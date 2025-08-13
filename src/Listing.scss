@@ -1,0 +1,123 @@
+// styles.scss
+
+@import url('https://fonts.googleapis.com/css?family=Loved+by+the+King|Reenie+Beanie');
+
+
+
+$bg-color: #5D576B;
+$sticker1: #FAE3E3;
+$sticker2: #6CD4FF;
+$sticker1-fold: #DDC6C3;
+$sticker2-fold: #51C0EF;
+$text-color: #171A21;
+$break-medium: 700px;
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+body {
+  font-family: 'Loved by the King', cursive;
+  background-color: $bg-color;
+  color: $text-color;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 50px auto;
+  overflow: hidden;
+  width: 80%;
+  grid-template-areas: "title title" "sticker1 sticker2";
+  margin: 0 auto;
+  padding-top: 100px;
+  grid-gap: 10px;
+
+  @media (max-width: $break-medium) {
+    grid-template-columns: 1fr;
+    grid-template-areas: "title" "sticker1" "sticker2";
+  }
+}
+
+p {
+  grid-area: title;
+  text-align: center;
+  align-self: center;
+  font-family: 'Reenie Beanie', cursive;
+  font-weight: bold;
+  font-size: 60px;
+}
+
+.sticky-note {
+  width: 300px;
+  min-height: 300px;
+  padding: 1em;
+  font-size: 20px;
+  letter-spacing: 2px;
+  outline: none;
+  position: relative;
+  margin-top: 50px;
+  margin-bottom: 10px;
+  padding-top: 40px;
+
+  &::before {
+    content: "";
+    position: absolute;
+    display: block;
+  }
+
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    border-width: 12px 12px 12px 12px;
+    border-style: solid;
+  }
+
+  &.sticky-note-one {
+    background-color: $sticker1;
+    grid-area: sticker1;
+    box-shadow: 9px 0px 10px -5px rgba(0, 0, 0, 0.42);
+
+    &::before {
+      background-color: rgba(108, 212, 255, 0.6);
+      width: 120px;
+      height: 35px;
+      left: 50%;
+      top: -15px;
+      transform: translateX(-50%) rotate(3deg);
+    }
+
+    &::after {
+      left: 0;
+      border-top-color: $sticker2-fold;
+      border-right-color: $sticker2-fold;
+      border-bottom-color: $bg-color;
+      border-left-color: $bg-color;
+    }
+  }
+
+  &.sticky-note-two {
+    background-color: $sticker2;
+    grid-area: sticker2;
+    box-shadow: -9px 0px 10px -5px rgba(0, 0, 0, 0.42);
+
+    &::before {
+      background-color: rgba(250, 227, 227, 0.8);
+      height: 70px;
+      width: 50px;
+      left: 50%;
+      top: -30px;
+      transform: rotate(-3deg) translateX(-50%);
+    }
+
+    &::after {
+      right: 0;
+      border-top-color: $sticker1-fold;
+      border-left-color: $sticker1-fold;
+      border-bottom-color: $bg-color;
+      border-right-color: $bg-color;
+    }
+  }
+}

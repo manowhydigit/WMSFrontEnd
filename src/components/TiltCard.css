@@ -1,0 +1,312 @@
+@import url("https://fonts.googleapis.com/css?family=Asar|Oxygen");
+
+/* .card {
+  background-color: black;
+  width: 150px;
+  height: 200px;
+  border-radius: 10px;
+  perspective: 1500px;
+  transition: transform 0.5s ease-in-out, box-shadow 0.5s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  transform-style: preserve-3d;
+  /* box-shadow: 5px 5px 24px 0px rgba(0, 0, 0, 0.2); 
+} */
+
+/* @media (min-height: 600px) {
+  .card {
+    width: 300px;
+    height: 150px;
+  }
+} */
+
+/* .card h2,
+.card h3,
+.card p {
+  transform: translateZ(2px);
+  color: white;
+  font-size: 30px;
+  line-height: 30px;
+  margin: 0;
+  font-weight: 300;
+  padding: 0;
+  transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+} */
+
+/* @media (min-height: 600px) {
+  .card h2,
+  .card h3,
+  .card p {
+    font-size: 40px;
+    line-height: 40px;
+  }
+} */
+
+.card h2 {
+  margin: 20px 0 0 0;
+}
+
+.card h3 {
+  margin: 10px 0 40px 0;
+}
+
+@media (min-height: 600px) {
+  .card h3 {
+    margin: 20px 0 40px 0;
+  }
+}
+
+.card p {
+  margin: 0 0 30px 0;
+  /* font-size: 16px; */
+}
+
+@media (min-height: 600px) {
+  .card p {
+    margin: 0 0 40px 0;
+    font-size: 21px;
+  }
+}
+
+.card .chart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  transform: translateZ(2px);
+  transition: transform 0.5s ease-in-out;
+}
+
+.photo {
+  position: absolute;
+  transform: translateZ(1px);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url("https://source.unsplash.com/kpAXYoXSeuY/600x600") no-repeat
+    center center;
+  background-size: cover;
+  border-radius: 10px;
+  transition: transform 0.5s ease-in-out;
+  overflow: hidden;
+}
+
+.photo::after {
+  position: absolute;
+  content: " ";
+  display: block;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-color: rgba(0, 0, 0, 0.2);
+  transition: background-color 0.5s ease-in-out;
+}
+
+.bar {
+  will-change: height;
+  width: 15px;
+  height: 1px;
+  background-color: white;
+  transform: translateX(-7.5px) rotateX(-90deg) rotateY(-45deg);
+  transform-origin: 100% 100%;
+  transition: height 0.5s ease-in-out, margin 0.5s ease-in-out,
+    transform 0.5s ease-in-out;
+  transform-style: preserve-3d;
+  margin: 6px;
+  position: relative;
+  background: linear-gradient(to bottom, #feffff 0%, #ddf1f9 0%, #a0d8ef 100%);
+}
+
+@media (min-height: 600px) {
+  .bar {
+    margin: 10px;
+    width: 25px;
+    transform: translateX(-12.5px) rotateX(-90deg) rotateY(-45deg);
+  }
+}
+
+.bar::after {
+  display: block;
+  content: "";
+  height: 100%;
+  width: 15px;
+  position: absolute;
+  top: 0;
+  right: -15px;
+  background: linear-gradient(to bottom, #feffff 0%, #85d7f7 0%, #4c8596 100%);
+  transform: rotateY(90deg);
+  transform-origin: 0% 50%;
+}
+
+@media (min-height: 600px) {
+  .bar::after {
+    width: 25px;
+    right: -25px;
+  }
+}
+
+.bar::before {
+  font-family: "Oxygen", sans-serif;
+  display: block;
+  content: "";
+  height: 15px;
+  width: 15px;
+  position: absolute;
+  top: -15px;
+  left: 0;
+  background-color: white;
+  transform: rotateX(90deg);
+  transform-origin: 0% 100%;
+  color: white;
+  text-align: center;
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0;
+}
+
+@media (min-height: 600px) {
+  .bar::before {
+    width: 25px;
+    height: 25px;
+    top: -25px;
+    font-size: 12px;
+    line-height: 18px;
+  }
+}
+
+.bar1::before {
+  content: "M";
+}
+.bar2::before {
+  content: "T";
+}
+.bar3::before {
+  content: "W";
+}
+.bar4::before {
+  content: "T";
+}
+.bar5::before {
+  content: "F";
+}
+.bar6::before {
+  content: "S";
+}
+.bar7::before {
+  content: "S";
+}
+
+.bar span {
+  font-family: "Oxygen", sans-serif;
+  position: absolute;
+  transform: rotateZ(-90deg);
+  border-radius: 2px;
+  transform-origin: 0% 100%;
+  top: 20px;
+  white-space: nowrap;
+  text-align: right;
+  left: 18px;
+  padding: 5px;
+  color: black;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.5s ease-in-out;
+}
+
+@media (min-height: 600px) {
+  .bar span {
+    top: 25px;
+    left: 25px;
+    font-size: 13px;
+  }
+}
+
+.details .card {
+  transform: rotateX(60deg) translateY(150px);
+  box-shadow: 0px 30px 40px 0px rgba(0, 0, 0, 0.75);
+}
+
+.details .card .chart {
+  transform: translateZ(40px) translateY(50px);
+}
+
+.details .bar {
+  transform: translateX(-7.5px) rotateX(-90deg) rotateY(-25deg);
+}
+
+@media (min-height: 600px) {
+  .details .bar {
+    transform: translateX(-12.5px) rotateX(-90deg) rotateY(-25deg);
+  }
+}
+
+.details .bar1 {
+  height: 150px;
+  transition-delay: 0.3s;
+  margin-top: -150px;
+}
+
+.details .bar2 {
+  height: 75px;
+  transition-delay: 0.2s;
+  margin-top: -75px;
+}
+
+.details .bar3 {
+  height: 112.5px;
+  transition-delay: 0.1s;
+  margin-top: -112.5px;
+}
+
+.details .bar4 {
+  height: 180px;
+  transition-delay: 0s;
+  margin-top: -180px;
+}
+
+.details .bar5 {
+  height: 52.5px;
+  transition-delay: 0.1s;
+  margin-top: -52.5px;
+}
+
+.details .bar6 {
+  height: 52.5px;
+  transition-delay: 0.2s;
+  margin-top: -52.5px;
+}
+
+.details .bar7 {
+  height: 75px;
+  transition-delay: 0.3s;
+  margin-top: -75px;
+}
+
+.details .bar span {
+  opacity: 1;
+  transition-delay: 0.3s;
+}
+
+.details .bar::before {
+  color: black;
+}
+
+.details .photo {
+  transform: translateZ(20px);
+}
+
+.details .photo::after {
+  background-color: rgba(0, 50, 100, 0.8);
+}
+
+.info {
+  font-family: "Oxygen", sans-serif;
+  color: white;
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+}

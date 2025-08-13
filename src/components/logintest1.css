@@ -1,0 +1,208 @@
+@import url(https://fonts.googleapis.com/css?family=Coda:400,800);
+@import url(https://fonts.googleapis.com/css?family=Bitter:400,700);
+
+/* body {
+  height:100%;
+  font-family: 'Hind', sans-serif;
+} */
+
+.container {
+  width:100%;
+  height:100%;
+}
+
+h1,h2,h3,h4,h5 {
+  margin:0;
+}
+
+h1{
+  padding-top:50px;
+  font-size:50px;
+  font-weight: 700;
+  text-align:center;
+  text-transform:uppercase;
+  color:#777;
+  line-height:60px;
+}
+
+h1 span {
+  color: #e3e3e3;
+  font-size:50px;
+  text-shadow: 0 -3px 0px #fff, 0px 4px 8px rgba(0,0,0,0.35), 0px 3px 30px rgba(0,0,0,0.15);
+}
+
+hr.cool-separator {
+  height: 1px;
+  background: white;
+  border: none;
+  outline: none;
+  margin: 4em auto 4em;
+  position: relative;
+  background-image: -webkit-linear-gradient(right, #777, #fff, #777);
+  background-image: linear-gradient(to left, #777, #fff, #777);
+  text-transform: capitalize;
+}
+
+hr.cool-separator:before {
+  color: #777;
+  font-weight: 700;
+  content: attr(data-symbol);
+  position: absolute;
+  top: 0;
+  left: 50%;
+  background: #fff;
+  border-left: 1px solid #ccc;
+  border-right: 1px solid #ccc;
+  border-radius: 2em;
+  padding: 0.5em 3em;
+  -webkit-transform: translate(-50%, -50%);
+          transform: translate(-50%, -50%);
+}
+
+.text-container {
+  display: block;
+  text-align:center;
+  font-size: 50px;
+  font-weight: 700;
+  text-align:center;
+  text-transform:uppercase;
+  margin:0 auto;
+  width: 30%;
+  height: auto;
+}
+
+.underline {
+  font-size:40px;
+  text-decoration: underline;
+}
+
+/* Stroke Effect */
+.stroke-1{
+  color: #eee;
+  text-shadow:
+       3px 3px 0 #000,
+     -1px -1px 0 #000,  
+      1px -1px 0 #000,
+      -1px 1px 0 #000,
+       1px 1px 0 #000;
+}
+.stroke-2{
+  color: #fff;
+  text-shadow:
+     -1px -1px 0 #777,  
+      1px -1px 0 #777,
+      -1px 1px 0 #777,
+       1px 1px 0 #777;
+}
+
+/* 3D Effect */
+.threeD-1{
+  color: #fff;
+  text-shadow:
+    0px 2px 0px #777,
+    0px 5px 10px rgba(0,0,0,0.15),
+    0px 10px 2px rgba(0,0,0,0.1),
+    0px 15px 30px rgba(0,0,0,0.1);   
+}
+.threeD-2{
+  color: #fff;
+  text-shadow:
+    0 1px 0 #777,
+    0 -1px 1px #eee,
+    0px 4px 3px rgba(0,0,0,0.4),
+    0px 8px 13px rgba(0,0,0,0.1),
+    0px 18px 23px rgba(0,0,0,0.1);
+}
+.threeD-3 {
+  color:#fff;
+  text-shadow: 
+    0 1px 0 #ccc,
+    0 2px 0 #c9c9c9,
+    0 3px 0 #bbb,
+    0 4px 0 #b9b9b9,
+    0 5px 0 #aaa,
+    0 6px 1px rgba(0,0,0,.1),
+    0 0 5px rgba(0,0,0,.1),
+    0 1px 3px rgba(0,0,0,.3),
+    0 3px 5px rgba(0,0,0,.2),
+    0 5px 10px rgba(0,0,0,.25),
+    0 10px 10px rgba(0,0,0,.2),
+    0 20px 20px rgba(0,0,0,.15);
+}
+
+.threeD-4 {
+  color:#ccc;
+  text-shadow: 
+    0 -2px 0px #fff, 
+    0px 2px 4px rgba(0,0,0,0.35), 
+    0px 3px 15px rgba(0,0,0,0.15);
+}
+
+
+
+/***************************
+****************************
+footer animation
+****************************
+***************************/
+footer {
+  font-family: "bitter", san-serif;
+  display:block;
+  overflow:hidden;
+  width:100%;
+  position: fixed;
+  text-align:center;
+  bottom: 0px;
+}
+
+footer h4 {
+  font-family: 'coda', cursive;
+  font-size:1.5em;
+  color:#fff;
+  text-shadow:
+       3px 3px 0 #000,
+     -1px -1px 0 #000,  
+      1px -1px 0 #000,
+      -1px 1px 0 #000,
+       1px 1px 0 #000;
+}
+
+footer h4 span{
+  font-family: "bitter", san-serif;
+}
+
+.footer-container {
+  position:relative;
+  padding:15px 0;
+  bottom:-120px;
+  background-color: #e3e3e3;
+  transition: all .5s ease-in-out;
+}
+
+footer:hover .footer-container {
+  bottom:0px;
+}
+
+.f-svg {
+  display: block;
+  width: 50px;
+  height: 20%;
+  margin: auto;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+}
+
+.small-o {
+  position: relative;
+  font-size:10px;
+  text-decoration: underline;
+  top:-6px;
+  
+}
+
+/***************************
+****************************
+Main SVG CSS
+****************************
+***************************/
+
