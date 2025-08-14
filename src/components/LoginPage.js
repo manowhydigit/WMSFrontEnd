@@ -3,6 +3,7 @@ import {
   MoonOutlined,
   SunOutlined,
 } from "@ant-design/icons";
+import Axios from "axios";
 import {
   Alert,
   Button,
@@ -12,6 +13,10 @@ import {
   Typography,
   notification,
 } from "antd";
+
+import { useSelector } from "react-redux";
+
+import { ToastContainer, toast } from "react-toastify";
 import axios from "axios";
 import confetti from "canvas-confetti";
 import React, { useEffect, useState, useRef } from "react";
@@ -37,6 +42,9 @@ import logoonly1 from "../logoonly.png";
 import ParticleOrbit from "./ParticleOrbit";
 import styled, { createGlobalStyle } from "styled-components";
 import LocationDateTime from "./LocationDateTime";
+
+import { Formik } from "formik";
+import * as Yup from "yup";
 
 const { Text } = Typography;
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8091";
@@ -282,7 +290,7 @@ ul {
     inset -3px -3px 15px rgba(255, 255, 255, 0.05);
   border-radius: 10px;
   margin-top: 4px;
-  height: 400px;
+  height: 220px;
 }
   .wow-bg.mystylefour {
   background-color: #1D2C4F;
@@ -597,12 +605,20 @@ ul {
 
 const LoginPage = () => {
   const [username, setUsername] = useState("");
-  const [passcode, setPasscode] = useState(["", "", "", "", "", ""]);
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  const formikRef = useRef(null);
+  const [checked, setChecked] = useState(false);
+
+  const [showPassword, setShowPassword] = useState(false);
+  const handleClickShowPassword = () => {
+    setShowPassword(!showPassword);
+  };
 
   // const rainContainerRef = useRef(null);
   // const numberOfDrops = 150;
@@ -693,57 +709,19 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Handle mobile state persistence
-  // useEffect(() => {
-  //   // First check URL state (from logout)
-  //   if (location.state?.isMobile !== undefined) {
-  //     setIsMobile(location.state.isMobile);
-  //     return;
-  //   }
+  const resetForm = () => {
+    // Check if the formikRef is defined
+    if (formikRef.current) {
+      // Call the resetForm function using the ref
+      formikRef.current.resetForm({
+        values: {
+          email: "",
+          password: "",
+        },
+      });
+    }
+  };
 
-  //   // Then check localStorage
-  //   const savedMobileView = localStorage.getItem("isMobileView");
-  //   if (savedMobileView) {
-  //     setIsMobile(savedMobileView === "true");
-  //   }
-
-  //   const handleResize = () => {
-  //     const mobile = window.innerWidth < 768;
-  //     setIsMobile(mobile);
-  //     localStorage.setItem("isMobileView", mobile.toString());
-  //   };
-
-  //   window.addEventListener("resize", handleResize);
-  //   return () => window.removeEventListener("resize", handleResize);
-  // }, [location.state]);
-
-  // Handle mobile state persistence
-  // useEffect(() => {
-  //   // Check URL state first (from logout)
-  //   if (location.state?.isMobile !== undefined) {
-  //     setIsMobile(location.state.isMobile);
-  //     return;
-  //   }
-
-  //   // Otherwise check localStorage
-  //   const savedMobileView = localStorage.getItem("isMobileView");
-  //   if (savedMobileView) {
-  //     setIsMobile(savedMobileView === "true");
-  //   }
-
-  //   const handleResize = () => {
-  //     setIsMobile(window.innerWidth < 768);
-  //   };
-  //   window.addEventListener("resize", handleResize);
-  //   return () => window.removeEventListener("resize", handleResize);
-  // }, [location.state]);
-
-  // Save mobile view preference
-  // useEffect(() => {
-  //   localStorage.setItem("isMobileView", isMobile);
-  // }, [isMobile]);
-
-  // Handle mobile state and window resize
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
@@ -790,124 +768,198 @@ const LoginPage = () => {
     }
   }, [error, success]);
 
-  const handleChange = (value, index) => {
-    const newPasscode = [...passcode];
-    if (/^\d*$/.test(value)) {
-      newPasscode[index] = value;
-      setPasscode(newPasscode);
-      if (value && index < 5) {
-        document.getElementById(`otp-${index + 1}`).focus();
-      }
-    }
-  };
+  const loginAPICall = async (values) => {
+    // Prepare the user registration data
 
-  const handleKeyDown = (e, index) => {
-    if (e.key === "Backspace") {
-      const newPasscode = [...passcode];
-      if (passcode[index]) {
-        newPasscode[index] = "";
-        setPasscode(newPasscode);
-      } else if (index > 0) {
-        newPasscode[index - 1] = "";
-        setPasscode(newPasscode);
-        document.getElementById(`otp-${index - 1}`).focus();
-        handleSubmit();
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (username && passcode.join("").length === 6) {
-      handleSubmit();
-    }
-  }, [username, passcode]);
-
-  const handleSubmit = async () => {
-    if (!username) {
-      setError("Username is required");
-      return;
-    }
-
-    if (passcode.join("").length !== 6) {
-      setError("Passcode must be exactly 6 digits");
-      return;
-    }
-
-    setLoading(true);
-
+    const userData = {
+      password: encryptPassword(values.password),
+      userName: values.username,
+    };
     try {
-      const response = await axios.post(`${API_URL}/api/auth/login`, {
-        userName: username,
-        password: encryptPassword(passcode.join("")),
-      });
+      const response = await Axios.post(
+        `${process.env.REACT_APP_API_URL}/api/auth/login`,
+        userData,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-      if (response.data.status === true) {
-        setSuccess(
-          response.data.paramObjectsMap?.message || "Successfully logged in"
-        );
-
-        const userData = response.data.paramObjectsMap?.userVO;
-        const screens =
-          response.data.paramObjectsMap?.userVO.roleVO[0].responsibilityVO[0]
-            .screensVO;
-
-        localStorage.setItem("userData", JSON.stringify(userData));
-        localStorage.setItem("screens", JSON.stringify(screens));
-        localStorage.setItem("authToken", userData?.token);
-
-        const token = response.data.paramObjectsMap?.userVO?.token;
-        localStorage.setItem("authToken", token);
-
-        const userName = response.data.paramObjectsMap?.userVO?.userName;
-        localStorage.setItem("userName", userName);
-
-        const userType = response.data.paramObjectsMap?.userVO?.userType;
-        localStorage.setItem("userType", userType);
-
-        const email = response.data.paramObjectsMap?.userVO?.email;
-        localStorage.setItem("email", email);
-
-        const nickName = response.data.paramObjectsMap?.userVO?.nickName;
-        localStorage.setItem("nickName", nickName);
+      if (response.data.status) {
+        console.log("Test1", userData);
+        // dispatch(setUser({ orgId: response.data.paramObjectsMap.userVO.orgId }));
 
         localStorage.setItem(
-          `${userData.userName}_theme`,
-          currentTheme.toString()
+          "orgId",
+          response.data.paramObjectsMap.userVO.orgId
+        ); // Replace with the actual token
+        localStorage.setItem(
+          "userId",
+          response.data.paramObjectsMap.userVO.usersId
         );
-
-        const responseScreens = JSON.stringify(
-          response.data.paramObjectsMap.userVO.roleVO[0].responsibilityVO[0]
-            .screensVO
+        localStorage.setItem(
+          "userName",
+          response.data.paramObjectsMap.userVO.userName
         );
-        localStorage.setItem("responseScreens", responseScreens);
-        setLoading(false);
-        navigate("/Transactions");
+        localStorage.setItem(
+          "userType",
+          response.data.paramObjectsMap.userVO.userType
+        );
+        localStorage.setItem(
+          "token",
+          response.data.paramObjectsMap.userVO.token
+        );
+        localStorage.setItem(
+          "tokenId",
+          response.data.paramObjectsMap.userVO.tokenId
+        );
+        localStorage.setItem("LoginMessage", true);
+        //SET ROLES
+        const userRoleVO = response.data.paramObjectsMap.userVO.roleVO;
+        const roles = userRoleVO.map((row) => ({
+          role: row.role,
+        }));
+        localStorage.setItem("ROLES", JSON.stringify(roles));
 
-        notification.success({
-          message: "Success",
-          description: "Successfully Logged In",
-          duration: 5,
+        // SET SCREENS
+        const roleVO = response.data.paramObjectsMap.userVO.roleVO;
+        let allScreensVO = [];
+        roleVO.forEach((roleObj) => {
+          roleObj.responsibilityVO.forEach((responsibility) => {
+            if (responsibility.screensVO) {
+              allScreensVO = allScreensVO.concat(responsibility.screensVO);
+            }
+          });
         });
+        allScreensVO = [...new Set(allScreensVO)];
+        localStorage.setItem("screens", JSON.stringify(allScreensVO));
+
+        // dispatch(setUserRole(userRole));
+        resetForm();
+        // window.location.href = "/login";
+
+        navigate("/transactions");
+        if (checked) {
+          localStorage.setItem(
+            "rememberedCredentials",
+            JSON.stringify({
+              username: values.username,
+              password: values.password,
+            })
+          );
+        } else {
+          // Clear stored credentials if "Remember Me" is unchecked
+          localStorage.removeItem("rememberedCredentials");
+        }
+        navigate("/Trasactions");
+        window.location.reload(true);
       } else {
-        const errorMsg = response?.data.paramObjectsMap.errorMessage;
-        const message = response?.data.paramObjectsMap.message;
-
-        notification.error({
-          message: "Login attempt has failed",
-          description: errorMsg,
-          duration: 10,
+        // Successful registration, perform actions like storing tokens and redirecting
+        toast.error(response.data.paramObjectsMap.errorMessage, {
+          autoClose: 2000,
+          theme: "colored",
         });
+        // setTimeout(() => {
+        //   toast.success(response.data.paramObjectsMap.message, {
+        //     autoClose: 2000,
+        //     theme: 'colored'
+        //   });
+        // }, 2000);
       }
     } catch (error) {
-      const errorMessage =
-        error.response?.data?.paramObjectsMap?.errorMessage ||
-        error.response?.data?.message ||
-        "An unexpected error occurred.";
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+      toast.error("Network Error", {
+        autoClose: 2000,
+        theme: "colored",
+      });
     }
   };
+
+  // const handleSubmit = async () => {
+  //   if (!username) {
+  //     setError("Username is required");
+  //     return;
+  //   }
+
+  //   if (!password) {
+  //     setError("Password is required");
+  //     return;
+  //   }
+  //   setLoading(true);
+
+  //   try {
+  //     const response = await axios.post(`${API_URL}/api/auth/login`, {
+  //       userName: username,
+  //       password: encryptPassword(password),
+  //     });
+
+  //     if (response.data.status === true) {
+  //       setSuccess(
+  //         response.data.paramObjectsMap?.message || "Successfully logged in"
+  //       );
+
+  //       const userData = response.data.paramObjectsMap?.userVO;
+  //       const screens =
+  //         response.data.paramObjectsMap?.userVO.roleVO[0].responsibilityVO[0]
+  //           .screensVO;
+
+  //       localStorage.setItem("userData", JSON.stringify(userData));
+  //       localStorage.setItem("screens", JSON.stringify(screens));
+  //       localStorage.setItem("authToken", userData?.token);
+
+  //       const token = response.data.paramObjectsMap?.userVO?.token;
+  //       localStorage.setItem("authToken", token);
+
+  //       const userName = response.data.paramObjectsMap?.userVO?.userName;
+  //       localStorage.setItem("userName", userName);
+
+  //       const userType = response.data.paramObjectsMap?.userVO?.userType;
+  //       localStorage.setItem("userType", userType);
+
+  //       const email = response.data.paramObjectsMap?.userVO?.email;
+  //       localStorage.setItem("email", email);
+
+  //       const nickName = response.data.paramObjectsMap?.userVO?.nickName;
+  //       localStorage.setItem("nickName", nickName);
+
+  //       localStorage.setItem(
+  //         `${userData.userName}_theme`,
+  //         currentTheme.toString()
+  //       );
+
+  //       const responseScreens = JSON.stringify(
+  //         response.data.paramObjectsMap.userVO.roleVO[0].responsibilityVO[0]
+  //           .screensVO
+  //       );
+  //       localStorage.setItem("responseScreens", responseScreens);
+  //       setLoading(false);
+  //       navigate("/Transactions");
+
+  //       notification.success({
+  //         message: "Success",
+  //         description: "Successfully Logged In",
+  //         duration: 5,
+  //       });
+  //     } else {
+  //       const errorMsg = response?.data.paramObjectsMap.errorMessage;
+  //       const message = response?.data.paramObjectsMap.message;
+
+  //       notification.error({
+  //         message: "Login attempt has failed",
+  //         description: errorMsg,
+  //         duration: 10,
+  //       });
+  //     }
+  //   } catch (error) {
+  //     const errorMessage =
+  //       error.response?.data?.paramObjectsMap?.errorMessage ||
+  //       error.response?.data?.message ||
+  //       "An unexpected error occurred.";
+  //     setError(errorMessage);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -955,6 +1007,101 @@ const LoginPage = () => {
     theme === "dark"
       ? { backgroundColor: "#fff", color: "#000", borderColor: "#666" }
       : { backgroundColor: "#fff", color: "#000", borderColor: "#d9d9d9" };
+
+  const handleSubmit = async () => {
+    if (!username) {
+      setError("Username is required");
+      return;
+    }
+
+    if (!password) {
+      setError("Password is required");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await axios.post(`${API_URL}/api/auth/login`, {
+        userName: username,
+        password: encryptPassword(password),
+      });
+
+      if (response.data.status === true) {
+        setSuccess(
+          response.data.paramObjectsMap?.message || "Successfully logged in"
+        );
+
+        const userData = response.data.paramObjectsMap?.userVO;
+
+        // Store user data
+        localStorage.setItem("userData", JSON.stringify(userData));
+        localStorage.setItem("authToken", userData?.token);
+        localStorage.setItem("userName", userData?.userName);
+        localStorage.setItem("userType", userData?.userType);
+        localStorage.setItem("email", userData?.email);
+        localStorage.setItem("nickName", userData?.nickName);
+
+        // Store roles and screens
+        const userRoleVO = userData.roleVO;
+        const roles = userRoleVO.map((row) => ({
+          role: row.role,
+        }));
+        localStorage.setItem("ROLES", JSON.stringify(roles));
+
+        // Store screens
+        let allScreensVO = [];
+        userRoleVO.forEach((roleObj) => {
+          roleObj.responsibilityVO.forEach((responsibility) => {
+            if (responsibility.screensVO) {
+              allScreensVO = allScreensVO.concat(responsibility.screensVO);
+            }
+          });
+        });
+        allScreensVO = [...new Set(allScreensVO)];
+        localStorage.setItem("screens", JSON.stringify(allScreensVO));
+
+        // Remember credentials if checked
+        if (checked) {
+          localStorage.setItem(
+            "rememberedCredentials",
+            JSON.stringify({
+              username: username,
+              password: password,
+            })
+          );
+        } else {
+          localStorage.removeItem("rememberedCredentials");
+        }
+
+        // Show success notification
+        notification.success({
+          message: "Success",
+          description: "Successfully Logged In",
+          duration: 5,
+        });
+
+        // Navigate to transactions
+        navigate("/transactions");
+        // window.location.reload(); // Force refresh to ensure all data is loaded
+      } else {
+        const errorMsg = response?.data.paramObjectsMap.errorMessage;
+        notification.error({
+          message: "Login attempt has failed",
+          description: errorMsg,
+          duration: 10,
+        });
+      }
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.paramObjectsMap?.errorMessage ||
+        error.response?.data?.message ||
+        "An unexpected error occurred.";
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -1064,10 +1211,10 @@ const LoginPage = () => {
                   marginTop: "20px",
                 }}
               >
-                Welcome To UWL Portal
+                Welcome To UWL WMS
               </h3>
 
-              <form onSubmit={handleSubmit}>
+              <form>
                 <div style={{ marginTop: "-20px" }}>
                   <Text
                     style={{
@@ -1108,33 +1255,52 @@ const LoginPage = () => {
                     }}
                   >
                     {/* 6-Digit Passcode */}
-                    6-Digit Key
+                    PassWord
                   </Text>
                   <Space
                     size="middle"
                     style={{ justifyContent: "center", marginLeft: "20px" }}
                   >
-                    {passcode.map((digit, index) => (
-                      <Input
-                        key={index}
-                        id={`otp-${index}`}
-                        value={digit}
-                        maxLength={1}
-                        onChange={(e) => handleChange(e.target.value, index)}
-                        onKeyDown={(e) => handleKeyDown(e, index)}
-                        style={{
-                          width: "30px",
-                          height: "30px",
-                          textAlign: "center",
-                          fontSize: "14px",
-                          borderRadius: "8px",
-                          background: "transparent",
-                          color: "white",
-                        }}
-                      />
-                    ))}
+                    <Input.Password
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password"
+                      visibilityToggle={{
+                        visible: showPassword,
+                        onVisibleChange: setShowPassword,
+                      }}
+                      style={{
+                        color: "white",
+                        padding: "4px",
+                        fontSize: 16,
+                        borderRadius: 8,
+                        background: "transparent",
+                        width: "250px",
+                        marginLeft: "20px",
+                      }}
+                    />
+                    ))
                   </Space>
                 </div>
+                <Button
+                  type="primary"
+                  onClick={handleSubmit}
+                  loading={loading}
+                  disabled={!username || !password} // Disable when fields are empty
+                  style={{
+                    marginTop: "20px",
+                    marginLeft: "20px",
+                    width: "250px",
+                    borderRadius: "8px",
+                    height: "40px", // Added fixed height
+                    fontSize: "16px", // Consistent font size
+                    fontWeight: "bold", // Make text stand out
+                    color: "white",
+                  }}
+                  onKeyPress={(e) => e.key === "Enter" && handleSubmit()} // Handle Enter key
+                >
+                  {loading ? "Logging in..." : "Login"}
+                </Button>
               </form>
             </div>
           </div>

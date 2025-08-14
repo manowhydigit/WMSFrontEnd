@@ -86,75 +86,75 @@ const NotificationBell = () => {
     });
   };
 
-  const fetchNotifications = async () => {
-    try {
-      setLoading(true);
-      let response;
+  // const fetchNotifications = async () => {
+  //   try {
+  //     setLoading(true);
+  //     let response;
 
-      if (isAdmin) {
-        response = await getAdminNote(createdBy);
-      } else {
-        response = await getUserNote(createdBy);
-      }
+  //     if (isAdmin) {
+  //       response = await getAdminNote(createdBy);
+  //     } else {
+  //       response = await getUserNote(createdBy);
+  //     }
 
-      if (response) {
-        const filtered = response.filter((item) => {
-          if (isAdmin) {
-            return (
-              item.adminNote !== "F" &&
-              (item.status === "Pending" || item.status === "Going On")
-            );
-          }
+  //     if (response) {
+  //       const filtered = response.filter((item) => {
+  //         if (isAdmin) {
+  //           return (
+  //             item.adminNote !== "F" &&
+  //             (item.status === "Pending" || item.status === "Going On")
+  //           );
+  //         }
 
-          if (!isAdmin) {
-            return (
-              item.userNote !== "F" &&
-              (item.status === "Completed" || item.status === "Going On")
-            );
-          }
-        });
+  //         if (!isAdmin) {
+  //           return (
+  //             item.userNote !== "F" &&
+  //             (item.status === "Completed" || item.status === "Going On")
+  //           );
+  //         }
+  //       });
 
-        // Check for new notifications
-        const newNotifications = filtered.filter(
-          (newNotif) =>
-            !prevNotificationsRef.current.some(
-              (prevNotif) => prevNotif.gst_ticketId === newNotif.gst_ticketId
-            )
-        );
+  //       // Check for new notifications
+  //       const newNotifications = filtered.filter(
+  //         (newNotif) =>
+  //           !prevNotificationsRef.current.some(
+  //             (prevNotif) => prevNotif.gst_ticketId === newNotif.gst_ticketId
+  //           )
+  //       );
 
-        // Show custom toast for new notifications
-        if (
-          newNotifications.length > 0 &&
-          prevNotificationsRef.current.length > 0
-        ) {
-          newNotifications.forEach((notif) => {
-            showCustomNotification(notif);
-          });
-        }
+  //       // Show custom toast for new notifications
+  //       if (
+  //         newNotifications.length > 0 &&
+  //         prevNotificationsRef.current.length > 0
+  //       ) {
+  //         newNotifications.forEach((notif) => {
+  //           showCustomNotification(notif);
+  //         });
+  //       }
 
-        setNotifications(filtered);
-        prevNotificationsRef.current = filtered;
-      } else {
-        setNotifications([]);
-        prevNotificationsRef.current = [];
-      }
-    } catch (error) {
-      notification.error({
-        message: "Data Fetch Error",
-        description: "Failed to fetch notifications.",
-      });
-      setNotifications([]);
-      prevNotificationsRef.current = [];
-    } finally {
-      setLoading(false);
-    }
-  };
+  //       setNotifications(filtered);
+  //       prevNotificationsRef.current = filtered;
+  //     } else {
+  //       setNotifications([]);
+  //       prevNotificationsRef.current = [];
+  //     }
+  //   } catch (error) {
+  //     notification.error({
+  //       message: "Data Fetch Error",
+  //       description: "Failed to fetch notifications.",
+  //     });
+  //     setNotifications([]);
+  //     prevNotificationsRef.current = [];
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
-  useEffect(() => {
-    fetchNotifications();
-    const intervalId = setInterval(fetchNotifications, 1 * 60 * 1000);
-    return () => clearInterval(intervalId);
-  }, []);
+  // useEffect(() => {
+  //   fetchNotifications();
+  //   const intervalId = setInterval(fetchNotifications, 1 * 60 * 1000);
+  //   return () => clearInterval(intervalId);
+  // }, []);
 
   const updateNote = async (createdBy, ticketId) => {
     try {

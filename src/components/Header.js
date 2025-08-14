@@ -62,7 +62,6 @@ import giphybrain5 from "../giphybrain5.gif";
 import aibrain1 from "../aibrain1.png";
 import SuperPowerModal from "./SuperPowerModal";
 import HAILogo from "../HAILogo.png";
-import Ticket from "./Ticket";
 import NotificationBell from "./NotificationBell";
 import AnalogClock from "./AnalogClock";
 import OrbParticles from "./OrbParticles";
@@ -90,36 +89,36 @@ const Header = () => {
 
   const [data, setData] = useState(null);
 
-  const checkUserActiveStatus = async (username) => {
-    try {
-      const response = await fetch(
-        `${API_URL}/api/Ticket/getUserActiveStatus?userName=${username}`
-      );
-      const resData = await response.json();
-      const isActive =
-        resData?.paramObjectsMap?.getUserActiveStatus?.[0]?.is_active;
+  // const checkUserActiveStatus = async (username) => {
+  //   try {
+  //     const response = await fetch(
+  //       `${API_URL}/api/Ticket/getUserActiveStatus?userName=${username}`
+  //     );
+  //     const resData = await response.json();
+  //     const isActive =
+  //       resData?.paramObjectsMap?.getUserActiveStatus?.[0]?.is_active;
 
-      console.log("User is_active:", isActive);
+  //     console.log("User is_active:", isActive);
 
-      if (isActive === 0) {
-        handleLogout(); // 👈 Trigger logout if inactive
-      }
-    } catch (error) {
-      console.error("Error checking user status:", error);
-    }
-  };
+  //     if (isActive === 0) {
+  //       handleLogout(); // 👈 Trigger logout if inactive
+  //     }
+  //   } catch (error) {
+  //     console.error("Error checking user status:", error);
+  //   }
+  // };
 
-  useEffect(() => {
-    if (user) {
-      checkUserActiveStatus(user); // initial call immediately
+  // useEffect(() => {
+  //   if (user) {
+  //     checkUserActiveStatus(user); // initial call immediately
 
-      const interval = setInterval(() => {
-        checkUserActiveStatus(user); // every 2 minutes
-      }, 2 * 60 * 1000); // 2 minutes = 120000 ms
+  //     const interval = setInterval(() => {
+  //       checkUserActiveStatus(user); // every 2 minutes
+  //     }, 2 * 60 * 1000); // 2 minutes = 120000 ms
 
-      return () => clearInterval(interval); // cleanup on unmount
-    }
-  }, [user]);
+  //     return () => clearInterval(interval); // cleanup on unmount
+  //   }
+  // }, [user]);
 
   // const checkUserActiveStatus = async (user) => {
   //   try {

@@ -22,12 +22,12 @@ import {
 } from "antd";
 
 const clientReportData = [
-  { name: "Tax Inv Approval" },
-  { name: "Tax Inv Approved" },
+  { name: "GATEPASSIN" },
+  { name: "GRN" },
   // { name: "Approved2 List" },
-  { name: "CN Request" },
-  { name: "CN - Branch Approval" },
-  { name: "CN - Corp. Approval" },
+  { name: "PUTAWAY" },
+  { name: "BUYER ORDER" },
+  { name: "PICK REQUEST" },
   { name: "CN - Branch Approved" },
   { name: "CN - Corp. Approved" },
   { name: "CN - Status" },
@@ -48,12 +48,12 @@ const clientReportData = [
 ];
 
 const routes = {
-  "Tax Inv Approval": "/listing",
-  "Tax Inv Approved": "/ApprovedList",
+  GATEPASSIN: "/listing",
+  GRN: "/GRN",
   // "Approved2 List": "/Approved2List",
-  "CN Request": "/CNPreApproval",
-  "CN - Branch Approval": "/CRListing",
-  "CN - Corp. Approval": "/CRPendingList",
+  PUTAWAY: "/CNPreApproval",
+  "BUYER ORDER": "/CRListing",
+  "PICK REQUEST": "/CRPendingList",
   "CN - Branch Approved": "/CRApprovedList",
   "CN - Corp. Approved": "/CRApprovedList2",
   "CN - Status": "/CRStatus",
@@ -83,51 +83,42 @@ const Transactions = () => {
   };
 
   // Filter menu items based on allowedScreens
-  useEffect(() => {
-    const responseScreens = localStorage.getItem("responseScreens");
-    let parsedScreens = [];
-
-    try {
-      if (responseScreens) {
-        parsedScreens = JSON.parse(responseScreens);
-      }
-    } catch (error) {
-      console.error("Error parsing responseScreens:", error);
-    }
-
-    const filtered = clientReportData.filter((menu) =>
-      parsedScreens.includes(menu.name.toUpperCase())
-    );
-
-    setFilteredMenuItems(filtered);
-
-    // Redirect to PS page if no menu items are available
-    if (filtered.length === 0) {
-      navigate("/ps");
-    }
-  }, [navigate]);
-  // Filter menu items based on allowedScreens
-  const responseScreens = localStorage.getItem("responseScreens");
+  const responseScreens = localStorage.getItem("screens");
   let parsedScreens = [];
 
-  try {
-    if (responseScreens) {
-      parsedScreens = JSON.parse(responseScreens);
+  // Extract and normalize screen names from user data
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem("userData"));
+    let userScreens = [];
+
+    if (userData?.roleVO) {
+      userData.roleVO.forEach((role) => {
+        role.responsibilityVO.forEach((resp) => {
+          userScreens = [...userScreens, ...resp.screensVO];
+        });
+      });
     }
-  } catch (error) {
-    console.error("Error parsing responseScreens:", error);
-  }
 
-  // Filtered client report data based on screens
-  // const filteredMenuItems = clientReportData.filter((menu) =>
-  //   parsedScreens.includes(menu.name.toUpperCase())
-  // );
+    // Normalize screen names (remove spaces, convert to uppercase)
+    const normalizedUserScreens = userScreens.map((screen) =>
+      screen.replace(/\s+/g, "").toUpperCase()
+    );
 
-  // Filter further based on the search term
+    // Filter clientReportData based on normalized screens
+    const filtered = clientReportData.filter((menu) => {
+      const normalizedMenuName = menu.name.replace(/\s+/g, "").toUpperCase();
+      return normalizedUserScreens.includes(normalizedMenuName);
+    });
+
+    setFilteredMenuItems(filtered);
+  }, []);
+
+  // Filter further based on search term
   const filteredAndSearchedMenuItems = filteredMenuItems.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  console.log("filteredAndSearchedMenuItems", filteredAndSearchedMenuItems);
   // Button styles
   const buttonStyles = {
     display: "flex",

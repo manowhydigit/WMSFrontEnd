@@ -51,9 +51,6 @@ const Sidebar = () => {
     { text: "Screen", icon: <TvIcon />, path: "/screen" },
     { text: "Transactions", icon: <GridViewIcon />, path: "/transactions" },
     { text: "Reports", icon: <BarChartIcon />, path: "/reports" },
-    { text: "PRMS", icon: <GridViewIcon />, path: "/ps" },
-    // { text: "Ticket", icon: <ReceiptIcon />, path: "/ticket" },
-    { text: "PO", icon: <ReceiptIcon />, path: "/PurchaseOrder" },
   ];
 
   const responseScreens = localStorage.getItem("responseScreens");
