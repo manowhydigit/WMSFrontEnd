@@ -1,0 +1,72 @@
+.button11 {
+  padding: 1.3em 3em;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 2.5px;
+  font-weight: 500;
+  color: #000;
+  background-color: rgba(255, 255, 255, 0.726);
+  border: none;
+  border-radius: 45px;
+  /* box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.1); Button Shawdow*/
+  transition: all 0.3s ease 0s;
+  cursor: pointer;
+  outline: none;
+  margin-top: -20px;
+  font-weight: bold;
+  width: 220px;
+}
+
+.button11:hover {
+  background-color: #3323c4;
+  box-shadow: 0px 15px 20px rgba(46, 229, 157, 0.4);
+  color: #fff;
+  transform: translateY(-7px);
+}
+
+.button11:active {
+  transform: translateY(-1px);
+  background-color: #584bd1;
+}
+
+/* ---------------------------- */
+input[type="file"] {
+  margin-top: 0.5rem;
+  padding: 1.5em;
+  /* border: 2px dashed grey; */
+  border: 2px dashed dodgerblue;
+  background-color: #fff;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  width: 40%;
+  height: 136%;
+  max-width: 300px;
+  border-radius: 1rem;
+  transition: border 0.3s ease;
+}
+
+input[type="file"]:hover {
+  /* border-color: dodgerblue; */
+  border: 2px solid dodgerblue;
+}
+
+/* Style the inner file selector button */
+input[type="file"]::file-selector-button {
+  padding: 1em 1.5em;
+  border-width: 0;
+  border-radius: 1rem;
+  background-color: dodgerblue;
+  color: #fff;
+  font-weight: bold;
+  transition: all 0.25s ease-in-out;
+  cursor: pointer;
+  margin-right: 1em;
+  margin-top: -1em;
+  width: 50%;
+  height: 2.7em;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background-color: deepskyblue;
+  /* box-shadow: 0 0 10px dodgerblue, 0 0 20px deepskyblue; */
+}

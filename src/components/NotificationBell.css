@@ -1,0 +1,244 @@
+.notification-container {
+  position: relative;
+  display: inline-block;
+  margin-right: 20px;
+}
+
+.notification-badge {
+  cursor: pointer;
+  margin-right: 20px;
+  margin-top: 10px;
+}
+
+.notification-icon-trigger {
+  font-size: 24px;
+  vertical-align: middle;
+}
+
+.notification-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: 400px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #f9f9f9;
+}
+
+.notification-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.notification-close-btn {
+  color: #999;
+}
+
+.notification-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.notification-loading,
+.notification-empty {
+  text-align: center;
+  padding: 16px;
+  color: #999;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.3s;
+}
+
+.notification-item:hover {
+  background: #f5f5f5;
+}
+
+.notification-item-icon {
+  flex-shrink: 0;
+  margin-right: 12px;
+  margin-top: 2px;
+}
+
+.notification-item-content {
+  flex-grow: 1;
+}
+
+.notification-item-title {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.notification-item-description {
+  color: #666;
+  font-size: 14px;
+}
+
+.notification-item-close {
+  color: #999;
+  margin-left: 8px;
+}
+
+.notification-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-right: 20px;
+}
+
+/* Keep all the existing bell button styles from previous implementation */
+
+.toast-list {
+  position: fixed;
+  bottom: 1em;
+  right: 1em;
+  z-index: 1000;
+}
+
+.toast {
+  min-width: 20em;
+  max-width: 40em;
+  margin-bottom: 1em;
+  display: flex;
+  animation: appear 0.5s ease-out;
+}
+
+.toast__image,
+.toast-info {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25), 0 15px 30px rgba(0, 0, 0, 0.15);
+}
+
+.toast__image {
+  align-self: center;
+  width: 50px;
+  height: 50px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  margin: 0.3em;
+  object-fit: cover;
+}
+
+.toast-info {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  padding: 0.5em 1em;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(#1b5faa, #18579a);
+  border-radius: 3px;
+  color: #fff;
+}
+
+.toast-info--error {
+  background: #d31 !important;
+}
+
+.toast-info__title {
+  margin-bottom: 0.1em;
+  font-weight: 500;
+}
+
+.toast-info__message {
+  font-size: 0.8em;
+  margin: 0.1em 0;
+  opacity: 0.75;
+  flex-grow: 1;
+}
+
+.toast-info__data {
+  font-size: 0.5em;
+  text-align: right;
+  /* opacity: 0.5; */
+  margin-bottom: 0.5em;
+}
+
+.toast-info__timer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  animation: timer 5s linear;
+  transform-origin: left;
+}
+
+.toast__dismiss {
+  align-self: center;
+  font-size: 1.5em;
+  margin: 0.25em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cancel-button {
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  transition: opacity 0.2s ease;
+}
+
+.cancel-button:hover {
+  opacity: 0.75;
+}
+
+@keyframes timer {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media screen and (max-width: 700px) {
+  .toast-list {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    padding: 1em;
+  }
+
+  .toast {
+    max-width: 100%;
+    margin-bottom: 0.5em;
+  }
+}
+
+/* --------------------- */

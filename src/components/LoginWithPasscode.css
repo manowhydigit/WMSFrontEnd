@@ -1,0 +1,19 @@
+#otp-0,
+#otp-1,
+#otp-2,
+#otp-3,
+#otp-4,
+#otp-5 {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease-in-out;
+}
+
+#otp-0:focus,
+#otp-1:focus,
+#otp-2:focus,
+#otp-3:focus,
+#otp-4:focus,
+#otp-5:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 8px rgba(24, 144, 255, 0.5);
+}

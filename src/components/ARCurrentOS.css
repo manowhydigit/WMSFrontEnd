@@ -1,0 +1,143 @@
+.ar-current-os-unique-container {
+  width: 100%;
+  padding: 20px;
+  margin: 20px 0;
+  background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+}
+
+.ar-current-os-unique-container .glass-card {
+  /* background: rgba(255, 255, 255, 0.1); */
+  background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 12px;
+  /* border: 1px solid rgba(255, 255, 255, 0.2); */
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  padding: 20px;
+  color: white;
+  width: 100%;
+  border: 1px solid white;
+}
+
+.ar-current-os-unique-container .card-header {
+  padding: 15px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  text-align: center;
+  color: white;
+}
+
+.ar-current-os-unique-container .filter-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  gap: 15px;
+}
+
+.ar-current-os-unique-container .ut-per-input {
+  display: flex;
+  align-items: center;
+}
+
+.ar-current-os-unique-container .search-button {
+  background: rgba(24, 144, 255, 0.8);
+  border: none;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.ar-current-os-unique-container .search-button:hover {
+  background: rgba(24, 144, 255, 1);
+}
+
+.ar-current-os-unique-container .stats-container {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ar-current-os-unique-container .stat-tag {
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 6px;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+}
+
+.ar-current-os-unique-container .glass-table {
+  /* background: rgba(255, 255, 255, 0.1) !important; */
+  background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white !important;
+}
+
+.ar-current-os-unique-container .glass-table-cell {
+  background: transparent !important;
+  color: white !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.ar-current-os-unique-container .glass-table .ant-table-thead > tr > th {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: white !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.ar-current-os-unique-container .glass-table .ant-table-tbody > tr:hover > td {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+.ar-current-os-unique-container .glass-table .ant-table-summary > tr > td {
+  background: rgba(255, 255, 255, 0.15) !important;
+  font-weight: bold !important;
+  color: white !important;
+}
+
+.ar-current-os-unique-container .summary-row {
+  color: white !important;
+}
+
+/* Style for InputNumber text color */
+.ar-current-os-unique-container .ant-input-number-input {
+  color: white !important;
+}
+
+/* Style for InputNumber controls (arrows) */
+.ar-current-os-unique-container .ant-input-number-handler-wrap {
+  border-left: 1px solid white !important;
+}
+
+.ar-current-os-unique-container .ant-input-number-handler-up,
+.ar-current-os-unique-container .ant-input-number-handler-down {
+  color: white !important;
+  border-color: white !important;
+}
+
+.ar-current-os-unique-container .ant-input-number-handler-up:hover,
+.ar-current-os-unique-container .ant-input-number-handler-down:hover {
+  color: #1890ff !important;
+}
+
+/* Style for the input number when focused */
+.ar-current-os-unique-container .ant-input-number-focused {
+  border-color: white !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Style for the input number placeholder */
+.ar-current-os-unique-container .ant-input-number-input::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+/* Force input inside InputNumber to be white */
+.white-number-input input {
+  color: white !important;
+  background: transparent !important;
+}

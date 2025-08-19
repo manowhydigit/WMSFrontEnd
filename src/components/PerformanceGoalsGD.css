@@ -1,0 +1,494 @@
+@import url(https://fonts.googleapis.com/css?family=Lily+Script+One);
+/* PerformanceGoalsGD.css - Specific to PerformanceGoalsGD component only */
+.performance-heading {
+  font: 100 2.5rem/1 "Lily Script One", cursive;
+  font-style: normal;
+  letter-spacing: 3px;
+  /* color: white; */
+  /* color: #969595; */
+  color: rgba(47, 47, 47, 0.5);
+  text-shadow: 1px 4px 6px rgb(249, 247, 241), 0 0 0 #000,
+    1px 4px 6px rgb(249, 247, 241);
+
+  /* color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7); */
+  /* text-shadow: 0 3px 0 #5e5e5e, 0 5px 0 #4d4d4d, 0 7px 0 #3c3c3c,
+    0 9px 0 #2b2b2b, 3px 8px 15px rgba(0, 0, 0, 0.1),
+    3px 8px 5px rgba(0, 0, 0, 0.3); */
+  text-align: center;
+  /* text-transform: uppercase; */
+  cursor: pointer;
+  transition: all 400ms cubic-bezier(0.42, 0, 0.58, 1);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Make sure text inside InputNumber is white */
+.white-input .ant-input-number-input {
+  color: white !important;
+  background-color: transparent !important;
+}
+
+.performance-heading:hover {
+  /* color: rgba(47, 47, 47, 0.5); */
+  /* text-shadow: 1px 4px 6px rgb(249, 247, 241), 0 0 0 #000,
+    1px 4px 6px rgb(249, 247, 241); */
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Rain Effect Styles */
+.rain-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.raindrop {
+  position: absolute;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.4);
+  animation: rain linear infinite;
+}
+
+@keyframes rain {
+  0% {
+    transform: translateY(-100px);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(100vh);
+    opacity: 0;
+  }
+}
+
+/* Adjust the main container to ensure content stays above rain */
+.performance-goals-gd-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Container specific to PerformanceGoalsGD */
+.performance-goals-gd-container .containerSG {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  max-height: 530px;
+  max-width: 1800px;
+}
+
+.performance-goals-gd-container .form-containerSG {
+  background-color: white;
+  border-radius: 24px;
+  box-shadow: 0 15px 35px rgba(108, 99, 255, 0.2);
+}
+
+.performance-goals-gd-container .form-headerSG {
+  padding: 30px;
+  color: white;
+  text-align: center;
+}
+
+.performance-goals-gd-container .form-headerSG h1 {
+  font-weight: 600;
+  margin-bottom: 10px;
+  font-size: 28px;
+}
+
+.performance-goals-gd-container .form-headerSG p {
+  opacity: 0.9;
+  font-weight: 300;
+  font-size: 16px;
+}
+
+.performance-goals-gd-container .form-groupSG {
+  margin-bottom: 25px;
+}
+
+.performance-goals-gd-container labelSG {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #32325d;
+  font-size: 15px;
+}
+
+.performance-goals-gd-container inputSG,
+.performance-goals-gd-container selectSG,
+.performance-goals-gd-container textareaSG {
+  width: 100%;
+  padding: 12px 15px;
+  border: 1px solid #adb5bd;
+  border-radius: 12px;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  background-color: transparent !important;
+}
+
+.performance-goals-gd-container inputSG:focus,
+.performance-goals-gd-container selectSG:focus,
+.performance-goals-gd-container textareaSG:focus {
+  outline: none;
+  border-color: #6c63ff;
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.2);
+}
+
+.performance-goals-gd-container .form-buttonsSG {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.performance-goals-gd-container buttonSG {
+  cursor: pointer;
+  padding: 12px 25px;
+  border-radius: 12px;
+  font-weight: 500;
+  font-size: 15px;
+  transition: all 0.3s ease;
+}
+
+/* Dark mode styles specific to PerformanceGoalsGD */
+.performance-goals-gd-container.dark-mode .form-container {
+  background-color: #1a1a2e;
+}
+
+.performance-goals-gd-container.dark-mode label {
+  color: #ffffff;
+}
+
+.performance-goals-gd-container.dark-mode input,
+.performance-goals-gd-container.dark-mode select,
+.performance-goals-gd-container.dark-mode textarea {
+  background-color: #2a2a3e !important;
+  color: #ffffff !important;
+  border-color: #555c !important;
+}
+
+.performance-goals-gd-container .ant-select-selection-item,
+.performance-goals-gd-container .ant-select-selector,
+.performance-goals-gd-container .ant-input,
+.performance-goals-gd-container .ant-th {
+  background-color: transparent !important;
+}
+
+/* Selected value in the input */
+.performance-goals-gd-container .ant-select-selection-item {
+  color: white !important;
+  font-size: 12px !important;
+}
+
+/* Dropdown menu */
+.performance-goals-gd-container .ant-select-dropdown {
+  background-color: #333 !important;
+}
+
+/* Dropdown options */
+.performance-goals-gd-container .ant-select-item {
+  color: white !important;
+  font-size: 8px !important;
+  background-color: #333 !important;
+}
+
+/* Hovered dropdown option */
+.performance-goals-gd-container
+  .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+  background-color: #444 !important;
+}
+
+/* Selected dropdown option */
+.performance-goals-gd-container .ant-select-item-option-selected {
+  background-color: #555 !important;
+}
+
+/* Dropdown arrow icon */
+.performance-goals-gd-container .ant-select-arrow {
+  color: white !important;
+}
+
+/* Focused/active state */
+.performance-goals-gd-container
+  .ant-select-focused:not(.ant-select-disabled).ant-select:not(
+    .ant-select-customize-input
+  )
+  .ant-select-selector {
+  border-color: white !important;
+  box-shadow: none !important;
+}
+
+.performance-goals-gd-container.dark-mode input:focus,
+.performance-goals-gd-container.dark-mode select:focus,
+.performance-goals-gd-container.dark-mode textarea:focus {
+  border-color: #6c63ff;
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, 0.2);
+}
+
+/* For all Ant Design Input placeholders */
+.performance-goals-gd-container .ant-input::placeholder {
+  color: white !important;
+  opacity: 0.7 !important;
+}
+
+/* For your specific Input if you need to target it more specifically */
+.performance-goals-gd-container
+  .your-specific-input-class
+  .ant-input::placeholder {
+  color: white !important;
+  opacity: 0.7 !important;
+}
+
+.performance-goals-gd-container table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.performance-goals-gd-container th {
+  padding: 12px;
+  text-align: left;
+}
+
+/* For modern browsers */
+.performance-goals-gd-container .white-placeholder-input::placeholder {
+  color: white !important;
+  opacity: 0.7 !important;
+}
+
+/* For older browsers */
+.performance-goals-gd-container
+  .white-placeholder-input::-webkit-input-placeholder {
+  /* Chrome/Opera/Safari */
+  color: white !important;
+  opacity: 0.7 !important;
+}
+.performance-goals-gd-container .white-placeholder-input::-moz-placeholder {
+  /* Firefox 19+ */
+  color: white !important;
+  opacity: 0.7 !important;
+}
+.performance-goals-gd-container .white-placeholder-input:-ms-input-placeholder {
+  /* IE 10+ */
+  color: white !important;
+  opacity: 0.7 !important;
+}
+.performance-goals-gd-container .white-placeholder-input:-moz-placeholder {
+  /* Firefox 18- */
+  color: white !important;
+  opacity: 0.7 !important;
+}
+
+.performance-goals-gd-container td {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .performance-goals-gd-container .form-container {
+    padding: 20px;
+  }
+
+  /* For the selected value display */
+  .performance-goals-gd-container .ant-select-selection-item {
+    color: white !important;
+  }
+
+  /* For the dropdown options */
+  .performance-goals-gd-container .ant-select-item,
+  .performance-goals-gd-container .ant-select-selection-item {
+    color: white !important;
+    background-color: #333 !important;
+  }
+
+  /* For hover state in dropdown */
+  .performance-goals-gd-container
+    .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+    background-color: #444 !important;
+  }
+
+  /* For the dropdown arrow */
+  .performance-goals-gd-container .ant-select-arrow {
+    color: white !important;
+  }
+
+  .performance-goals-gd-container .form-group {
+    flex-direction: column !important;
+  }
+
+  .performance-goals-gd-container .form-buttons {
+    flex-direction: column !important;
+  }
+}
+
+.performance-goals-gd-container .glass-effect {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+}
+
+/* Dark mode glass effect */
+.performance-goals-gd-container.dark .glass-effect {
+  background: rgba(26, 26, 46, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.performance-goals-gd-container {
+  --clr-container-bg: rgba(255, 255, 255, 0.105);
+  --clr-container-border: rgba(255, 255, 255, 0.196);
+  --clr-buttons-bg: rgba(255, 255, 255, 0.209);
+  --clr-highlight: #fff;
+  --clr-btn-text: #111;
+  --clr-btn-shadow: #444;
+  --clr-social-icon: #fff;
+  --clr-input: #fff;
+  --clr-input-border: #fff;
+  --clr-input-placeholder: #fff;
+  --clr-submit-bg: #fff;
+  --clr-submit-text: #111;
+  --clr-submit-border-hover: #fff;
+  --clr-span: #777;
+  --clr-terms: #fff;
+  --clr-terms-link: #aad8d3;
+  --box-shadow-buttons: 0 4px 10px 6px rgba(255, 255, 255, 0.15);
+  --box-shadow-submit: 0 4px 55px rgba(255, 255, 255, 0.2);
+  --bg-body-gradient: linear-gradient(to right, #155799, #159957);
+  --backdrop-form: blur(19px);
+}
+
+.performance-goals-gd-container .form-containerSG {
+  background-color: var(--clr-container-bg);
+  border: 1px solid var(--clr-container-border);
+  backdrop-filter: var(--backdrop-form);
+  position: relative;
+  width: min(100%, 95vw);
+  height: 490px;
+  padding: 5px;
+  border-radius: 2rem;
+  overflow: clip;
+}
+/* For Webkit browsers (Chrome, Safari) */
+.performance-goals-gd-container .table-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Make sure the table container doesn't affect layout */
+.performance-goals-gd-container .table-container {
+  isolation: isolate;
+}
+
+/* Optional: Add smooth scrolling for better UX */
+.performance-goals-gd-container .table-container {
+  scroll-behavior: smooth;
+}
+.performance-goals-gd-container th {
+  background-color: transparent !important;
+  font-weight: normal !important;
+}
+
+/* Bubble Animation */
+/* .wrapper {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.bubble {
+  position: absolute;
+  bottom: -100px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  animation: rise 10s infinite;
+}
+
+.bubble:nth-child(1) {
+  width: 40px;
+  height: 40px;
+  left: 10%;
+  animation-delay: 0s;
+}
+
+.bubble:nth-child(2) {
+  width: 60px;
+  height: 60px;
+  left: 30%;
+  animation-delay: 1s;
+}
+
+.bubble:nth-child(3) {
+  width: 50px;
+  height: 50px;
+  left: 50%;
+  animation-delay: 2s;
+}
+
+.bubble:nth-child(4) {
+  width: 70px;
+  height: 70px;
+  left: 70%;
+  animation-delay: 3s;
+}
+
+.bubble:nth-child(5) {
+  width: 30px;
+  height: 30px;
+  left: 20%;
+  animation-delay: 4s;
+}
+
+.bubble:nth-child(6) {
+  width: 80px;
+  height: 80px;
+  left: 40%;
+  animation-delay: 5s;
+}
+
+.bubble:nth-child(7) {
+  width: 20px;
+  height: 20px;
+  left: 60%;
+  animation-delay: 6s;
+}
+
+.bubble:nth-child(8) {
+  width: 90px;
+  height: 90px;
+  left: 80%;
+  animation-delay: 7s;
+}
+
+.bubble:nth-child(9) {
+  width: 50px;
+  height: 50px;
+  left: 15%;
+  animation-delay: 8s;
+}
+
+.bubble:nth-child(10) {
+  width: 60px;
+  height: 60px;
+  left: 85%;
+  animation-delay: 9s;
+}
+
+@keyframes rise {
+  to {
+    transform: translateY(-100vh);
+    opacity: 0;
+  }
+} */
