@@ -51,10 +51,24 @@ const PendingBuyerOrder = () => {
   const [viewMode, setViewMode] = useState("list");
   const [rowData, setRowData] = useState([]);
   const [selectedRows, setSelectedRows] = useState([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Add checkbox column
   const columns = [
+    {
+      title: "Select",
+      dataIndex: "selection",
+      key: "selection",
+      width: 80,
+      render: (_, record) => (
+        <Checkbox
+          checked={selectedRowKeys.includes(record.key)}
+          onChange={(e) => handleCheckboxChange(e, record)}
+        />
+      ),
+    },
     {
       title: "S No",
       dataIndex: "sno",
@@ -130,14 +144,16 @@ const PendingBuyerOrder = () => {
       const response = await axios.get(
         `${API_URL}/api/buyerOrder/getPendingBuyerOrderDetails?branchCode=${loginBranchCode}&finYear=${loginFinYear}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
-      if (response.status === true) {
-        setRowData(
-          response.paramObjectsMap.pendingOrderDetails.map((item, index) => ({
-            ...item,
-            key: index,
-            sno: index + 1,
-          }))
-        );
+      if (response.data.status === true) {
+        const dataWithKeys =
+          response.data.paramObjectsMap.pendingOrderDetails.map(
+            (item, index) => ({
+              ...item,
+              key: index,
+              sno: index + 1,
+            })
+          );
+        setRowData(dataWithKeys);
       } else {
         toast.error(
           response.paramObjectsMap.errorMessage || "Report Fetch failed"
@@ -151,10 +167,57 @@ const PendingBuyerOrder = () => {
     }
   };
 
-  const handleSelectedRows = async (selectedRowKeys, selectedRows) => {
-    setSelectedRows(selectedRows);
-    console.log("selectedRows", selectedRows);
+  // Handle checkbox change
+  const handleCheckboxChange = (e, record) => {
+    const isChecked = e.target.checked;
+    if (isChecked) {
+      setSelectedRowKeys([...selectedRowKeys, record.key]);
+      setSelectedRows([...selectedRows, record]);
+    } else {
+      setSelectedRowKeys(selectedRowKeys.filter((key) => key !== record.key));
+      setSelectedRows(selectedRows.filter((row) => row.key !== record.key));
+    }
+  };
 
+  // Handle select all on current page
+  const handleSelectAll = (e) => {
+    const isChecked = e.target.checked;
+    const currentPageData = rowData.slice(
+      (currentPage - 1) * pageSize,
+      currentPage * pageSize
+    );
+
+    if (isChecked) {
+      const newSelectedKeys = [
+        ...new Set([
+          ...selectedRowKeys,
+          ...currentPageData.map((item) => item.key),
+        ]),
+      ];
+      const newSelectedRows = [
+        ...selectedRows,
+        ...currentPageData.filter(
+          (item) => !selectedRowKeys.includes(item.key)
+        ),
+      ];
+
+      setSelectedRowKeys(newSelectedKeys);
+      setSelectedRows(newSelectedRows);
+    } else {
+      const currentPageKeys = currentPageData.map((item) => item.key);
+      const newSelectedKeys = selectedRowKeys.filter(
+        (key) => !currentPageKeys.includes(key)
+      );
+      const newSelectedRows = selectedRows.filter(
+        (row) => !currentPageKeys.includes(row.key)
+      );
+
+      setSelectedRowKeys(newSelectedKeys);
+      setSelectedRows(newSelectedRows);
+    }
+  };
+
+  const handleGenerateBuyerOrders = async () => {
     if (selectedRows.length === 0) {
       toast.error("Please select at least one order");
       return;
@@ -175,25 +238,38 @@ const PendingBuyerOrder = () => {
 
     setIsSubmitting(true);
 
-    const saveFormData = selectedRows.map((row) => ({
-      billToName: row.billToName,
-      branch: loginBranch,
-      branchCode: loginBranchCode,
-      buyerName: row.buyerName,
-      client: loginClient,
-      createdBy: loginUserName,
-      customer: loginCustomer,
-      finYear: loginFinYear,
-      invoiceDate: row.invoiceDate,
-      invoiceNo: row.invoiceNo,
-      orderDate: row.orderDate,
-      orderNo: row.orderNo,
-      orgId: orgId,
-      refDate: row.refDate,
-      refNo: row.refNo,
-      shipToName: row.shipToName,
-      warehouse: loginWarehouse,
-    }));
+    const saveFormData = selectedRows.map((row) => {
+      // Format dates for each individual row
+      const formattedOrderDate = row.orderDate
+        ? dayjs(row.orderDate).format("YYYY-MM-DD")
+        : "";
+      const formattedRefDate = row.refDate
+        ? dayjs(row.refDate).format("YYYY-MM-DD")
+        : "";
+      const formattedInvoiceDate = row.invoiceDate
+        ? dayjs(row.invoiceDate).format("YYYY-MM-DD")
+        : "";
+
+      return {
+        billToName: row.billToName || "",
+        branch: loginBranch || "",
+        branchCode: loginBranchCode || "",
+        buyerName: row.buyerName || "",
+        client: loginClient || "",
+        createdBy: loginUserName || "",
+        customer: loginCustomer || "",
+        finYear: loginFinYear || "",
+        invoiceDate: formattedInvoiceDate,
+        invoiceNo: row.invoiceNo || "",
+        orderDate: formattedOrderDate,
+        orderNo: row.orderNo || "",
+        orgId: orgId || "",
+        refDate: formattedRefDate,
+        refNo: row.refNo || "",
+        shipToName: row.shipToName || "",
+        warehouse: loginWarehouse || "",
+      };
+    });
 
     console.log("DATA TO SAVE IS:", saveFormData);
 
@@ -203,14 +279,14 @@ const PendingBuyerOrder = () => {
         saveFormData
       );
 
-      if (result.status === true) {
-        console.log("Response:", result);
+      if (result.data.status === true) {
+        console.log("Response:", result.data);
         toast.success("Multiple Buyer Orders created successfully");
         handleClear();
         getPendingBuyerOrderDetails();
       } else {
         toast.error(
-          result.paramObjectsMap.errorMessage ||
+          result.data.paramObjectsMap?.errorMessage ||
             "Multiple Buyer Order creation failed"
         );
       }
@@ -224,16 +300,23 @@ const PendingBuyerOrder = () => {
 
   const handleClear = () => {
     setSelectedRows([]);
-  };
-
-  const rowSelection = {
-    onChange: (selectedRowKeys, selectedRows) => {
-      setSelectedRows(selectedRows);
-    },
+    setSelectedRowKeys([]);
   };
 
   const toggleViewMode = () => {
     setViewMode(viewMode === "form" ? "list" : "form");
+  };
+
+  // Check if all items on current page are selected
+  const isAllSelectedOnCurrentPage = () => {
+    const currentPageData = rowData.slice(
+      (currentPage - 1) * pageSize,
+      currentPage * pageSize
+    );
+    return (
+      currentPageData.length > 0 &&
+      currentPageData.every((item) => selectedRowKeys.includes(item.key))
+    );
   };
 
   return (
@@ -295,7 +378,7 @@ const PendingBuyerOrder = () => {
               }}
             >
               <Typography.Title level={3} style={{ color: "#fff", margin: 0 }}>
-                Generating Muliple Buyer Orders
+                Generating Multiple Buyer Orders
               </Typography.Title>
               <div>
                 <Button
@@ -346,7 +429,7 @@ const PendingBuyerOrder = () => {
               </Button>
               <Button
                 icon={<SaveOutlined />}
-                onClick={() => handleSelectedRows(selectedRows)}
+                onClick={handleGenerateBuyerOrders}
                 loading={isSubmitting}
                 className="primary-action-btn"
                 style={{
@@ -355,7 +438,7 @@ const PendingBuyerOrder = () => {
                   border: "none",
                 }}
               >
-                Generate Muliple Buyer Orders
+                Generate Multiple Buyer Orders ({selectedRows.length})
               </Button>
               <Button
                 icon={<CloudUploadOutlined />}
@@ -380,6 +463,15 @@ const PendingBuyerOrder = () => {
                 Download
               </Button>
             </div>
+
+            {/* Selection Info */}
+            {selectedRows.length > 0 && (
+              <div style={{ padding: "0 20px 10px 20px", color: "white" }}>
+                <Typography.Text>
+                  Selected {selectedRows.length} order(s)
+                </Typography.Text>
+              </div>
+            )}
 
             {/* Table Section */}
             <div
@@ -412,7 +504,24 @@ const PendingBuyerOrder = () => {
                       backgroundColor: "rgba(255, 255, 255, 0.1)",
                     }}
                   >
-                    {columns.map((column) => (
+                    <th
+                      style={{
+                        padding: "12px",
+                        textAlign: "center",
+                        color: "white",
+                        width: "80px",
+                      }}
+                    >
+                      <Checkbox
+                        checked={isAllSelectedOnCurrentPage()}
+                        onChange={handleSelectAll}
+                        indeterminate={
+                          selectedRowKeys.length > 0 &&
+                          !isAllSelectedOnCurrentPage()
+                        }
+                      />
+                    </th>
+                    {columns.slice(1).map((column) => (
                       <th
                         key={column.key}
                         style={{
@@ -427,38 +536,50 @@ const PendingBuyerOrder = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {rowData.map((row, index) => (
-                    <tr
-                      key={`row-${index}-${row.key || index}`}
-                      style={{
-                        borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                        color: "white",
-                        backgroundColor:
-                          index % 2 === 0
-                            ? "rgba(255, 255, 255, 0.02)"
-                            : "rgba(255, 255, 255, 0.05)",
-                        "&:hover": {
-                          backgroundColor: "rgba(255, 255, 255, 0.1)",
-                        },
-                      }}
-                    >
-                      {columns.map((column) => (
+                  {rowData
+                    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                    .map((row, index) => (
+                      <tr
+                        key={`row-${index}-${row.key || index}`}
+                        style={{
+                          borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                          color: "white",
+                          backgroundColor:
+                            index % 2 === 0
+                              ? "rgba(255, 255, 255, 0.02)"
+                              : "rgba(255, 255, 255, 0.05)",
+                        }}
+                      >
                         <td
-                          key={column.key}
                           style={{
                             padding: "12px",
-                            textAlign: "left",
+                            textAlign: "center",
                             color: "white",
                             fontSize: "11px",
                           }}
                         >
-                          {column.render
-                            ? column.render(row[column.dataIndex], row)
-                            : row[column.dataIndex]}
+                          <Checkbox
+                            checked={selectedRowKeys.includes(row.key)}
+                            onChange={(e) => handleCheckboxChange(e, row)}
+                          />
                         </td>
-                      ))}
-                    </tr>
-                  ))}
+                        {columns.slice(1).map((column) => (
+                          <td
+                            key={column.key}
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {column.render
+                              ? column.render(row[column.dataIndex], row)
+                              : row[column.dataIndex]}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
                 </tbody>
               </table>
 
@@ -576,103 +697,6 @@ const PendingBuyerOrder = () => {
                   ))}
                 </select>
               </div>
-            </div>
-
-            {/* Pagination Controls */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                marginTop: "16px",
-                padding: "0 20px 20px 20px",
-                color: "white",
-              }}
-            >
-              <span style={{ marginRight: "16px", fontSize: "12px" }}>
-                {(currentPage - 1) * pageSize + 1}-
-                {Math.min(currentPage * pageSize, rowData.length)} of{" "}
-                {rowData.length} items
-              </span>
-
-              <Button
-                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                style={{
-                  backgroundColor: "transparent",
-                  color: "white",
-                  border: "1px solid white",
-                  margin: "0 4px",
-                }}
-              >
-                Prev
-              </Button>
-
-              {Array.from(
-                { length: Math.ceil(rowData.length / pageSize) },
-                (_, i) => (
-                  <Button
-                    key={i}
-                    onClick={() => setCurrentPage(i + 1)}
-                    style={{
-                      backgroundColor:
-                        currentPage === i + 1
-                          ? "rgba(255,255,255,0.2)"
-                          : "transparent",
-                      color: "white",
-                      border: "1px solid white",
-                      margin: "0 2px",
-                      minWidth: "32px",
-                    }}
-                  >
-                    {i + 1}
-                  </Button>
-                )
-              )}
-
-              <Button
-                onClick={() =>
-                  setCurrentPage((prev) =>
-                    Math.min(prev + 1, Math.ceil(rowData.length / pageSize))
-                  )
-                }
-                disabled={currentPage === Math.ceil(rowData.length / pageSize)}
-                style={{
-                  backgroundColor: "transparent",
-                  color: "white",
-                  border: "1px solid white",
-                  margin: "0 4px",
-                }}
-              >
-                Next
-              </Button>
-
-              <Select
-                value={pageSize}
-                onChange={(value) => {
-                  setPageSize(value);
-                  setCurrentPage(1);
-                }}
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.1)",
-                  color: "white",
-                  border: "1px solid white",
-                  marginLeft: "8px",
-                  width: "120px",
-                }}
-              >
-                <Option value={10} style={{ background: "#1A1A2E" }}>
-                  10 per page
-                </Option>
-                <Option value={20} style={{ background: "#1A1A2E" }}>
-                  20 per page
-                </Option>
-                <Option value={50} style={{ background: "#1A1A2E" }}>
-                  50 per page
-                </Option>
-                <Option value={100} style={{ background: "#1A1A2E" }}>
-                  100 per page
-                </Option>
-              </Select>
             </div>
           </div>
         </div>

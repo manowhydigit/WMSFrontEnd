@@ -30,6 +30,7 @@ import axios from "axios";
 import ToastComponent from "../utils/toast-component";
 import { showToast } from "../utils/toast-component";
 import CommonBulkUpload from "../utils/CommonBulkUpload";
+import GridOnIcon from "@mui/icons-material/GridOn";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
 const { Option } = Select;
@@ -47,13 +48,15 @@ const DocumentMapping = () => {
   const [pageSize, setPageSize] = useState(5);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [editId, setEditId] = useState("");
+  const [finYrId, setFinYrId] = useState(null);
+  const [branchCodeId, setBranchCodeId] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Data states
   const [branchList, setBranchList] = useState([]);
   const [finYearList, setFinYearList] = useState([]);
   const [mappingList, setMappingList] = useState([]);
-  const [screenList, setScreenList] = useState([]);
-  const [clientList, setClientList] = useState([]);
+  const [mappingTableData, setMappingTableData] = useState([]);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -61,8 +64,6 @@ const DocumentMapping = () => {
     finYear: "",
     active: true,
   });
-
-  const [mappingTableData, setMappingTableData] = useState([]);
 
   // Error states
   const [fieldErrors, setFieldErrors] = useState({
@@ -82,8 +83,6 @@ const DocumentMapping = () => {
         getAllBranches(),
         getAllFinYears(),
         getAllDocumentTypeMappings(),
-        getAllScreens(),
-        getAllClients(),
       ]);
     } catch (error) {
       console.error("Error fetching initial data:", error);
@@ -95,13 +94,21 @@ const DocumentMapping = () => {
   const getAllBranches = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/api/commonmaster/getAllActiveBranches?orgId=${orgId}`
+        `${API_URL}/api/warehousemastercontroller/branch?orgid=${orgId}`
       );
-      if (response.data.status) {
-        setBranchList(response.data.paramObjectsMap.branchVOs);
+
+      if (
+        response.data?.status &&
+        Array.isArray(response.data?.paramObjectsMap?.branchVO)
+      ) {
+        setBranchList(response.data.paramObjectsMap.branchVO);
+      } else {
+        setBranchList([]);
+        console.warn("Unexpected branch response structure:", response.data);
       }
     } catch (error) {
       console.error("Error fetching branches:", error);
+      setBranchList([]);
     }
   };
 
@@ -110,11 +117,18 @@ const DocumentMapping = () => {
       const response = await axios.get(
         `${API_URL}/api/commonmaster/getAllAciveFInYear?orgId=${orgId}`
       );
-      if (response.data.status) {
+      if (
+        response.data?.status &&
+        Array.isArray(response.data?.paramObjectsMap?.financialYearVOs)
+      ) {
         setFinYearList(response.data.paramObjectsMap.financialYearVOs);
+      } else {
+        setFinYearList([]);
+        console.warn("Unexpected finYear response structure:", response.data);
       }
     } catch (error) {
       console.error("Error fetching financial years:", error);
+      setFinYearList([]);
     }
   };
 
@@ -123,37 +137,26 @@ const DocumentMapping = () => {
       const response = await axios.get(
         `${API_URL}/api/warehousemastercontroller/getAllDocumentTypeMapping?orgId=${orgId}`
       );
-      if (response.data.status) {
-        setMappingList(response.data.paramObjectsMap.documentTypeMappingVO);
+
+      if (
+        response.data?.status &&
+        Array.isArray(response.data?.paramObjectsMap?.documentTypeMappingVO)
+      ) {
+        const mappedData =
+          response.data.paramObjectsMap.documentTypeMappingVO.map((item) => ({
+            ...item,
+            key: item.id,
+            active: item.active === "Active" || item.active === true,
+          }));
+
+        setMappingList(mappedData);
+      } else {
+        console.warn("Unexpected response structure:", response.data);
+        setMappingList([]);
       }
     } catch (error) {
       console.error("Error fetching document type mappings:", error);
-    }
-  };
-
-  const getAllScreens = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/api/commonmaster/allScreenNames`
-      );
-      if (response.data.status) {
-        setScreenList(response.data.paramObjectsMap.screenNamesVO);
-      }
-    } catch (error) {
-      console.error("Error fetching screens:", error);
-    }
-  };
-
-  const getAllClients = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/api/warehousemastercontroller/getClientAndClientCodeByOrgId?orgId=${orgId}`
-      );
-      if (response.data.status) {
-        setClientList(response.data.paramObjectsMap.CustomerVO);
-      }
-    } catch (error) {
-      console.error("Error fetching clients:", error);
+      setMappingList([]);
     }
   };
 
@@ -162,24 +165,43 @@ const DocumentMapping = () => {
       if (!formData.branch || !formData.finYear) return;
 
       setLoading(true);
+
+      const selectedBranch = branchList.find(
+        (b) => b.branch === formData.branch
+      );
+      const selectedFinYear = finYearList.find(
+        (f) => f.finYear === formData.finYear
+      );
+
+      if (!selectedBranch || !selectedFinYear) {
+        console.error("Couldn't find branch or finYear details");
+        return;
+      }
+
       const response = await axios.get(
         `${API_URL}/api/warehousemastercontroller/getPendingDocumentTypeMapping`,
         {
           params: {
             branch: formData.branch,
+            branchCode: selectedBranch.branchCode,
             finYear: formData.finYear,
+            finYearIdentifier: selectedFinYear.finYearIdentifier,
             orgId: orgId,
           },
         }
       );
 
-      if (response.data.status) {
+      if (response.data?.status) {
         setMappingTableData(
-          response.data.paramObjectsMap.documentTypeMappingVO
+          response.data.paramObjectsMap.documentTypeMappingVO || []
         );
+      } else {
+        console.warn("Unexpected pending mappings response:", response.data);
+        setMappingTableData([]);
       }
     } catch (error) {
       console.error("Error fetching pending mappings:", error);
+      setMappingTableData([]);
     } finally {
       setLoading(false);
     }
@@ -198,6 +220,7 @@ const DocumentMapping = () => {
       finYear: "",
     });
     setEditId("");
+    setIsEditMode(false);
   };
 
   // Handle save document type mapping
@@ -216,10 +239,19 @@ const DocumentMapping = () => {
     setIsSubmitting(true);
 
     try {
+      const selectedBranch = branchList.find(
+        (b) => b.branch === formData.branch
+      );
+      const selectedFinYear = finYearList.find(
+        (f) => f.finYear === formData.finYear
+      );
+
       const payload = {
         ...(editId && { id: editId }),
         branch: formData.branch,
+        branchCode: selectedBranch?.branchCode,
         finYear: formData.finYear,
+        finYearIdentifier: selectedFinYear?.finYearIdentifier,
         documentTypeMappingDetailsDTO: mappingTableData.map((item) => ({
           screenName: item.screenName,
           screenCode: item.screenCode,
@@ -238,7 +270,7 @@ const DocumentMapping = () => {
         payload
       );
 
-      if (response.data.status) {
+      if (response.data?.status) {
         showToast(
           "success",
           editId
@@ -246,11 +278,11 @@ const DocumentMapping = () => {
             : "Document type mapping created successfully"
         );
         handleClear();
-        getAllDocumentTypeMappings();
+        await getAllDocumentTypeMappings();
       } else {
         showToast(
           "error",
-          response.data.paramObjectsMap.errorMessage || "Operation failed"
+          response.data?.paramObjectsMap?.errorMessage || "Operation failed"
         );
       }
     } catch (error) {
@@ -264,12 +296,13 @@ const DocumentMapping = () => {
   // Handle edit document type mapping
   const handleEditMapping = (record) => {
     setEditId(record.id);
+    setIsEditMode(true);
     setViewMode("form");
 
     setFormData({
       branch: record.branch,
       finYear: record.finYear,
-      active: record.active === "Active",
+      active: record.active === "Active" || record.active === true,
     });
 
     // Set mapping table data
@@ -295,23 +328,19 @@ const DocumentMapping = () => {
 
   // Handle form input changes
   const handleInputChange = (name, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    const newFormData = { ...formData, [name]: value };
+    setFormData(newFormData);
 
     // Clear error when field is filled
     if (value) {
-      setFieldErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setFieldErrors((prev) => ({ ...prev, [name]: "" }));
     }
 
     // If both branch and finYear are selected, fetch pending mappings
     if (
       (name === "branch" || name === "finYear") &&
-      (name === "branch" ? value && formData.finYear : formData.branch && value)
+      newFormData.branch &&
+      newFormData.finYear
     ) {
       getPendingMappings();
     }
@@ -528,6 +557,7 @@ const DocumentMapping = () => {
                             .indexOf(input.toLowerCase()) >= 0
                         }
                         style={{ width: "100%" }}
+                        disabled={isEditMode}
                       >
                         {branchList.map((branch) => (
                           <Option key={branch.branchCode} value={branch.branch}>
@@ -556,6 +586,7 @@ const DocumentMapping = () => {
                             .indexOf(input.toLowerCase()) >= 0
                         }
                         style={{ width: "100%" }}
+                        disabled={isEditMode}
                       >
                         {finYearList.map((year) => (
                           <Option
@@ -590,10 +621,6 @@ const DocumentMapping = () => {
 
                 {/* Mapping Table */}
                 <div style={{ marginTop: "24px" }}>
-                  <Typography.Title level={5} style={{ color: "#fff" }}>
-                    Document Type Mappings
-                  </Typography.Title>
-
                   <div
                     className="form-containerSG"
                     style={{
@@ -650,6 +677,18 @@ const DocumentMapping = () => {
                         background: "var(--bg-body-gradient)",
                       }}
                     >
+                      <Button
+                        icon={<GridOnIcon />}
+                        onClick={getPendingMappings}
+                        style={{
+                          marginRight: "8px",
+                          background: "rgba(108, 99, 255, 0.3)",
+                          color: "#fff",
+                          border: "none",
+                        }}
+                      >
+                        Fill Grid
+                      </Button>
                       <table
                         style={{
                           width: "100%",
@@ -735,9 +774,6 @@ const DocumentMapping = () => {
                                     index % 2 === 0
                                       ? "rgba(255, 255, 255, 0.02)"
                                       : "rgba(255, 255, 255, 0.05)",
-                                  "&:hover": {
-                                    backgroundColor: "rgba(255, 255, 255, 0.1)",
-                                  },
                                 }}
                               >
                                 <td
@@ -804,7 +840,10 @@ const DocumentMapping = () => {
                             ))
                           ) : (
                             <tr>
-                              <td colSpan="6" className="text-center">
+                              <td
+                                colSpan="6"
+                                style={{ textAlign: "center", padding: "20px" }}
+                              >
                                 <strong style={{ color: "white" }}>
                                   {formData.branch && formData.finYear
                                     ? "No pending mappings found"
@@ -944,203 +983,218 @@ const DocumentMapping = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {mappingList
-                      .slice(
-                        (currentPage - 1) * pageSize,
-                        currentPage * pageSize
-                      )
-                      .map((mapping, index) => (
-                        <tr
-                          key={`mapping-${index}-${mapping.id}`}
-                          style={{
-                            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                            color: "white",
-                            backgroundColor:
-                              index % 2 === 0
-                                ? "rgba(255, 255, 255, 0.02)"
-                                : "rgba(255, 255, 255, 0.05)",
-                            "&:hover": {
-                              backgroundColor: "rgba(255, 255, 255, 0.1)",
-                            },
-                          }}
+                    {mappingList.length > 0 ? (
+                      mappingList
+                        .slice(
+                          (currentPage - 1) * pageSize,
+                          currentPage * pageSize
+                        )
+                        .map((mapping, index) => (
+                          <tr
+                            key={`mapping-${index}-${mapping.id}`}
+                            style={{
+                              borderBottom:
+                                "1px solid rgba(255, 255, 255, 0.1)",
+                              color: "white",
+                              backgroundColor:
+                                index % 2 === 0
+                                  ? "rgba(255, 255, 255, 0.02)"
+                                  : "rgba(255, 255, 255, 0.05)",
+                            }}
+                          >
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "left",
+                                color: "white",
+                                fontSize: "11px",
+                              }}
+                            >
+                              {mapping.branch}
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "left",
+                                color: "white",
+                                fontSize: "11px",
+                              }}
+                            >
+                              {mapping.finYear}
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "left",
+                                color: "white",
+                                fontSize: "11px",
+                              }}
+                            >
+                              {mapping.active === "Active" ||
+                              mapping.active === true
+                                ? "Yes"
+                                : "No"}
+                            </td>
+                            <td
+                              style={{
+                                padding: "12px",
+                                textAlign: "left",
+                                color: "white",
+                                fontSize: "11px",
+                              }}
+                            >
+                              <Space>
+                                <Button
+                                  type="link"
+                                  icon={<EditOutlined />}
+                                  onClick={() => handleEditMapping(mapping)}
+                                  style={{ color: "white" }}
+                                />
+                              </Space>
+                            </td>
+                          </tr>
+                        ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          style={{ textAlign: "center", padding: "20px" }}
                         >
-                          <td
-                            style={{
-                              padding: "12px",
-                              textAlign: "left",
-                              color: "white",
-                              fontSize: "11px",
-                            }}
-                          >
-                            {mapping.branch}
-                          </td>
-                          <td
-                            style={{
-                              padding: "12px",
-                              textAlign: "left",
-                              color: "white",
-                              fontSize: "11px",
-                            }}
-                          >
-                            {mapping.finYear}
-                          </td>
-                          <td
-                            style={{
-                              padding: "12px",
-                              textAlign: "left",
-                              color: "white",
-                              fontSize: "11px",
-                            }}
-                          >
-                            {mapping.active === "Active" ? "Yes" : "No"}
-                          </td>
-                          <td
-                            style={{
-                              padding: "12px",
-                              textAlign: "left",
-                              color: "white",
-                              fontSize: "11px",
-                            }}
-                          >
-                            <Space>
-                              <Button
-                                type="link"
-                                icon={<EditOutlined />}
-                                onClick={() => handleEditMapping(mapping)}
-                                style={{ color: "white" }}
-                              />
-                              {/* <Button
-                                type="link"
-                                icon={<DeleteOutlined />}
-                                danger
-                              /> */}
-                            </Space>
-                          </td>
-                        </tr>
-                      ))}
+                          <strong style={{ color: "white" }}>
+                            {loading
+                              ? "Loading..."
+                              : "No document type mappings found"}
+                          </strong>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
 
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    marginTop: "16px",
-                    paddingRight: "20px",
-                    color: "white",
-                  }}
-                >
-                  <span style={{ marginRight: "16px", fontSize: "12px" }}>
-                    {(currentPage - 1) * pageSize + 1}-
-                    {Math.min(currentPage * pageSize, mappingList.length)} of{" "}
-                    {mappingList.length} items
-                  </span>
-
-                  <button
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.max(prev - 1, 1))
-                    }
-                    disabled={currentPage === 1}
+                {mappingList.length > 0 && (
+                  <div
                     style={{
-                      backgroundColor: "transparent",
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginTop: "16px",
+                      paddingRight: "20px",
                       color: "white",
-                      border: "1px solid white",
-                      margin: "0 4px",
-                      padding: "2px 8px",
-                      borderRadius: "4px",
-                      cursor: currentPage === 1 ? "not-allowed" : "pointer",
-                      opacity: currentPage === 1 ? 0.5 : 1,
                     }}
                   >
-                    Prev
-                  </button>
+                    <span style={{ marginRight: "16px", fontSize: "12px" }}>
+                      {(currentPage - 1) * pageSize + 1}-
+                      {Math.min(currentPage * pageSize, mappingList.length)} of{" "}
+                      {mappingList.length} items
+                    </span>
 
-                  {Array.from(
-                    { length: Math.ceil(mappingList.length / pageSize) },
-                    (_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setCurrentPage(i + 1)}
-                        style={{
-                          backgroundColor:
-                            currentPage === i + 1
-                              ? "rgba(255,255,255,0.2)"
-                              : "transparent",
-                          color: "white",
-                          border: "1px solid white",
-                          margin: "0 2px",
-                          padding: "2px 8px",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          minWidth: "28px",
-                        }}
-                      >
-                        {i + 1}
-                      </button>
-                    )
-                  )}
+                    <button
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.max(prev - 1, 1))
+                      }
+                      disabled={currentPage === 1}
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "white",
+                        border: "1px solid white",
+                        margin: "0 4px",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                        opacity: currentPage === 1 ? 0.5 : 1,
+                      }}
+                    >
+                      Prev
+                    </button>
 
-                  <button
-                    onClick={() =>
-                      setCurrentPage((prev) =>
-                        Math.min(
-                          prev + 1,
-                          Math.ceil(mappingList.length / pageSize)
-                        )
+                    {Array.from(
+                      { length: Math.ceil(mappingList.length / pageSize) },
+                      (_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setCurrentPage(i + 1)}
+                          style={{
+                            backgroundColor:
+                              currentPage === i + 1
+                                ? "rgba(255,255,255,0.2)"
+                                : "transparent",
+                            color: "white",
+                            border: "1px solid white",
+                            margin: "0 2px",
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            minWidth: "28px",
+                          }}
+                        >
+                          {i + 1}
+                        </button>
                       )
-                    }
-                    disabled={
-                      currentPage === Math.ceil(mappingList.length / pageSize)
-                    }
-                    style={{
-                      backgroundColor: "transparent",
-                      color: "white",
-                      border: "1px solid white",
-                      margin: "0 4px",
-                      padding: "2px 8px",
-                      borderRadius: "4px",
-                      cursor:
-                        currentPage === Math.ceil(mappingList.length / pageSize)
-                          ? "not-allowed"
-                          : "pointer",
-                      opacity:
-                        currentPage === Math.ceil(mappingList.length / pageSize)
-                          ? 0.5
-                          : 1,
-                    }}
-                  >
-                    Next
-                  </button>
+                    )}
 
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      backgroundColor: "rgba(255,255,255,0.1)",
-                      color: "white",
-                      border: "1px solid white",
-                      marginLeft: "8px",
-                      padding: "2px 4px",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    <option value="5" style={{ background: "#1A1A2E" }}>
-                      5 / page
-                    </option>
-                    <option value="10" style={{ background: "#1A1A2E" }}>
-                      10 / page
-                    </option>
-                    <option value="20" style={{ background: "#1A1A2E" }}>
-                      20 / page
-                    </option>
-                    <option value="50" style={{ background: "#1A1A2E" }}>
-                      50 / page
-                    </option>
-                  </select>
-                </div>
+                    <button
+                      onClick={() =>
+                        setCurrentPage((prev) =>
+                          Math.min(
+                            prev + 1,
+                            Math.ceil(mappingList.length / pageSize)
+                          )
+                        )
+                      }
+                      disabled={
+                        currentPage === Math.ceil(mappingList.length / pageSize)
+                      }
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "white",
+                        border: "1px solid white",
+                        margin: "0 4px",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        cursor:
+                          currentPage ===
+                          Math.ceil(mappingList.length / pageSize)
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity:
+                          currentPage ===
+                          Math.ceil(mappingList.length / pageSize)
+                            ? 0.5
+                            : 1,
+                      }}
+                    >
+                      Next
+                    </button>
+
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        backgroundColor: "rgba(255,255,255,0.1)",
+                        color: "white",
+                        border: "1px solid white",
+                        marginLeft: "8px",
+                        padding: "2px 4px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      <option value="5" style={{ background: "#1A1A2E" }}>
+                        5 / page
+                      </option>
+                      <option value="10" style={{ background: "#1A1A2E" }}>
+                        10 / page
+                      </option>
+                      <option value="20" style={{ background: "#1A1A2E" }}>
+                        20 / page
+                      </option>
+                      <option value="50" style={{ background: "#1A1A2E" }}>
+                        50 / page
+                      </option>
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
           )}
