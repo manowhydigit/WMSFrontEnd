@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Button,
-  Card,
   Table,
   Modal,
   Pagination,
@@ -12,15 +11,15 @@ import {
   Row,
   Col,
   ConfigProvider,
-  Checkbox,
   Form,
   Input,
   DatePicker,
   Select,
+  InputNumber,
+  Checkbox,
 } from "antd";
 import {
   CloudUploadOutlined,
-  DownloadOutlined,
   SearchOutlined,
   ClearOutlined,
   DeleteOutlined,
@@ -28,10 +27,15 @@ import {
   FormOutlined,
   PlusOutlined,
   SaveOutlined,
+  CloseOutlined,
+  AppstoreAddOutlined,
+  FilterOutlined,
+  UnorderedListOutlined,
+  RightCircleOutlined,
 } from "@ant-design/icons";
 import CommonBulkUpload from "../utils/CommonBulkUpload";
 import sampleFile from "../assets/sample-files/sample_Stock_Restate_.xls";
-import { ToastContainer, toast } from "react-toastify";
+import { ToastContainer } from "react-toastify";
 import dayjs from "dayjs";
 import axios from "axios";
 
@@ -41,37 +45,25 @@ const { TabPane } = Tabs;
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
 
 const StockRestate = () => {
-  const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
-  const [orgId, setOrgId] = useState(localStorage.getItem("orgId"));
+  const [theme] = useState(localStorage.getItem("theme") || "light");
+  const [orgId] = useState(localStorage.getItem("orgId"));
   const [isLoading, setIsLoading] = useState(false);
   const [viewMode, setViewMode] = useState("form");
   const [editId, setEditId] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [fillGridOpen, setFillGridOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [selectedModalRows, setSelectedModalRows] = useState([]);
 
-  const [loginUserName, setLoginUserName] = useState(
-    localStorage.getItem("userName")
-  );
-  const [loginBranchCode, setLoginBranchCode] = useState(
-    localStorage.getItem("branchcode")
-  );
-  const [loginBranch, setLoginBranch] = useState(
-    localStorage.getItem("branch")
-  );
-  const [loginCustomer, setLoginCustomer] = useState(
-    localStorage.getItem("customer")
-  );
-  const [loginClient, setLoginClient] = useState(
-    localStorage.getItem("client")
-  );
-  const [loginWarehouse, setLoginWarehouse] = useState(
-    localStorage.getItem("warehouse")
-  );
-  const [loginFinYear, setLoginFinYear] = useState(
-    localStorage.getItem("finYear")
-  );
+  const [loginUserName] = useState(localStorage.getItem("userName"));
+  const [loginBranchCode] = useState(localStorage.getItem("branchcode"));
+  const [loginBranch] = useState(localStorage.getItem("branch"));
+  const [loginCustomer] = useState(localStorage.getItem("customer"));
+  const [loginClient] = useState(localStorage.getItem("client"));
+  const [loginWarehouse] = useState(localStorage.getItem("warehouse"));
+  const [loginFinYear] = useState(localStorage.getItem("finYear"));
 
   // Data states
   const [stockRestateList, setStockRestateList] = useState([]);
@@ -80,7 +72,7 @@ const StockRestate = () => {
   const [toBinList, setToBinList] = useState([]);
   const [grnNoList, setGrnNoList] = useState([]);
   const [batchNoList, setBatchNoList] = useState([]);
-  const [transferType, setTransferType] = useState([
+  const [transferType] = useState([
     { name: "HOLD", value: "HOLD" },
     { name: "DEFECTIVE", value: "DEFECTIVE" },
     { name: "RELEASE", value: "RELEASE" },
@@ -94,6 +86,7 @@ const StockRestate = () => {
     transferTo: "",
     transferFromFlag: "",
     transferToFlag: "",
+    selectedTransferFromFlag: "",
     entryNo: "",
   });
 
@@ -104,11 +97,39 @@ const StockRestate = () => {
     status: "ALL",
   });
 
+  // Modal states
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [modalTableData, setModalTableData] = useState([]);
+  const [filteredModalData, setFilteredModalData] = useState([]);
+  const [modalFilters, setModalFilters] = useState({
+    partNo: "",
+    fromBin: "",
+  });
+
   useEffect(() => {
     getAllStockRestate();
     getFromBin();
     getNewStockRestateDocId();
   }, []);
+
+  // Filter modal data when filters change
+  useEffect(() => {
+    let filteredData = modalTableData;
+
+    if (modalFilters.partNo) {
+      filteredData = filteredData.filter((item) =>
+        item.partNo?.toLowerCase().includes(modalFilters.partNo.toLowerCase())
+      );
+    }
+
+    if (modalFilters.fromBin) {
+      filteredData = filteredData.filter((item) =>
+        item.fromBin?.toLowerCase().includes(modalFilters.fromBin.toLowerCase())
+      );
+    }
+
+    setFilteredModalData(filteredData);
+  }, [modalTableData, modalFilters]);
 
   const getNewStockRestateDocId = async () => {
     try {
@@ -225,6 +246,83 @@ const StockRestate = () => {
     }
   };
 
+  const getFillGridDetails = async () => {
+    try {
+      setIsLoading(true);
+      const response = await axios.get(
+        `${API_URL}/api/stockRestate/getFillGridDetailsForStockRestate?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&tranferFromFlag=${formData.transferFromFlag}&tranferToFlag=${formData.transferToFlag}&warehouse=${loginWarehouse}&entryNo=${formData.entryNo}`
+      );
+
+      if (response.data.status === true) {
+        const gridDetails = response.data.paramObjectsMap.fillGridDetails || [];
+
+        const modalData = gridDetails.map((row, index) => ({
+          id: row.id || index,
+          fromBin: row.fromBin || "",
+          fromBinClass: row.fromBinClass || "",
+          fromBinType: row.fromBinType || "",
+          fromCellType: row.fromCellType || "",
+          partNo: row.partNo || "",
+          partDesc: row.partDesc || "",
+          sku: row.sku || "",
+          grnNo: row.grnNo || "",
+          grnDate: row.grnDate || "",
+          batchNo: row.batchNo || "",
+          batchDate: row.batchDate || "",
+          expDate: row.expDate || "",
+          toBin: row.toBin || "",
+          toBinType: row.ToBinType || "",
+          toBinClass: row.ToBinClass || "",
+          toCellType: row.ToCellType || "",
+          fromQty: row.fromQty || 0,
+          toQty: row.toQty || 0,
+          remainQty: (row.fromQty || 0) - (row.toQty || 0),
+          fromCore: row.fromCore || "",
+          toCore: row.ToCore || "",
+          qcFlag: row.qcFlag || "",
+        }));
+
+        setModalTableData(modalData);
+        setFilteredModalData(modalData);
+        setIsModalVisible(true);
+      } else {
+        message.error("Failed to fetch grid details");
+      }
+    } catch (error) {
+      console.error("Error fetching fill grid data:", error);
+      message.error("Error fetching grid details");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUseFillGridData = () => {
+    if (selectedModalRows.length === 0) {
+      message.warning("Please select at least one record");
+      return;
+    }
+
+    setDetailTableData(selectedModalRows);
+    setIsModalVisible(false);
+    setModalFilters({ partNo: "", fromBin: "" });
+    setSelectedModalRows([]); // Clear selection after use
+    message.success("Selected data applied successfully");
+  };
+
+  const handleCloseModal = () => {
+    setIsModalVisible(false);
+    setModalFilters({ partNo: "", fromBin: "" });
+    setSelectedModalRows([]);
+  };
+
+  const handleOpenModal = () => {
+    if (!formData.transferFromFlag || !formData.transferToFlag) {
+      message.error("Please select Transfer From and Transfer To first");
+      return;
+    }
+    getFillGridDetails();
+  };
+
   const getFromQty = async (
     selectedBatchNo,
     selectedFromBin,
@@ -251,58 +349,6 @@ const StockRestate = () => {
     } catch (error) {
       console.error("Error fetching from quantity:", error);
       message.error("Failed to fetch from quantity");
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    const specialCharsRegex = /^[A-Za-z0-9#_\-/\\]*$/;
-
-    let errorMessage = "";
-
-    switch (name) {
-      case "entryNo":
-        if (!specialCharsRegex.test(value)) {
-          errorMessage = "Only alphanumeric, #_-/ are allowed";
-        }
-        break;
-      default:
-        break;
-    }
-
-    if (errorMessage) {
-      message.error(errorMessage);
-    } else {
-      let updatedData = { ...formData, [name]: value.toUpperCase() };
-
-      if (name === "transferFrom") {
-        updatedData.transferFromFlag =
-          value === "DEFECTIVE"
-            ? "D"
-            : value === "HOLD"
-            ? "H"
-            : value === "RELEASE"
-            ? "R"
-            : value === "VAS"
-            ? "V"
-            : "";
-        setFromBinList([]);
-        getFromBin(updatedData.transferFromFlag);
-        getToBinDetails(updatedData.transferFromFlag);
-      } else if (name === "transferTo") {
-        updatedData.transferToFlag =
-          value === "DEFECTIVE"
-            ? "D"
-            : value === "HOLD"
-            ? "H"
-            : value === "RELEASE"
-            ? "R"
-            : value === "VAS"
-            ? "V"
-            : "";
-      }
-
-      setFormData(updatedData);
     }
   };
 
@@ -352,7 +398,7 @@ const StockRestate = () => {
 
   const handlePartNoChange = (id, value) => {
     const row = detailTableData.find((item) => item.id === id);
-    const selectedPart = row.rowPartNoList.find(
+    const selectedPart = row.rowPartNoList?.find(
       (part) => part.partNo === value
     );
     setDetailTableData((prev) =>
@@ -379,7 +425,7 @@ const StockRestate = () => {
         item.id === id
           ? {
               ...item,
-              grnNo: selectedGrnNo.grnNo,
+              grnNo: selectedGrnNo?.grnNo || "",
               grnDate: selectedGrnNo?.grnDate || "",
             }
           : item
@@ -400,7 +446,7 @@ const StockRestate = () => {
         item.id === id
           ? {
               ...item,
-              batchNo: selectedBatchNo.batchNo,
+              batchNo: selectedBatchNo?.batchNo || "",
               batchDate: selectedBatchNo?.batchDate || "",
               expDate: selectedBatchNo?.expDate || "",
             }
@@ -420,11 +466,11 @@ const StockRestate = () => {
         item.id === id
           ? {
               ...item,
-              toBin: selectedToBin.toBin,
-              toBinType: selectedToBin.tobinType,
-              toBinClass: selectedToBin.toBinClass,
-              toCellType: selectedToBin.toCellType,
-              toCore: selectedToBin.toCore,
+              toBin: selectedToBin?.toBin || "",
+              toBinType: selectedToBin?.tobinType || "",
+              toBinClass: selectedToBin?.toBinClass || "",
+              toCellType: selectedToBin?.toCellType || "",
+              toCore: selectedToBin?.toCore || "",
             }
           : item
       )
@@ -525,8 +571,12 @@ const StockRestate = () => {
     try {
       setIsLoading(true);
 
+      const formattedDocDate = formData.docDate.format("YYYY-MM-DD");
+
       const saveData = {
+        ...(editId && { id: parseInt(editId) }),
         ...formData,
+        docDate: formattedDocDate,
         branch: loginBranch,
         branchCode: loginBranchCode,
         client: loginClient,
@@ -545,10 +595,12 @@ const StockRestate = () => {
           partDesc: item.partDesc,
           sku: item.sku,
           grnNo: item.grnNo,
-          grnDate: item.grnDate,
+          grnDate: item.grnDate ? item.grnDate.format("YYYY-MM-DD") : null,
           batch: item.batchNo,
-          batchDate: item.batchDate,
-          expDate: item.expDate,
+          batchDate: item.batchDate
+            ? item.batchDate.format("YYYY-MM-DD")
+            : null,
+          expDate: item.expDate ? item.expDate.format("YYYY-MM-DD") : null,
           toBin: item.toBin,
           toBinType: item.toBinType,
           toBinClass: item.toBinClass,
@@ -586,14 +638,19 @@ const StockRestate = () => {
   };
 
   const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllStockRestate();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   const handleEditStockRestate = (record) => {
     setEditId(record.id);
     setFormData({
       docId: record.docId,
-      docDate: record.docDate,
+      docDate: dayjs(record.docDate),
       transferFrom: record.transferFrom,
       transferFromFlag: record.transferFromFlag,
       transferTo: record.transferTo,
@@ -612,10 +669,10 @@ const StockRestate = () => {
         partDesc: item.partDesc,
         sku: item.sku,
         grnNo: item.grnNo,
-        grnDate: item.grnDate,
+        grnDate: item.grnDate ? dayjs(item.grnDate) : null, // Convert string to Day.js object
         batchNo: item.batch,
-        batchDate: item.batchDate,
-        expDate: item.expDate,
+        batchDate: item.batchDate ? dayjs(item.batchDate) : null,
+        expDate: item.expDate ? dayjs(item.expDate) : null,
         toBin: item.toBin,
         toBinType: item.toBinType,
         toBinClass: item.toBinClass,
@@ -634,10 +691,6 @@ const StockRestate = () => {
     setViewMode("form");
   };
 
-  const handleFileUpload = (event) => {
-    console.log(event.target.files[0]);
-  };
-
   const handleUploadSubmit = () => {
     console.log("Submit clicked");
     setUploadOpen(false);
@@ -647,6 +700,169 @@ const StockRestate = () => {
   const getAvailableTransferTo = (transferFrom) => {
     return transferType.filter((item) => !transferFrom.includes(item.value));
   };
+
+  // Custom Glass Modal Component
+  const GlassModal = ({
+    visible,
+    onCancel,
+    title,
+    children,
+    width = 1200,
+    footer = null,
+  }) => {
+    return (
+      <Modal
+        open={visible}
+        onCancel={onCancel}
+        footer={footer}
+        width={width}
+        closeIcon={<CloseOutlined style={{ color: "white" }} />}
+        maskClosable={false} // ✅ Prevent close when clicking outside
+        keyboard={false}
+        styles={{
+          body: {
+            padding: 0,
+            background: "rgba(255, 255, 255, 0.1)",
+            backdropFilter: "blur(12px)",
+            borderRadius: "16px",
+            boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            color: "white",
+          },
+          header: {
+            background: "rgba(255, 255, 255, 0.05)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
+            borderRadius: "16px 16px 0 0",
+            color: "white",
+            padding: "16px 24px",
+            color: "white",
+          },
+          content: {
+            backdropFilter: "blur(5px)",
+            background: "transparent",
+            color: "white",
+          },
+          mask: {
+            backdropFilter: "blur(5px)",
+            background: "rgba(0, 0, 0, 0.5)",
+            color: "white",
+          },
+        }}
+        title={title}
+      >
+        <div
+          style={{
+            padding: "24px",
+            background: "transparent",
+            background: "rgba(255, 255, 255, 0.05)",
+            borderBottom: "1px solid rgba(255, 255, 255, 极致的玻璃效果设计)",
+            borderRadius: "16px 16px 0 0",
+            color: "white",
+            padding: "16px 24px",
+            color: "white",
+          }}
+          onClick={(e) => e.stopPropagation()} // ✅ prevent bubbling from child clicks
+        >
+          {children}
+        </div>
+      </Modal>
+    );
+  };
+
+  const handleModalRowSelect = (e, record) => {
+    if (e.target.checked) {
+      setSelectedModalRows([...selectedModalRows, record]);
+    } else {
+      setSelectedModalRows(
+        selectedModalRows.filter((row) => row.id !== record.id)
+      );
+    }
+  };
+
+  const handleConfirmSelection = () => {
+    if (selectedModalRows.length === 0) {
+      message.warning("Please select at least one record");
+      return;
+    }
+
+    setDetailTableData(selectedModalRows);
+    setIsModalVisible(false);
+    setModalFilters({ partNo: "", fromBin: "" });
+    setSelectedModalRows([]);
+    message.success("Selected data applied successfully");
+  };
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedModalRows([...filteredModalData]);
+    } else {
+      setSelectedModalRows([]);
+    }
+  };
+  // Fill Grid Modal Columns
+  const fillGridColumns = [
+    {
+      title: "Select",
+      key: "selection",
+      fixed: "left",
+      width: 60,
+      render: (_, record) => (
+        <Checkbox
+          checked={selectedModalRows.some((row) => row.id === record.id)}
+          onChange={(e) => handleModalRowSelect(e, record)}
+        />
+      ),
+    },
+    {
+      title: "S.No",
+      dataIndex: "index",
+      key: "index",
+      render: (text, record, index) => index + 1,
+      width: 60,
+    },
+    {
+      title: "From Bin",
+      dataIndex: "fromBin",
+      key: "fromBin",
+    },
+    {
+      title: "Part No",
+      dataIndex: "partNo",
+      key: "partNo",
+    },
+    {
+      title: "Part Description",
+      dataIndex: "partDesc",
+      key: "partDesc",
+    },
+    {
+      title: "GRN No",
+      dataIndex: "grnNo",
+      key: "grnNo",
+    },
+    {
+      title: "Batch No",
+      dataIndex: "batchNo",
+      key: "batchNo",
+    },
+    {
+      title: "To Bin",
+      dataIndex: "toBin",
+      key: "toBin",
+    },
+    {
+      title: "From Qty",
+      dataIndex: "fromQty",
+      key: "fromQty",
+      render: (text) => text || 0,
+    },
+    {
+      title: "To Qty",
+      dataIndex: "toQty",
+      key: "toQty",
+      render: (text) => text || 0,
+    },
+  ];
 
   const columns = [
     {
@@ -728,7 +944,7 @@ const StockRestate = () => {
 
   const selectStyle = {
     width: "100%",
-    background: "rgba(255, 255, 255, 0.1)",
+    background: "rgba(255, 255, 255, 极致的玻璃效果设计)",
     color: "white",
     border: "1px solid rgba(255, 255, 255, 0.3)",
   };
@@ -848,9 +1064,11 @@ const StockRestate = () => {
                     color: "white",
                     border: "none",
                   }}
+                  disabled={editId > 0} // ✅ disable if EditId > 0
                 >
                   Save
                 </Button>
+
                 <Button
                   icon={<CloudUploadOutlined />}
                   onClick={() => setUploadOpen(true)}
@@ -896,9 +1114,11 @@ const StockRestate = () => {
                               }
                             >
                               <DatePicker
+                                className="white-datepicker"
                                 style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.docDate)}
+                                value={formData.docDate}
                                 disabled
+                                format="DD-MM-YYYY"
                               />
                             </Form.Item>
                           </Col>
@@ -912,22 +1132,27 @@ const StockRestate = () => {
                             >
                               <Select
                                 value={formData.transferFrom}
-                                onChange={(value) =>
+                                onChange={(value) => {
+                                  const transferFromFlag =
+                                    value === "DEFECTIVE"
+                                      ? "D"
+                                      : value === "HOLD"
+                                      ? "H"
+                                      : value === "RELEASE"
+                                      ? "R"
+                                      : value === "VAS"
+                                      ? "V"
+                                      : "";
+
                                   setFormData({
                                     ...formData,
                                     transferFrom: value,
-                                    transferFromFlag:
-                                      value === "DEFECTIVE"
-                                        ? "D"
-                                        : value === "HOLD"
-                                        ? "H"
-                                        : value === "RELEASE"
-                                        ? "R"
-                                        : value === "VAS"
-                                        ? "V"
-                                        : "",
-                                  })
-                                }
+                                    transferFromFlag: transferFromFlag, // Only set transferFromFlag
+                                  });
+
+                                  // Call API to get from bin list with the new flag
+                                  getFromBin(transferFromFlag);
+                                }}
                                 style={selectStyle}
                               >
                                 <Option value="">--Select--</Option>
@@ -949,22 +1174,27 @@ const StockRestate = () => {
                             >
                               <Select
                                 value={formData.transferTo}
-                                onChange={(value) =>
+                                onChange={(value) => {
+                                  const transferToFlag =
+                                    value === "DEFECTIVE"
+                                      ? "D"
+                                      : value === "HOLD"
+                                      ? "H"
+                                      : value === "RELEASE"
+                                      ? "R"
+                                      : value === "VAS"
+                                      ? "V"
+                                      : "";
+
                                   setFormData({
                                     ...formData,
                                     transferTo: value,
-                                    transferToFlag:
-                                      value === "DEFECTIVE"
-                                        ? "D"
-                                        : value === "HOLD"
-                                        ? "H"
-                                        : value === "RELEASE"
-                                        ? "R"
-                                        : value === "VAS"
-                                        ? "V"
-                                        : "",
-                                  })
-                                }
+                                    transferToFlag: transferToFlag,
+                                  });
+
+                                  // Call API to get to bin details with the transferFromFlag
+                                  getToBinDetails(formData.transferFromFlag);
+                                }}
                                 style={selectStyle}
                               >
                                 <Option value="">--Select--</Option>
@@ -1034,6 +1264,22 @@ const StockRestate = () => {
                           }}
                         >
                           Add Item
+                        </Button>
+                        <Button
+                          icon={<AppstoreAddOutlined />}
+                          onClick={handleOpenModal}
+                          className="action-btn"
+                          style={{
+                            backgroundColor: "transparent",
+                            color: "white",
+                            border: "none",
+                          }}
+                          disabled={
+                            !formData.transferFromFlag ||
+                            !formData.transferToFlag
+                          }
+                        >
+                          Fill Grid
                         </Button>
                       </div>
                     </div>
@@ -1455,187 +1701,520 @@ const StockRestate = () => {
             </div>
           ) : (
             <div
+              className="form-containerSG"
               style={{
-                padding: "20px",
-                marginTop: "20px",
-                display: "revert",
-                placeContent: "center",
-                overflowY: "none",
-                minHeight: "20dvh",
-                background: "#159957",
+                minHeight: "70vh",
                 background: "var(--bg-body-gradient)",
+                marginTop: "40px",
               }}
             >
-              {/* Header */}
               <div
-                className="form-containerSG"
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  background: "#159957",
+                  background: "var(--bg-body-gradient)",
+                  padding: "0 60px",
+                }}
+              >
+                <Typography.Title
+                  level={3}
+                  style={{ color: "#fff", margin: "20px 0" }}
+                >
+                  Sales Return List
+                </Typography.Title>
+                <Button
+                  icon={
+                    viewMode === "form" ? (
+                      <UnorderedListOutlined />
+                    ) : (
+                      <FormOutlined />
+                    )
+                  }
+                  onClick={toggleViewMode}
+                  style={{
+                    backgroundColor: "transparent",
+                    color: "white",
+                    marginTop: "20px",
+                    border: "none",
+                  }}
+                >
+                  {viewMode === "form" ? "List View" : "New Sales Return"}
+                </Button>
+              </div>
+
+              <div
+                className="table-container"
+                style={{
+                  position: "relative",
+                  width: "80%",
+                  overflowX: "auto",
+                  fontSize: "11px",
+                  maxHeight: "500px",
+                  overflowY: "auto",
+                  margin: "40px auto",
                   background: "var(--bg-body-gradient)",
                 }}
               >
-                <div>
-                  <Typography.Title
-                    level={3}
-                    style={{ color: "#fff", margin: 0 }}
-                  >
-                    Stock Restate List
-                  </Typography.Title>
-                  <Typography.Text
-                    style={{ color: "rgba(255, 255, 255, 0.8)" }}
-                  >
-                    View and manage stock restate entries
-                  </Typography.Text>
-                </div>
-                <div>
-                  <Button
-                    icon={<FormOutlined />}
-                    onClick={toggleViewMode}
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    background: "var(--bg-body-gradient)",
+                  }}
+                >
+                  <thead style={{ backgroundColor: "revert" }}>
+                    <tr
+                      style={{
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.3)",
+                        backgroundColor: "rgba(255, 255, 255, 0.1)",
+                      }}
+                    >
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Action
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Doc No
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Doc Date
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Transfer From
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Transfer To
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stockRestateList
+                      .slice(
+                        (currentPage - 1) * pageSize,
+                        currentPage * pageSize
+                      )
+                      .map((item, index) => (
+                        <tr
+                          key={`sales-return-${index}-${item.id}`}
+                          style={{
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                            color: "white",
+                            backgroundColor:
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)",
+                            "&:hover": {
+                              backgroundColor: "rgba(255, 255, 255, 0.1)",
+                            },
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            <Button
+                              type="link"
+                              icon={<RightCircleOutlined />}
+                              onClick={() => handleEditStockRestate(item)}
+                              style={{ color: "white" }}
+                            ></Button>
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.docId}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {dayjs(item.docDate).format("DD-MM-YYYY")}
+                          </td>
+
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.transferFrom}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.transferTo}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    marginTop: "16px",
+                    paddingRight: "50px",
+                    color: "white",
+                  }}
+                >
+                  <span style={{ marginRight: "16px", fontSize: "12px" }}>
+                    {(currentPage - 1) * pageSize + 1}-
+                    {Math.min(currentPage * pageSize, stockRestateList.length)}{" "}
+                    of {stockRestateList.length} items
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
+                    disabled={currentPage === 1}
                     style={{
                       backgroundColor: "transparent",
                       color: "white",
-                      border: "none",
+                      border: "1px solid white",
+                      margin: "0 4px",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                      opacity: currentPage === 1 ? 0.5 : 1,
                     }}
                   >
-                    Form View
-                  </Button>
-                </div>
-              </div>
+                    Prev
+                  </button>
 
-              {/* Search Filters */}
-              <div
-                style={{
-                  marginTop: "20px",
-                  padding: "20px",
-                  borderRadius: "8px",
-                  background: "rgba(255, 255, 255, 0.1)",
-                  backdropFilter: "blur(10px)",
-                }}
-              >
-                <Row gutter={16}>
-                  <Col span={6}>
-                    <Form.Item label="From Date">
-                      <DatePicker
-                        style={{ width: "100%" }}
-                        value={dayjs(searchParams.fromDate)}
-                        onChange={(date) =>
-                          setSearchParams({
-                            ...searchParams,
-                            fromDate: date,
-                          })
-                        }
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item label="To Date">
-                      <DatePicker
-                        style={{ width: "100%" }}
-                        value={dayjs(searchParams.toDate)}
-                        onChange={(date) =>
-                          setSearchParams({
-                            ...searchParams,
-                            toDate: date,
-                          })
-                        }
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item label="Document No">
-                      <Input
-                        value={searchParams.docId}
-                        onChange={(e) =>
-                          setSearchParams({
-                            ...searchParams,
-                            docId: e.target.value,
-                          })
-                        }
-                        placeholder="Enter document no"
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item label="Status">
-                      <Select
-                        value={searchParams.status}
-                        onChange={(value) =>
-                          setSearchParams({
-                            ...searchParams,
-                            status: value,
-                          })
-                        }
-                        style={{ width: "100%" }}
+                  {Array.from(
+                    { length: Math.ceil(stockRestateList.length / pageSize) },
+                    (_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i + 1)}
+                        style={{
+                          backgroundColor:
+                            currentPage === i + 1
+                              ? "rgba(255,255,255,0.2)"
+                              : "transparent",
+                          color: "white",
+                          border: "1px solid white",
+                          margin: "0 2px",
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          minWidth: "28px",
+                        }}
                       >
-                        <Option value="ALL">All</Option>
-                        <Option value="PENDING">Pending</Option>
-                        <Option value="COMPLETED">Completed</Option>
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                </Row>
-                <div style={{ textAlign: "right", marginTop: "16px" }}>
-                  <Button
-                    type="primary"
-                    icon={<SearchOutlined />}
-                    onClick={() => {
-                      // Implement search functionality
-                      console.log("Search clicked", searchParams);
-                    }}
-                    style={{ marginRight: "8px" }}
-                  >
-                    Search
-                  </Button>
-                  <Button
-                    icon={<ClearOutlined />}
-                    onClick={() => {
-                      setSearchParams({
-                        fromDate: dayjs().startOf("month"),
-                        toDate: dayjs(),
-                        docId: "",
-                        status: "ALL",
-                      });
-                    }}
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </div>
+                        {i + 1}
+                      </button>
+                    )
+                  )}
 
-              {/* Data Table */}
-              <div
-                style={{
-                  marginTop: "20px",
-                  borderRadius: "8px",
-                  overflow: "hidden",
-                }}
-              >
-                <Table
-                  columns={columns}
-                  dataSource={stockRestateList}
-                  rowKey="id"
-                  pagination={{
-                    current: currentPage,
-                    pageSize: pageSize,
-                    total: stockRestateList.length,
-                    onChange: (page, size) => {
-                      setCurrentPage(page);
-                      setPageSize(size);
-                    },
-                    showSizeChanger: true,
-                    pageSizeOptions: ["10", "20", "50", "100"],
-                  }}
-                  scroll={{ x: true }}
-                  loading={isLoading}
-                />
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) =>
+                        Math.min(
+                          prev + 1,
+                          Math.ceil(stockRestateList.length / pageSize)
+                        )
+                      )
+                    }
+                    disabled={
+                      currentPage ===
+                      Math.ceil(stockRestateList.length / pageSize)
+                    }
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid white",
+                      margin: "0 4px",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      cursor:
+                        currentPage ===
+                        Math.ceil(stockRestateList.length / pageSize)
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        currentPage ===
+                        Math.ceil(stockRestateList.length / pageSize)
+                          ? 0.5
+                          : 1,
+                    }}
+                  >
+                    Next
+                  </button>
+
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      color: "white",
+                      border: "1px solid white",
+                      marginLeft: "8px",
+                      padding: "2px 4px",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    <option value="5" style={{ background: "#1A1A2E" }}>
+                      5 / page
+                    </option>
+                    <option value="10" style={{ background: "#1A1A2E" }}>
+                      10 / page
+                    </option>
+                    <option value="20" style={{ background: "#1A1A2E" }}>
+                      20 / page
+                    </option>
+                    <option value="50" style={{ background: "#1A1A2E" }}>
+                      50 / page
+                    </option>
+                  </select>
+                </div>
               </div>
             </div>
           )}
         </div>
+        <GlassModal
+          visible={isModalVisible}
+          onCancel={handleCloseModal}
+          // title="Fill Grid Details"
+          width={1200}
+          // Replace the existing footer with this:
+          footer={[
+            <Button key="cancel" onClick={handleCloseModal}>
+              Cancel
+            </Button>,
+            <Button
+              key="ok"
+              type="primary"
+              onClick={handleConfirmSelection}
+              disabled={selectedModalRows.length === 0}
+            >
+              OK ({selectedModalRows.length} selected)
+            </Button>,
+          ]}
+        >
+          <Row gutter={16}>
+            <Col span={8}>
+              <Text style={{ color: "white" }}>Fill Grid Details</Text>
+              <Form.Item
+                label={<span style={{ color: "#fff" }}>Selection</span>}
+              >
+                <Checkbox
+                  indeterminate={
+                    selectedModalRows.length > 0 &&
+                    selectedModalRows.length < filteredModalData.length
+                  }
+                  checked={
+                    filteredModalData.length > 0 &&
+                    selectedModalRows.length === filteredModalData.length
+                  }
+                  onChange={handleSelectAll}
+                >
+                  {<span style={{ color: "#fff" }}>Select All</span>} (
+                  <Text style={{ color: "white" }}>
+                    {selectedModalRows.length} selected)
+                  </Text>
+                </Checkbox>
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item
+                label={<span style={{ color: "#fff" }}>Part No Search</span>}
+              >
+                <Input
+                  placeholder="Search by part number..."
+                  value={modalFilters.partNo}
+                  onChange={(e) =>
+                    setModalFilters({
+                      ...modalFilters,
+                      partNo: e.target.value,
+                    })
+                  }
+                  prefix={<SearchOutlined />}
+                  allowClear
+                />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item
+                label={
+                  <span style={{ color: "#fff" }}>
+                    From Bin (Pallet) Search
+                  </span>
+                }
+              >
+                <Input
+                  placeholder="Search by from bin..."
+                  value={modalFilters.fromBin}
+                  onChange={(e) =>
+                    setModalFilters({
+                      ...modalFilters,
+                      fromBin: e.target.value,
+                    })
+                  }
+                  prefix={<SearchOutlined />}
+                  allowClear
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label={<span style={{ color: "#fff" }}>Actions</span>}>
+                <Button
+                  icon={<FilterOutlined />}
+                  onClick={() => setModalFilters({ partNo: "", fromBin: "" })}
+                  style={{ marginRight: 8 }}
+                >
+                  Clear Filters
+                </Button>
+                <Text style={{ color: "white" }}>
+                  Showing {filteredModalData.length} of {modalTableData.length}{" "}
+                  items
+                </Text>
+              </Form.Item>
+            </Col>
+          </Row>
 
+          {/* Data Table */}
+          <div
+            style={{
+              backdropFilter: "blur(10px)",
+              background: "rgba(255, 255, 255, 0.1)",
+              borderRadius: "20px",
+              padding: "20px",
+              boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.2)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              marginBottom: "20px",
+            }}
+          >
+            <div
+              className="table-container"
+              style={{
+                position: "relative",
+                width: "100%",
+                overflowX: "auto",
+                fontSize: "11px",
+                backgroundColor: "transparent",
+                maxHeight: "500px",
+                overflowY: "auto",
+              }}
+            >
+              <table
+                style={{
+                  width: "max-content",
+                  minWidth: "100%",
+                  borderCollapse: "collapse",
+                  backgroundColor: "transparent",
+                }}
+              >
+                <thead>
+                  <tr
+                    style={{
+                      borderBottom: "1px dashed #000",
+                      zIndex: 2,
+                      position: "sticky",
+                      top: 0,
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    <th style={{ backgroundColor: "transparent" }}>Select</th>
+                    <th style={{ backgroundColor: "transparent" }}>S.No</th>
+                    <th style={{ backgroundColor: "transparent" }}>From Bin</th>
+                    <th style={{ backgroundColor: "transparent" }}>Part No</th>
+                    <th style={{ backgroundColor: "transparent" }}>
+                      Part Description
+                    </th>
+                    <th style={{ backgroundColor: "transparent" }}>GRN No</th>
+                    <th style={{ backgroundColor: "transparent" }}>Batch No</th>
+                    <th style={{ backgroundColor: "transparent" }}>To Bin</th>
+                    <th style={{ backgroundColor: "transparent" }}>From Qty</th>
+                    <th style={{ backgroundColor: "transparent" }}>To Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredModalData.map((row, index) => (
+                    <tr
+                      key={row.id}
+                      style={{
+                        borderBottom: "1px dashed rgba(255, 255, 255, 0.2)",
+                      }}
+                    >
+                      <td>
+                        <Checkbox
+                          checked={selectedModalRows.some(
+                            (r) => r.id === row.id
+                          )}
+                          onChange={(e) => handleModalRowSelect(e, row)}
+                        />
+                      </td>
+                      <td>{index + 1}</td>
+                      <td>{row.fromBin}</td>
+                      <td>{row.partNo}</td>
+                      <td>{row.partDesc}</td>
+                      <td>{row.grnNo}</td>
+                      <td>{row.batchNo}</td>
+                      <td>{row.toBin}</td>
+                      <td style={{ textAlign: "right" }}>{row.fromQty || 0}</td>
+                      <td style={{ textAlign: "right" }}>{row.toQty || 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </GlassModal>
         {/* Upload Modal */}
         <Modal
           title="Bulk Upload Stock Restate"

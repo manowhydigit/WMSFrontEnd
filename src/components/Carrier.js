@@ -241,7 +241,7 @@ const Carrier = () => {
     };
 
     try {
-      const method = editId ? "put" : "post";
+      const method = "put";
       const response = await axios[method](
         `${API_URL}/api/warehousemastercontroller/createUpdateCarrier`,
         carrierData
@@ -301,6 +301,7 @@ const Carrier = () => {
       getAllCarriers();
     }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   // Bulk upload handlers

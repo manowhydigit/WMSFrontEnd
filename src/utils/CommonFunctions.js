@@ -202,7 +202,7 @@ export const getAllActiveLocationTypes = async (orgId) => {
 export const getAllActiveSupplier = async (cbranch, client, orgId) => {
   try {
     const response = await axios.get(
-      `warehousemastercontroller/supplier?cbranch=${cbranch}&client=${client}&orgid=${orgId}`
+      `api/warehousemastercontroller/supplier?cbranch=${cbranch}&client=${client}&orgid=${orgId}`
     );
     if (response.status === true) {
       const supplierData = response.paramObjectsMap.supplierVO
@@ -232,7 +232,7 @@ export const getAllActiveCarrier = async (
 ) => {
   try {
     const response = await axios.get(
-      `warehousemastercontroller/getCarrierNameByCustomer?cbranch=${cbranch}&client=${client}&orgid=${orgId}&shipmentMode=${shipmentMode}`
+      `api/warehousemastercontroller/getCarrierNameByCustomer?cbranch=${cbranch}&client=${client}&orgid=${orgId}&shipmentMode=${shipmentMode}`
     );
     if (response.status === true) {
       const carrierData = response.paramObjectsMap.CarrierVO.filter(
@@ -255,7 +255,7 @@ export const getAllActiveCarrier = async (
 export const getAllShipmentModes = async (orgId) => {
   try {
     const response = await axios.get(
-      `gatePassIn/getAllModeOfShipment?orgId=${orgId}`
+      `api/gatePassIn/getAllModeOfShipment?orgId=${orgId}`
     );
     if (response.status === true) {
       const modeOfShipmentData = response.paramObjectsMap.modOfShipments;

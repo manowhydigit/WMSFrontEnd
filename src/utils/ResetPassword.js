@@ -8,19 +8,19 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Input, Space } from "antd";
+import { Space } from "antd";
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { encryptPassword } from "./encPassword";
-import { toast, ToastContainer } from "react-toastify"; // Import Toastify
-import "react-toastify/dist/ReactToastify.css"; // Import Toastify styles
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8091";
 
 const ResetPasswordPopup = () => {
   const [open, setOpen] = useState(false);
   const [userName, setUserName] = useState("");
-  const [passcode, setPasscode] = useState(["", "", "", "", "", ""]);
+  const [password, setPassword] = useState(""); // Store password as string
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,26 +30,16 @@ const ResetPasswordPopup = () => {
   }, []);
 
   const handleOpen = () => setOpen(true);
-  const handleClose = () => setOpen(false);
-
-  const handleChange = (value, index) => {
-    const newPasscode = [...passcode];
-    if (/^\d*$/.test(value)) {
-      newPasscode[index] = value;
-      setPasscode(newPasscode);
-
-      if (value && index < passcode.length - 1) {
-        const nextInput = document.getElementById(`otp-${index + 1}`);
-        if (nextInput) {
-          nextInput.focus();
-        }
-      }
-    }
+  const handleClose = () => {
+    setOpen(false);
+    setPassword(""); // Reset password when closing
+    setError(""); // Clear error
   };
 
   const handleSave = () => {
-    if (passcode.includes("") || passcode.some((digit) => digit === "")) {
-      setError("Please fill all passcode fields.");
+    // Validate password length
+    if (password.length !== 6) {
+      setError("Password must be exactly 6 digits");
       return;
     }
 
@@ -58,8 +48,8 @@ const ResetPasswordPopup = () => {
 
     const payload = {
       userName: userName,
-      newPassword: encryptPassword(passcode.join("")),
-      ppassword: passcode.join(""),
+      newPassword: encryptPassword(password), // Pass the password string
+      ppassword: password, // Pass the password string
     };
 
     axios
@@ -68,30 +58,13 @@ const ResetPasswordPopup = () => {
         console.log("Password reset successfully:", response.data);
         setLoading(false);
         handleClose();
-        toast.success("Passcode changed successfully!"); // Show success toast
+        toast.success("Password changed successfully!");
       })
       .catch((err) => {
         setLoading(false);
         setError("Failed to reset password. Please try again.");
         console.error("Error resetting password:", err);
       });
-  };
-
-  const handleKeyDown = (e, index) => {
-    if (e.key === "Backspace") {
-      const newPasscode = [...passcode];
-      if (passcode[index]) {
-        newPasscode[index] = "";
-        setPasscode(newPasscode);
-      } else if (index > 0) {
-        newPasscode[index - 1] = "";
-        setPasscode(newPasscode);
-        const previousInput = document.getElementById(`otp-${index - 1}`);
-        if (previousInput) {
-          previousInput.focus();
-        }
-      }
-    }
   };
 
   return (
@@ -106,14 +79,9 @@ const ResetPasswordPopup = () => {
         onClick={handleOpen}
         sx={{
           textTransform: "none",
-          // color: "#00FFFF",
-          // backgroundColor: "#f44336",
           backgroundColor: "transparent",
-          // "&:hover": { backgroundColor: "#f44336" },
-
           "&:hover": { boxShadow: "0 0 10px #00FFFF, 0 0 20px #00FFFF" },
-
-          width: "bold",
+          fontWeight: "bold",
         }}
       >
         Reset Password
@@ -125,26 +93,39 @@ const ResetPasswordPopup = () => {
           </Typography>
         </DialogTitle>
         <DialogContent>
-          <TextField fullWidth label="UserName" value={userName} readOnly />
+          <TextField
+            fullWidth
+            label="UserName"
+            value={userName}
+            readOnly
+            sx={{ marginBottom: "20px" }}
+          />
           <Typography align="center" sx={{ margin: "20px 0" }}>
-            Enter 6-Digit Passcode
+            Enter 6-Digit Password
           </Typography>
           <Space size="middle">
-            {passcode.map((digit, index) => (
-              <Input
-                key={index}
-                id={`otp-${index}`}
-                maxLength={1}
-                value={digit}
-                onKeyDown={(e) => handleKeyDown(e, index)}
-                onChange={(e) => handleChange(e.target.value, index)}
-                style={{
-                  width: "40px",
-                  textAlign: "center",
-                  fontSize: "16px",
-                }}
-              />
-            ))}
+            <TextField
+              fullWidth
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => {
+                // Allow only numbers and enforce max length of 6
+                const value = e.target.value.replace(/[^0-9]/g, "");
+                if (value.length <= 6) {
+                  setPassword(value);
+                }
+              }}
+              inputProps={{
+                maxLength: 6,
+                inputMode: "numeric",
+                pattern: "[0-9]*",
+              }}
+              sx={{
+                marginBottom: "20px",
+                "& .MuiInputBase-root": { borderRadius: "8px" },
+              }}
+            />
           </Space>
           {error && (
             <Typography color="error" align="center" sx={{ marginTop: "20px" }}>
@@ -154,12 +135,15 @@ const ResetPasswordPopup = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={loading}>
+          <Button
+            onClick={handleSave}
+            disabled={loading || password.length !== 6}
+          >
             {loading ? "Saving..." : "Save"}
           </Button>
         </DialogActions>
       </Dialog>
-      <ToastContainer /> {/* Add Toast Container */}
+      <ToastContainer />
     </Box>
   );
 };

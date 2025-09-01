@@ -483,6 +483,10 @@ const Customer = () => {
   };
 
   const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllCustomers();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
   };
 

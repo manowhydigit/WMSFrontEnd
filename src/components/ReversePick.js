@@ -6,7 +6,9 @@ import {
   ClearOutlined,
   SaveOutlined,
   CloudUploadOutlined,
-  CloudDownloadOutlined,FormOutlined
+  CloudDownloadOutlined,
+  FormOutlined,
+  RightCircleOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -68,7 +70,11 @@ export const ReversePick = () => {
   const [client, setClient] = useState(localStorage.getItem("client"));
   const [customer, setCustomer] = useState(localStorage.getItem("customer"));
   const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
-  const [finYear, setFinYear] = useState("2024");
+  const [finYear, setFinYear] = useState(localStorage.getItem("finYear"));
+
+  const [loginFinYear, setLoginFinYear] = useState(
+    localStorage.getItem("finYear")
+  );
   const [form] = Form.useForm();
   const [viewMode, setViewMode] = useState("form");
   const [currentPage, setCurrentPage] = useState(1);
@@ -138,7 +144,7 @@ export const ReversePick = () => {
   const getDocId = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/reversePick/getReversePickDocId?orgId=${orgId}&branchCode=${branchCode}&client=${client}&branch=${branch}&finYear=${finYear}`
+        `${API_URL}/api/reversePick/getReversePickDocId?orgId=${orgId}&branchCode=${branchCode}&client=${client}&branch=${branch}&finYear=${finYear}`
       );
       if (response.data.status === true) {
         setFormData((prev) => ({
@@ -154,7 +160,7 @@ export const ReversePick = () => {
   const getAllReversePick = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/reversePick/getAllReversePick?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&warehouse=${warehouse}&finYear=${finYear}`
+        `${API_URL}/api/reversePick/getAllReversePick?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&warehouse=${warehouse}&finYear=${finYear}`
       );
       if (response.data.status === true) {
         setReversePickList(response.data.paramObjectsMap.reversePickVO);
@@ -167,13 +173,69 @@ export const ReversePick = () => {
   const getPickRequestDetails = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/reversePick/getPickRequestDetailsForReversePick?orgId=${orgId}&branchCode=${branchCode}&client=${client}&finYear=${finYear}&branch=${branch}`
+        `${API_URL}/api/reversePick/getPickRequestDetailsForReversePick?orgId=${orgId}&branchCode=${branchCode}&client=${client}&finYear=${finYear}&branch=${branch}`
       );
       if (response.data.status === true) {
         setBuyerOrderNoList(response.data.paramObjectsMap.pickRequestVO);
       }
     } catch (error) {
       console.error("Error fetching pick requests:", error);
+    }
+  };
+
+  const handlePickRequestSelect = async (value) => {
+    try {
+      // Find the selected pick request from the list
+      const selectedPickRequest = buyerOrderNoList.find(
+        (order) => order.docId === value
+      );
+
+      if (selectedPickRequest) {
+        // Update form data with the selected pick request details
+        setFormData({
+          ...formData,
+          pickRequestDocId: selectedPickRequest.docId,
+          pickRequestDocDate: selectedPickRequest.docDate,
+          buyerOrderNo: selectedPickRequest.buyerOrderNo,
+          buyerOrderDate: selectedPickRequest.buyerOrderDate,
+          buyerRefNo: selectedPickRequest.buyerRefNo,
+          buyerRefDate: selectedPickRequest.buyerRefDate,
+          clientName: selectedPickRequest.clientName,
+          clientShortName: selectedPickRequest.clientShortName,
+          clientAddress: selectedPickRequest.clientAddress,
+          customerName: selectedPickRequest.customerName,
+          customerShortName: selectedPickRequest.customerShortName,
+          customerAddress: selectedPickRequest.customerAddress,
+          buyersReference: selectedPickRequest.buyersReference,
+          invoiceNo: selectedPickRequest.invoiceNo,
+          totalPickedQty: selectedPickRequest.totalPickQty,
+        });
+
+        // Also fetch and set the items for the selected pick request
+        if (selectedPickRequest.pickRequestDetailsVO) {
+          setReversePickItems(
+            selectedPickRequest.pickRequestDetailsVO.map((item) => ({
+              id: item.id,
+              partNo: item.partNo,
+              partDesc: item.partDesc,
+              core: item.core,
+              bin: item.bin,
+              sku: item.sku,
+              batchNo: item.batchNo,
+              batchDate: item.batchDate,
+              orderQty: item.orderQty,
+              pickQty: item.pickQty,
+              revisedQty: 0, // Start with 0 for revised quantity
+              grnNo: item.grnNo,
+              grnDate: item.grnDate,
+              status: item.status,
+            }))
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Error handling pick request selection:", error);
+      message.error("Failed to load pick request details");
     }
   };
 
@@ -268,11 +330,13 @@ export const ReversePick = () => {
     try {
       const saveData = {
         ...formData,
+        // Include the ID when updating an existing record
+        ...(editId && { id: editId }), // This line is crucial
         reversePickDetailsDTO: reversePickItems.map((item) => ({
           ...item,
           revisedQty: parseFloat(item.revisedQty) || 0,
         })),
-        orgId,
+        orgId: parseInt(orgId), // Ensure orgId is number
         branch,
         branchCode,
         client,
@@ -282,8 +346,10 @@ export const ReversePick = () => {
         createdBy: loginUserName,
       };
 
+      console.log("Saving data:", saveData); // Debug log
+
       const response = await axios.put(
-        `${API_URL}/reversePick/createUpdateReversePick`,
+        `${API_URL}/api/reversePick/createUpdateReversePick`,
         saveData
       );
 
@@ -558,8 +624,18 @@ export const ReversePick = () => {
                               }
                             >
                               <DatePicker
-                                style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.docDate)}
+                                style={{
+                                  color: "white",
+                                  width: "100%",
+                                  background: "rgba(255, 255, 255, 0.1)",
+                                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                                }}
+                                value={
+                                  formData.docDate
+                                    ? dayjs(formData.docDate)
+                                    : null
+                                }
+                                format="DD-MM-YYYY"
                                 disabled
                               />
                             </Form.Item>
@@ -574,15 +650,11 @@ export const ReversePick = () => {
                             >
                               <Select
                                 value={formData.pickRequestDocId}
-                                onChange={(value) =>
-                                  setFormData({
-                                    ...formData,
-                                    pickRequestDocId: value,
-                                  })
-                                }
+                                onChange={handlePickRequestSelect} // Changed to use the new function
                                 style={selectStyle}
                                 showSearch
                                 optionFilterProp="children"
+                                placeholder="Select Pick Request ID"
                               >
                                 {buyerOrderNoList.map((order) => (
                                   <Option key={order.docId} value={order.docId}>
@@ -601,8 +673,18 @@ export const ReversePick = () => {
                               }
                             >
                               <DatePicker
-                                style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.pickRequestDocDate)}
+                                style={{
+                                  color: "white",
+                                  width: "100%",
+                                  background: "rgba(255, 255, 255, 0.1)",
+                                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                                }}
+                                value={
+                                  formData.pickRequestDocDate
+                                    ? dayjs(formData.pickRequestDocDate)
+                                    : null
+                                }
+                                format="DD-MM-YYYY"
                                 disabled
                               />
                             </Form.Item>
@@ -634,8 +716,18 @@ export const ReversePick = () => {
                               }
                             >
                               <DatePicker
-                                style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.buyerOrderDate)}
+                                style={{
+                                  color: "white",
+                                  width: "100%",
+                                  background: "rgba(255, 255, 255, 0.1)",
+                                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                                }}
+                                value={
+                                  formData.buyerOrderDate
+                                    ? dayjs(formData.buyerOrderDate)
+                                    : null
+                                }
+                                format="DD-MM-YYYY"
                                 disabled
                               />
                             </Form.Item>
@@ -664,8 +756,18 @@ export const ReversePick = () => {
                               }
                             >
                               <DatePicker
-                                style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.buyerRefDate)}
+                                style={{
+                                  color: "white",
+                                  width: "100%",
+                                  background: "rgba(255, 255, 255, 0.1)",
+                                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                                }}
+                                value={
+                                  formData.buyerRefDate
+                                    ? dayjs(formData.buyerRefDate)
+                                    : null
+                                }
+                                format="DD-MM-YYYY"
                                 disabled
                               />
                             </Form.Item>
@@ -1071,7 +1173,7 @@ export const ReversePick = () => {
                                   onClick={() => handleDeleteItem(item.id)}
                                   danger
                                   type="text"
-                                  style={{ color: "#ff4d4f" }}
+                                  style={{ color: "white" }}
                                 />
                               </td>
 
@@ -1288,6 +1390,15 @@ export const ReversePick = () => {
                           color: "white",
                         }}
                       >
+                        Action
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
                         Doc ID
                       </th>
                       <th
@@ -1317,15 +1428,6 @@ export const ReversePick = () => {
                       >
                         Status
                       </th>
-                      <th
-                        style={{
-                          padding: "12px",
-                          textAlign: "left",
-                          color: "white",
-                        }}
-                      >
-                        Action
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1349,6 +1451,21 @@ export const ReversePick = () => {
                             },
                           }}
                         >
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            <Button
+                              type="link"
+                              icon={<RightCircleOutlined />}
+                              onClick={() => handleEditReversePick(item)}
+                              style={{ color: "white" }}
+                            ></Button>
+                          </td>
                           <td
                             style={{
                               padding: "12px",
@@ -1392,22 +1509,6 @@ export const ReversePick = () => {
                             >
                               {item.status}
                             </span>
-                          </td>
-                          <td
-                            style={{
-                              padding: "12px",
-                              textAlign: "left",
-                              color: "white",
-                              fontSize: "11px",
-                            }}
-                          >
-                            <Button
-                              type="link"
-                              onClick={() => handleEditReversePick(item)}
-                              style={{ color: "#1890ff" }}
-                            >
-                              Edit
-                            </Button>
                           </td>
                         </tr>
                       ))}

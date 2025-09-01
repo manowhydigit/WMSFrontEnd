@@ -76,27 +76,27 @@ const Buyer = () => {
   }, [buyerList]);
 
   // Apply filters
+  // Filter buyers based on search term
   useEffect(() => {
-    let filtered = buyerList;
-
-    if (searchTerm) {
-      const lowerTerm = searchTerm.toLowerCase();
-      filtered = filtered.filter(
+    if (buyerList) {
+      const filtered = buyerList.filter(
         (buyer) =>
-          buyer.buyerCode.toLowerCase().includes(lowerTerm) ||
-          buyer.buyerName.toLowerCase().includes(lowerTerm) ||
-          buyer.contactPerson.toLowerCase().includes(lowerTerm) ||
-          buyer.email.toLowerCase().includes(lowerTerm)
+          (buyer.buyer &&
+            buyer.buyer.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (buyer.buyerShortName &&
+            buyer.buyerShortName
+              .toLowerCase()
+              .includes(searchTerm.toLowerCase())) ||
+          (buyer.contactPerson &&
+            buyer.contactPerson
+              .toLowerCase()
+              .includes(searchTerm.toLowerCase())) ||
+          (buyer.email &&
+            buyer.email.toLowerCase().includes(searchTerm.toLowerCase()))
       );
+      setFilteredBuyerList(filtered);
     }
-
-    if (statusFilter) {
-      filtered = filtered.filter((buyer) => buyer.status === statusFilter);
-    }
-
-    setFilteredBuyerList(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
-  }, [searchTerm, statusFilter, buyerList]);
+  }, [searchTerm, buyerList]);
 
   // Handle search input change
   const handleSearch = (e) => {
@@ -107,7 +107,31 @@ const Buyer = () => {
   const handleStatusFilter = (value) => {
     setStatusFilter(value);
   };
+  // Apply filters
+  useEffect(() => {
+    let filtered = buyerList;
 
+    if (searchTerm) {
+      const lowerTerm = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (buyer) =>
+          (buyer.buyerCode &&
+            buyer.buyerCode.toLowerCase().includes(lowerTerm)) ||
+          (buyer.buyerName &&
+            buyer.buyerName.toLowerCase().includes(lowerTerm)) ||
+          (buyer.contactPerson &&
+            buyer.contactPerson.toLowerCase().includes(lowerTerm)) ||
+          (buyer.email && buyer.email.toLowerCase().includes(lowerTerm))
+      );
+    }
+
+    if (statusFilter) {
+      filtered = filtered.filter((buyer) => buyer.status === statusFilter);
+    }
+
+    setFilteredBuyerList(filtered);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [searchTerm, statusFilter, buyerList]);
   // Excel Download Function
   const handleExcelDownload = () => {
     // Prepare data for Excel
@@ -190,17 +214,41 @@ const Buyer = () => {
   };
   // Table columns for list view
   const listViewColumns = [
-    { title: "Buyer Name", dataIndex: "buyer", key: "buyer" },
-    { title: "Short Name", dataIndex: "buyerShortName", key: "buyerShortName" },
-    { title: "Buyer Type", dataIndex: "buyerType", key: "buyerType" },
-    { title: "PAN", dataIndex: "panNo", key: "panNo" },
-    { title: "TAN", dataIndex: "tanNo", key: "tanNo" },
+    {
+      title: "Buyer Name",
+      dataIndex: "buyer", // This should match your API response
+      key: "buyer",
+    },
+    {
+      title: "Short Name",
+      dataIndex: "buyerShortName", // This should match your API response
+      key: "buyerShortName",
+    },
+    {
+      title: "Buyer Type",
+      dataIndex: "buyerType", // This should match your API response
+      key: "buyerType",
+    },
+    {
+      title: "PAN",
+      dataIndex: "panNo", // This should match your API response
+      key: "panNo",
+    },
+    {
+      title: "TAN",
+      dataIndex: "tanNo", // This should match your API response
+      key: "tanNo",
+    },
     {
       title: "Contact Person",
-      dataIndex: "contactPerson",
+      dataIndex: "contactPerson", // This should match your API response
       key: "contactPerson",
     },
-    { title: "Mobile", dataIndex: "mobileNo", key: "mobileNo" },
+    {
+      title: "Mobile",
+      dataIndex: "mobileNo", // This should match your API response
+      key: "mobileNo",
+    },
     {
       title: "Active",
       dataIndex: "active",
@@ -213,15 +261,13 @@ const Buyer = () => {
       render: (_, record) => (
         <Button
           type="link"
+          icon={<EditOutlined />}
           style={{ color: "white" }}
           onClick={() => handleEditBuyer(record)}
-        >
-          Edit
-        </Button>
+        ></Button>
       ),
     },
   ];
-
   // Initialize data on component mount
   useEffect(() => {
     getAllBuyer();
@@ -572,6 +618,7 @@ const Buyer = () => {
       getAllBuyer();
     }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   const handleBulkUploadOpen = () => setUploadOpen(true);
@@ -1272,15 +1319,15 @@ const Buyer = () => {
                   gap: "10px",
                   flexWrap: "wrap",
                   marginBottom: "16px",
-                  display: "flex",
                   justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
                 <Input
                   placeholder="Search buyers..."
                   allowClear
                   value={searchTerm}
-                  onChange={handleSearch}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   style={{
                     width: "300px",
                     background: "rgba(255, 255, 255, 0.1)",
@@ -1354,7 +1401,7 @@ const Buyer = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {buyerList
+                    {filteredBuyerList
                       .slice(
                         (currentPage - 1) * pageSize,
                         currentPage * pageSize
@@ -1383,7 +1430,7 @@ const Buyer = () => {
                             >
                               {column.render
                                 ? column.render(buyer[column.dataIndex], buyer)
-                                : buyer[column.dataIndex]}
+                                : buyer[column.dataIndex] || "-"}
                             </td>
                           ))}
                         </tr>
@@ -1403,8 +1450,8 @@ const Buyer = () => {
                 >
                   <span style={{ marginRight: "16px", fontSize: "12px" }}>
                     {(currentPage - 1) * pageSize + 1}-
-                    {Math.min(currentPage * pageSize, buyerList.length)} of{" "}
-                    {buyerList.length} items
+                    {Math.min(currentPage * pageSize, filteredBuyerList.length)}{" "}
+                    of {filteredBuyerList.length} items
                   </span>
 
                   <button
@@ -1427,7 +1474,7 @@ const Buyer = () => {
                   </button>
 
                   {Array.from(
-                    { length: Math.ceil(buyerList.length / pageSize) },
+                    { length: Math.ceil(filteredBuyerList.length / pageSize) },
                     (_, i) => (
                       <button
                         key={i}
@@ -1456,12 +1503,13 @@ const Buyer = () => {
                       setCurrentPage((prev) =>
                         Math.min(
                           prev + 1,
-                          Math.ceil(buyerList.length / pageSize)
+                          Math.ceil(filteredBuyerList.length / pageSize)
                         )
                       )
                     }
                     disabled={
-                      currentPage === Math.ceil(buyerList.length / pageSize)
+                      currentPage ===
+                      Math.ceil(filteredBuyerList.length / pageSize)
                     }
                     style={{
                       backgroundColor: "transparent",
@@ -1471,11 +1519,13 @@ const Buyer = () => {
                       padding: "2px 8px",
                       borderRadius: "4px",
                       cursor:
-                        currentPage === Math.ceil(buyerList.length / pageSize)
+                        currentPage ===
+                        Math.ceil(filteredBuyerList.length / pageSize)
                           ? "not-allowed"
                           : "pointer",
                       opacity:
-                        currentPage === Math.ceil(buyerList.length / pageSize)
+                        currentPage ===
+                        Math.ceil(filteredBuyerList.length / pageSize)
                           ? 0.5
                           : 1,
                     }}

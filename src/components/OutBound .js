@@ -35,6 +35,7 @@ const menuCategories = [
   {
     category: "Delivery & Returns",
     items: [
+      { name: "WMS DELIVERY CHALLAN", backendName: "WMSPICKREQUEST" },
       { name: "DELIVERY CHALLAN", backendName: "DELIVERYCHALLAN" },
       { name: "SALES RETURN", backendName: "SALESRETURN" },
     ],
@@ -72,6 +73,8 @@ const menuCategories = [
 const routes = {
   "BUYER ORDER": "/BuyerOrder",
   "PICK REQUEST": "/PickRequest",
+  "WMS DELIVERY CHALLAN": "/WMSPickRequest",
+
   "REVERSE PICK": "/ReversePick",
   "DELIVERY CHALLAN": "/DeliveryChallan",
   "SALES RETURN": "/SalesReturn",
@@ -197,7 +200,7 @@ const OutBound = () => {
         />
       </div>
 
-      <Button
+      {/* <Button
         className="button1"
         type="text"
         icon={theme === "light" ? <MoonOutlined /> : <SunOutlined />}
@@ -206,7 +209,7 @@ const OutBound = () => {
         style={{ marginLeft: "550px", marginTop: "-90px" }}
       >
         {theme === "light" ? "Dark Mode" : "Light Mode"}
-      </Button>
+      </Button> */}
 
       {/* Grouped Buttons */}
       <div style={{ marginTop: "20px" }}>

@@ -1017,26 +1017,17 @@ export const UserCreation = () => {
               size="small"
               error={!!fieldErrors.employeeName}
             >
-              <InputLabel>Employee Name</InputLabel>
-              <Select
-                label="Employee Name"
+              <TextField
+                label="Employee Code"
                 name="employeeName"
                 value={formData.employeeName}
                 onChange={handleInputChange}
-                disabled={loading.employees}
-              >
-                {loading.employees ? (
-                  <MenuItem disabled>Loading employees...</MenuItem>
-                ) : employeeList.length > 0 ? (
-                  employeeList.map((emp) => (
-                    <MenuItem key={emp.id} value={emp.employeeName}>
-                      {emp.employeeName}
-                    </MenuItem>
-                  ))
-                ) : (
-                  <MenuItem disabled>No employees found</MenuItem>
-                )}
-              </Select>
+                size="small"
+                fullWidth
+                disabled
+                error={!!fieldErrors.employeeName}
+                helperText={fieldErrors.employeeName}
+              />
               {fieldErrors.employeeName && (
                 <FormHelperText>{fieldErrors.employeeName}</FormHelperText>
               )}

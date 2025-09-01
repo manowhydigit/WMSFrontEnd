@@ -4,6 +4,9 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import GridOnIcon from "@mui/icons-material/GridOn";
 import SendIcon from "@mui/icons-material/Send";
 import { Pagination } from "antd";
+import sampleFile from "../assets/sample-files/Sample_Grn_Upload.xls";
+import * as XLSX from "xlsx";
+import CommonBulkUpload from "../utils/CommonBulkUpload";
 
 import {
   LogoutOutlined,
@@ -54,7 +57,7 @@ import { Modal, message } from "antd";
 import { DownloadOutlined, CloseOutlined } from "@ant-design/icons";
 const { TabPane } = Tabs;
 const { Text } = Typography;
-
+const { RangePicker } = DatePicker;
 const LrTable = ({
   lrTableData,
   setLrTableData,
@@ -161,7 +164,7 @@ const LrTable = ({
             handleTableChange(
               record.id,
               "invDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -303,7 +306,7 @@ const LrTable = ({
             handleTableChange(
               record.id,
               "batchDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -322,7 +325,7 @@ const LrTable = ({
             handleTableChange(
               record.id,
               "expDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -470,10 +473,14 @@ const GatePassIn = () => {
   const [selectedFile, setSelectedFile] = useState(null);
 
   const handleSampleDownload = () => {
-    // Implement your sample download logic
+    const link = document.createElement("a");
+    link.href = sampleFile; // This should be the imported file
+    link.download = "sample_GatePass.xls";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     message.info("Downloading sample file...");
   };
-
   // Form state
   const [formData, setFormData] = useState({
     docId: "",
@@ -516,6 +523,13 @@ const GatePassIn = () => {
     remarks: "",
   });
 
+  const entrySlNoRef = useRef(formData.entrySlNo);
+
+  // Update the ref whenever the value changes
+  useEffect(() => {
+    entrySlNoRef.current = formData.entrySlNo;
+  }, [formData.entrySlNo]);
+
   const [lrTableData, setLrTableData] = useState([]);
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -528,6 +542,9 @@ const GatePassIn = () => {
   const [value, setValue] = useState(0);
   const [listView, setListView] = useState(false);
   const [listViewData, setListViewData] = useState([]);
+  const [loadingEntry, setLoadingEntry] = useState(false);
+
+  const [entryNoValue, setEntryNoValue] = useState("");
   const listViewColumns = [
     { accessorKey: "docDate", header: "Doc Date", size: 140 },
     { accessorKey: "docId", header: "Doc ID", size: 140 },
@@ -551,10 +568,14 @@ const GatePassIn = () => {
       const response = await axios.get(
         `${API_URL}/api/gatePassIn/getGatePassInDocId?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
       );
-      setFormData((prevData) => ({
-        ...prevData,
-        docId: response.paramObjectsMap.GatePassInDocId,
-      }));
+
+      // Check if response.data exists and has paramObjectsMap
+      if (response.data && response.data.paramObjectsMap) {
+        setFormData((prevData) => ({
+          ...prevData,
+          docId: response.data.paramObjectsMap.GatePassInDocId || "", // Use empty string if null
+        }));
+      }
     } catch (error) {
       console.error("Error fetching Gate Pass document ID:", error);
     }
@@ -564,7 +585,7 @@ const GatePassIn = () => {
   const getAllSuppliers = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/api/warehousemastercontroller/supplier?cbranch=${loginBranch}&client=${loginClient}&orgid=${orgId}`
+        `${API_URL}/api/warehousemastercontroller/supplier?cbranch=${loginBranchCode}&client=${loginClient}&orgid=${orgId}`
       );
 
       // Check response.data.status instead of response.status
@@ -589,7 +610,7 @@ const GatePassIn = () => {
       const response = await axios.get(
         `${API_URL}/api/gatePassIn/getAllModeOfShipment?orgId=${orgId}`
       );
-      setModeOfShipmentList(response.paramObjectsMap.modOfShipments);
+      setModeOfShipmentList(response.data.paramObjectsMap.modOfShipments);
     } catch (error) {
       console.error("Error fetching modes of shipment:", error);
     }
@@ -599,9 +620,9 @@ const GatePassIn = () => {
   const getAllCarriers = async (selectedModeOfShipment) => {
     try {
       const response = await axios.get(
-        `${API_URL}/api/carrier/getAllActiveCarrier?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&shipmentMode=${selectedModeOfShipment}`
+        `${API_URL}/api/warehousemastercontroller/getCarrierNameByCustomer?cbranch=${loginBranchCode}&client=${loginClient}&orgid=${orgId}&shipmentMode=${selectedModeOfShipment}`
       );
-      setCarrierList(response.paramObjectsMap.carrierVO);
+      setCarrierList(response.data.paramObjectsMap.CarrierVO);
     } catch (error) {
       console.error("Error fetching carriers:", error);
     }
@@ -680,35 +701,226 @@ const GatePassIn = () => {
   const getAllGatePasses = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/api/gatePassIn/gatePassIn?branchCode=${loginBranch}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
+        `${API_URL}/api/gatePassIn/gatePassIn?branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
       );
-      setListViewData(response.paramObjectsMap.gatePassInVO);
+      setListViewData(response.data.paramObjectsMap.gatePassInVO);
     } catch (error) {
       console.error("Error fetching Gate Pass data:", error);
     }
   };
 
+  // Debounce the entry number input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (formData.entrySlNo && formData.entrySlNo.length > 3) {
+        handleEntryNoChange(formData.entrySlNo);
+      }
+    }, 800); // Wait 800ms after typing stops
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [formData.entrySlNo]);
   // Get Gate Pass by ID
-  const getGatePassById = async (row) => {
-    console.log("THE SELECTED GATE PASS ID IS:", row.original.id);
-    setEditId(row.original.id);
+  // Get Gate Pass by ID
+  // FIXED DATE HANDLING IN handleSave FUNCTION
+  const handleSave = async () => {
+    const errors = {};
+    let firstInvalidFieldRef = null;
+    if (!formData.entrySlNo) errors.entrySlNo = "Entry No is required";
+    if (!formData.date) errors.date = "Date is required";
+    if (!formData.supplierShortName)
+      errors.supplierShortName = "Supplier Short Name is required";
+    if (!formData.modeOfShipment)
+      errors.modeOfShipment = "Mode of Shipment is required";
+    if (!formData.carrier) errors.carrier = "Carrier is required";
+
+    let lrTableDataValid = true;
+    if (
+      !lrTableData ||
+      !Array.isArray(lrTableData) ||
+      lrTableData.length === 0
+    ) {
+      lrTableDataValid = false;
+      setLrTableErrors([{ general: "Lr Table Data is required" }]);
+    } else {
+      const newTableErrors = lrTableData.map((row, index) => {
+        const rowErrors = {};
+        if (!row.lr_Hawb_Hbl_No) {
+          rowErrors.lr_Hawb_Hbl_No = "Lr_Hawb_Hbl_No is required";
+          if (!firstInvalidFieldRef)
+            firstInvalidFieldRef =
+              lrNoDetailsRefs.current[index].lr_Hawb_Hbl_No;
+          lrTableDataValid = false;
+        }
+        if (!row.invNo) {
+          rowErrors.invNo = "Inv No is required";
+          if (!firstInvalidFieldRef)
+            firstInvalidFieldRef = lrNoDetailsRefs.current[index].invNo;
+          lrTableDataValid = false;
+        }
+        if (!row.partNo) {
+          rowErrors.partNo = "Part No is required";
+          if (!firstInvalidFieldRef)
+            firstInvalidFieldRef = lrNoDetailsRefs.current[index].partNo;
+          lrTableDataValid = false;
+        }
+        if (!row.invQty) {
+          rowErrors.invQty = "Inv QTY is required";
+          if (!firstInvalidFieldRef)
+            firstInvalidFieldRef = lrNoDetailsRefs.current[index].invQty;
+          lrTableDataValid = false;
+        }
+        if (!row.recQty) {
+          rowErrors.recQty = "Rec QTY is required";
+          if (!firstInvalidFieldRef)
+            firstInvalidFieldRef = lrNoDetailsRefs.current[index].recQty;
+          lrTableDataValid = false;
+        }
+
+        return rowErrors;
+      });
+      setLrTableErrors(newTableErrors);
+    }
+    setFieldErrors(errors);
+
+    if (!lrTableDataValid || Object.keys(errors).length > 0) {
+      if (firstInvalidFieldRef && firstInvalidFieldRef.current) {
+        firstInvalidFieldRef.current.focus();
+      }
+    }
+    if (Object.keys(errors).length === 0 && lrTableDataValid) {
+      setIsLoading(true);
+
+      // FIXED DATE HANDLING - Convert DD-MM-YYYY to proper format for API
+      const lrVo = lrTableData.map((row) => ({
+        ...(editId && { id: row.id }),
+        qrCode: row.qrCode,
+        irNoHaw: row.lr_Hawb_Hbl_No,
+        invoiceNo: row.invNo,
+        invoiceDate: row.invDate ? convertToAPIDateFormat(row.invDate) : null,
+        partNo: row.partNo,
+        partDescription: row.partDesc,
+        sku: row.sku,
+        invQty: parseFloat(row?.invQty || 0),
+        recQty: parseFloat(row?.recQty || 0),
+        shortQty: parseFloat(row?.shortQty || 0),
+        damageQty: parseFloat(row?.damageQty || 0),
+        grnQty: parseFloat(row?.grnQty || 0),
+        batchNo: row.batch_PalletNo,
+        batchDate: row.batchDate ? convertToAPIDateFormat(row.batchDate) : null,
+        expDate: row.expDate ? convertToAPIDateFormat(row.expDate) : null,
+        remarks: row.remarks,
+      }));
+
+      const saveFormData = {
+        ...(editId && { id: editId }),
+        entryNo: formData.entrySlNo,
+        entryDate: formData.date ? convertToAPIDateFormat(formData.date) : null,
+        docdate: formData.docDate
+          ? convertToAPIDateFormat(formData.docDate)
+          : null,
+        supplierShortName: formData.supplierShortName,
+        supplier: formData.supplier,
+        modeOfShipment: formData.modeOfShipment,
+        carrier: formData.carrier,
+        vehicleType: formData.vehicleType,
+        contact: formData.contact,
+        driverName: formData.driverName,
+        securityName: formData.securityName,
+        vehicleNo: formData.vehicleNo,
+        goodsDescription: formData.goodsDesc,
+        orgId: orgId,
+        createdBy: loginUserName,
+        branch: loginBranch,
+        branchCode: loginBranchCode,
+        client: loginClient,
+        customer: loginCustomer,
+        finYear: loginFinYear,
+        gatePassInDetailsDTO: lrVo,
+      };
+
+      console.log("DATA TO SAVE IS:", saveFormData);
+
+      try {
+        const response = await axios.put(
+          `${API_URL}/api/gatePassIn/createUpdateGatePassIn`,
+          saveFormData
+        );
+        if (response.data.status === true) {
+          console.log("Response:", response);
+          showToast(
+            "success",
+            editId
+              ? "Gate Pass Updated Successfully"
+              : "Gate Pass created successfully"
+          );
+          handleClear();
+          getAllGatePasses();
+          setIsLoading(false);
+        } else {
+          showToast(
+            "error",
+            response.data.paramObjectsMap.errorMessage ||
+              "Gate Pass creation failed"
+          );
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        showToast("error", "Gate Pass creation failed");
+        setIsLoading(false);
+      }
+    } else {
+      setFieldErrors(errors);
+    }
+  };
+
+  // ADD THIS HELPER FUNCTION FOR DATE CONVERSION
+  const convertToAPIDateFormat = (dateString) => {
+    if (!dateString) return null;
+
+    try {
+      // If it's already in YYYY-MM-DD format, return as-is
+      if (dateString.includes("-") && dateString.split("-")[0].length === 4) {
+        return dateString;
+      }
+
+      // Convert from DD-MM-YYYY to YYYY-MM-DD
+      if (dateString.includes("-") && dateString.split("-")[0].length === 2) {
+        const parts = dateString.split("-");
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+
+      // Handle other formats or return original if unknown
+      return dateString;
+    } catch (error) {
+      console.warn("Date conversion error:", error, dateString);
+      return dateString;
+    }
+  };
+
+  // FIX THE getGatePassById FUNCTION TO PROPERLY HANDLE EDIT MODE
+  const getGatePassById = async (item) => {
+    console.log("THE SELECTED GATE PASS ID IS:", item.id);
+    setEditId(item.id);
     try {
       const response = await axios.get(
-        `${API_URL}/api/gatePassIn/gatePassIn/${row.original.id}`
+        `${API_URL}/api/gatePassIn/gatePassIn/${item.id}`
       );
-      console.log("API Response:", response);
+      console.log("API Response:", response.data);
 
-      if (response.status === true) {
-        setListView(false);
-        const particularGatePass = response.paramObjectsMap.GatePassIn;
+      if (response.data?.status === true) {
+        setViewMode("form");
+        const particularGatePass = response.data.paramObjectsMap.GatePassIn;
         setGatePassIdEdit(particularGatePass.docId);
 
-        setFormData({
+        // Format dates properly - FIXED DATE HANDLING
+        const formattedData = {
           docId: particularGatePass.docId,
-          editDocDate: particularGatePass.docdate,
-          docDate: particularGatePass.docDate,
+          docDate: particularGatePass.docDate || particularGatePass.docdate,
           entrySlNo: particularGatePass.entryNo,
-          date: particularGatePass.entryDate,
+          date: convertToDDMMYYYY(particularGatePass.entryDate),
           supplierShortName: particularGatePass.supplierShortName,
           supplier: particularGatePass.supplier,
           modeOfShipment: particularGatePass.modeOfShipment,
@@ -720,43 +932,98 @@ const GatePassIn = () => {
           vehicleNo: particularGatePass.vehicleNo,
           goodsDesc: particularGatePass.goodsDescription,
           freeze: particularGatePass.freeze,
-        });
-        getAllCarriers(particularGatePass.modeOfShipment);
-        setFormData((prevData) => ({
-          ...prevData,
-          carrier: particularGatePass.carrier.toUpperCase(),
-        }));
+        };
 
+        setFormData(formattedData);
+        getAllCarriers(particularGatePass.modeOfShipment);
+
+        // Set carrier after a small delay to ensure carrier list is loaded
+        setTimeout(() => {
+          setFormData((prevData) => ({
+            ...prevData,
+            carrier: particularGatePass.carrier?.toUpperCase() || "",
+          }));
+        }, 100);
+
+        // Format table data dates - FIXED DATE HANDLING
         setLrTableData(
-          particularGatePass.gatePassDetailsVO.map((row) => ({
-            id: row.id,
-            qrCode: row.qrCode,
-            lr_Hawb_Hbl_No: row.irNoHaw,
-            invNo: row.invoiceNo,
-            invDate: dayjs(row.invoiceDate).format("DD-MM-YYYY"),
-            partNo: row.partNo,
-            partDesc: row.partDescription,
-            sku: row.sku,
-            invQty: row.invQty,
-            recQty: row.recQty,
-            damageQty: row.damageQty,
-            grnQty: row.grnQty,
-            batch_PalletNo: row.batchNo,
-            batchDate: dayjs(row.batchDate).format("DD-MM-YYYY"),
-            expDate: dayjs(row.expDate).format("DD-MM-YYYY"),
-            shortQty: row.shortQty,
-            damageQty: row.damageQty,
-            remarks: row.remarks,
+          particularGatePass.gatePassDetailsVO.map((detail) => ({
+            id: detail.id,
+            qrCode: detail.qrCode,
+            lr_Hawb_Hbl_No: detail.irNoHaw,
+            invNo: detail.invoiceNo,
+            invDate: convertToDDMMYYYY(detail.invoiceDate),
+            partNo: detail.partNo,
+            partDesc: detail.partDescription,
+            sku: detail.sku,
+            invQty: detail.invQty,
+            recQty: detail.recQty,
+            damageQty: detail.damageQty,
+            grnQty: detail.grnQty,
+            batch_PalletNo: detail.batchNo,
+            batchDate: convertToDDMMYYYY(detail.batchDate),
+            expDate: convertToDDMMYYYY(detail.expDate),
+            shortQty: detail.shortQty,
+            remarks: detail.remarks,
           }))
         );
       } else {
-        console.error("API Error:", response);
+        console.error("API Error:", response.data);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
     }
   };
 
+  // FIX THE convertToDDMMYYYY FUNCTION TO HANDLE MORE DATE FORMATS
+  const convertToDDMMYYYY = (dateString) => {
+    if (!dateString) return null;
+
+    try {
+      // Handle null/undefined
+      if (!dateString) return null;
+
+      // If it's already in DD-MM-YYYY format, return as-is
+      if (
+        typeof dateString === "string" &&
+        dateString.includes("-") &&
+        dateString.split("-")[0].length === 2
+      ) {
+        return dateString;
+      }
+
+      // Handle YYYY-MM-DD format
+      if (
+        typeof dateString === "string" &&
+        dateString.includes("-") &&
+        dateString.split("-")[0].length === 4
+      ) {
+        const parts = dateString.split("-");
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+
+      // Handle Date objects
+      if (dateString instanceof Date) {
+        return dayjs(dateString).format("DD-MM-YYYY");
+      }
+
+      // Handle dayjs objects
+      if (dayjs.isDayjs(dateString)) {
+        return dateString.format("DD-MM-YYYY");
+      }
+
+      // Handle timestamps
+      if (typeof dateString === "number") {
+        return dayjs(dateString).format("DD-MM-YYYY");
+      }
+
+      // Return as-is if format is unknown
+      return dateString;
+    } catch (error) {
+      console.warn("Date conversion error:", error, dateString);
+      return null;
+    }
+  };
   // Initialize data on component mount
   useEffect(() => {
     getNewGatePassDocId();
@@ -767,7 +1034,51 @@ const GatePassIn = () => {
   }, []);
 
   const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllGatePasses();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
+  };
+
+  // Date formatting utility
+  // Date formatting utility - FIXED VERSION
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+
+    // Ensure we're working with a Day.js object
+    let date;
+
+    if (typeof dateString === "string" || dateString instanceof Date) {
+      date = dayjs(dateString);
+    } else if (dayjs.isDayjs(dateString)) {
+      date = dateString;
+    } else {
+      return String(dateString); // Return as string if not a recognizable date format
+    }
+
+    // Check if it's a valid date
+    if (date.isValid()) {
+      return date.format("DD-MM-YYYY");
+    }
+
+    // If invalid, try to handle common date formats manually
+    try {
+      if (typeof dateString === "string") {
+        // Handle YYYY-MM-DD format
+        if (dateString.includes("-")) {
+          const parts = dateString.split("-");
+          if (parts.length === 3 && parts[0].length === 4) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+          }
+        }
+        // Handle other formats if needed
+      }
+      return String(dateString); // Return as string if we can't format it
+    } catch (error) {
+      return String(dateString);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -829,8 +1140,147 @@ const GatePassIn = () => {
     }
   };
 
+  // Add this function to handle Entry No changes and fetch data
+  // Fix the handleEntryNoChange function
+  const handleEntryNoChange = async (value) => {
+    if (!value || value.length < 3) return; // Minimum length check
+
+    try {
+      setLoadingEntry(true);
+      console.log("Fetching details for entry no:", value);
+
+      // Fetch entry details
+      const entryResponse = await axios.get(
+        `${API_URL}/api/gatePassIn/getEntryNoDetails`,
+        {
+          params: {
+            branchCode: loginBranchCode,
+            client: loginClient,
+            entryNo: value,
+            finYear: loginFinYear,
+            orgId: orgId,
+          },
+        }
+      );
+
+      console.log("Entry Response:", entryResponse.data);
+
+      // Check if response has data
+      if (entryResponse.data?.status && entryResponse.data.paramObjectsMap) {
+        const entryDetails = entryResponse.data.paramObjectsMap.entryNoDetails;
+
+        // Handle both array and object responses
+        let entryData;
+        if (Array.isArray(entryDetails)) {
+          entryData = entryDetails[0]; // Take first item if array
+        } else if (typeof entryDetails === "object") {
+          entryData = entryDetails; // Use directly if object
+        }
+
+        if (entryData) {
+          // Update form with entry details
+          setFormData((prev) => ({
+            ...prev,
+            supplierShortName: entryData.supplierShortName || "",
+            supplier: entryData.supplier || "",
+            modeOfShipment: entryData.modeOfShipment || "",
+            carrier: entryData.carrierShortName || entryData.carrier || "",
+            vehicleType: entryData.vehicleType || "",
+            contact: entryData.contact || "",
+            driverName: entryData.driverName || "",
+            securityName: entryData.securityName || "",
+            vehicleNo: entryData.vehicleNo || "",
+            goodsDesc: entryData.goodsDescription || "",
+          }));
+
+          // Fetch carrier list based on mode of shipment if available
+          if (entryData.modeOfShipment) {
+            getAllCarriers(entryData.modeOfShipment);
+          }
+
+          // Fetch fill details for the grid
+          const fillResponse = await axios.get(
+            `${API_URL}/api/gatePassIn/getEntryNoFillDetails`,
+            {
+              params: {
+                branchCode: loginBranchCode,
+                client: loginClient,
+                entryNo: value,
+                finYear: loginFinYear,
+                orgId: orgId,
+              },
+            }
+          );
+
+          console.log("Fill Response:", fillResponse.data);
+
+          if (fillResponse.data?.status && fillResponse.data.paramObjectsMap) {
+            const fillDetails =
+              fillResponse.data.paramObjectsMap.entryNoFillDetails;
+
+            let fillData;
+            if (Array.isArray(fillDetails)) {
+              fillData = fillDetails;
+            } else if (typeof fillDetails === "object") {
+              fillData = [fillDetails]; // Wrap in array if single object
+            } else {
+              fillData = [];
+            }
+
+            // Transform fill details to match table structure
+            const tableData = fillData.map((detail, index) => ({
+              id: index + 1,
+              qrCode: detail.qrCode || "",
+              lr_Hawb_Hbl_No: detail.irNoHaw || "",
+              invNo: detail.invoiceNo || "",
+              invDate: detail.invoiceDate
+                ? convertToDDMMYYYY(detail.invoiceDate)
+                : null,
+              partNo: detail.partNo || "",
+              partDesc: detail.partDesc || detail.partDescription || "",
+              sku: detail.sku || "",
+              invQty: detail.invQty?.toString() || "0",
+              recQty: detail.recQty?.toString() || "0",
+              shortQty: detail.shortQty?.toString() || "0",
+              damageQty: detail.damageQty?.toString() || "0",
+              grnQty: detail.grnQty?.toString() || "0",
+              batch_PalletNo: detail.batchNo || "",
+              batchDate: detail.batchDate
+                ? convertToDDMMYYYY(detail.batchDate)
+                : null,
+              expDate: detail.expDate
+                ? convertToDDMMYYYY(detail.expDate)
+                : null,
+              remarks: detail.remarks || "",
+            }));
+
+            setLrTableData(tableData);
+            showToast("success", "Entry details loaded successfully");
+          }
+        } else {
+          showToast("warning", "No details found for this entry number");
+        }
+      } else {
+        showToast("warning", "Invalid response format from server");
+      }
+    } catch (error) {
+      console.error("Error fetching entry details:", error);
+      let errorMessage = "Failed to fetch entry details";
+
+      if (error.response?.data?.paramObjectsMap?.message) {
+        errorMessage = error.response.data.paramObjectsMap.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      showToast("error", errorMessage);
+    } finally {
+      setLoadingEntry(false);
+    }
+  };
+
   const handleDateChange = (field, date) => {
-    const formattedDate = date ? dayjs(date).format("YYYY-MM-DD") : null;
+    const formattedDate = date ? dayjs(date).format("DD-MM-YYYY") : null;
     setFormData({ ...formData, [field]: formattedDate });
   };
 
@@ -885,172 +1335,66 @@ const GatePassIn = () => {
     }
   };
 
-  const handleTableChange = (pagination, filters, sorter) => {
-    // Your implementation here
-    // For example:
-    setPagination(pagination);
-    setFilters(filters);
-    setSorter(sorter);
-    // Or any other logic you need for table changes
-  };
-
-  const handleSave = async () => {
-    const errors = {};
-    let firstInvalidFieldRef = null;
-    if (!formData.entrySlNo) errors.entrySlNo = "Entry No is required";
-    if (!formData.date) errors.date = "Date is required";
-    if (!formData.supplierShortName)
-      errors.supplierShortName = "Supplier Short Name is required";
-    if (!formData.modeOfShipment)
-      errors.modeOfShipment = "Mode of Shipment is required";
-    if (!formData.carrier) errors.carrier = "Carrier is required";
-
-    let lrTableDataValid = true;
+  const handleTableChange = (idOrPagination, fieldOrFilters, valueOrSorter) => {
+    // Check if this is a row data change (first parameter is id)
     if (
-      !lrTableData ||
-      !Array.isArray(lrTableData) ||
-      lrTableData.length === 0
+      typeof idOrPagination === "number" ||
+      typeof idOrPagination === "string"
     ) {
-      lrTableDataValid = false;
-      setLrTableErrors([{ general: "Lr Table Data is required" }]);
-    } else {
-      const newTableErrors = lrTableData.map((row, index) => {
-        const rowErrors = {};
-        if (!row.lr_Hawb_Hbl_No) {
-          rowErrors.lr_Hawb_Hbl_No = "Lr_Hawb_Hbl_No is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef =
-              lrNoDetailsRefs.current[index].lr_Hawb_Hbl_No;
-          lrTableDataValid = false;
-        }
-        if (!row.invNo) {
-          rowErrors.invNo = "Inv No is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].invNo;
-          lrTableDataValid = false;
-        }
-        if (!row.partNo) {
-          rowErrors.partNo = "Part No is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].partNo;
-          lrTableDataValid = false;
-        }
-        if (!row.invQty) {
-          rowErrors.invQty = "Inv QTY is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].invQty;
-          lrTableDataValid = false;
-        }
-        if (!row.recQty) {
-          rowErrors.recQty = "Rec QTY is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].recQty;
-          lrTableDataValid = false;
-        }
-        if (!row.damageQty) {
-          rowErrors.damageQty = "Damage QTY is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].damageQty;
-          lrTableDataValid = false;
-        }
-        return rowErrors;
-      });
-      setLrTableErrors(newTableErrors);
-    }
-    setFieldErrors(errors);
+      // This is a row data change
+      const id = idOrPagination;
+      const field = fieldOrFilters;
+      let value = valueOrSorter; // Change const to let to allow reassignment
 
-    if (!lrTableDataValid || Object.keys(errors).length > 0) {
-      if (firstInvalidFieldRef && firstInvalidFieldRef.current) {
-        firstInvalidFieldRef.current.focus();
+      // Prevent negative numbers for quantity fields
+      if (["invQty", "recQty", "shortQty", "damageQty"].includes(field)) {
+        const numValue = parseFloat(value);
+        if (numValue < 0 || isNaN(numValue)) {
+          value = "0"; // Set to 0 if negative or not a number
+        }
       }
-    }
-    if (Object.keys(errors).length === 0 && lrTableDataValid) {
-      setIsLoading(true);
 
-      const lrVo = lrTableData.map((row) => ({
-        ...(editId && { id: row.id }),
-        qrCode: row.qrCode,
-        irNoHaw: row.lr_Hawb_Hbl_No,
-        invoiceNo: row.invNo,
-        invoiceDate: row.invDate
-          ? dayjs(row.invDate).format("YYYY-MM-DD")
-          : null,
-        partNo: row.partNo,
-        partDescription: row.partDesc,
-        sku: row.sku,
-        invQty: parseInt(row.invQty),
-        recQty: parseInt(row.recQty),
-        damageQty: parseInt(row.damageQty),
-        grnQty: parseInt(row.grnQty),
-        batchNo: row.batch_PalletNo,
-        batchDate: row.batchDate
-          ? dayjs(row.batchDate).format("YYYY-MM-DD")
-          : null,
-        expDate: row.expDate ? dayjs(row.expDate).format("YYYY-MM-DD") : null,
-        remarks: row.remarks,
-      }));
+      setLrTableData((prevData) =>
+        prevData.map((row) => {
+          if (row.id === id) {
+            const updatedRow = { ...row, [field]: value };
 
-      const saveFormData = {
-        ...(editId && { id: editId }),
-        entryNo: formData.entrySlNo,
-        entryDate: formData.date
-          ? dayjs(formData.date).format("YYYY-MM-DD")
-          : null,
-        docdate: formData.docDate
-          ? dayjs(formData.docDate).format("YYYY-MM-DD")
-          : null,
-        supplierShortName: formData.supplierShortName,
-        supplier: formData.supplier,
-        modeOfShipment: formData.modeOfShipment,
-        carrier: formData.carrier,
-        vehicleType: formData.vehicleType,
-        contact: formData.contact,
-        driverName: formData.driverName,
-        securityName: formData.securityName,
-        vehicleNo: formData.vehicleNo,
-        goodsDescription: formData.goodsDesc,
-        orgId: orgId,
-        createdBy: loginUserName,
-        branch: loginBranch,
-        branchCode: loginBranchCode,
-        client: loginClient,
-        customer: loginCustomer,
-        finYear: loginFinYear,
-        gatePassInDetailsDTO: lrVo,
-      };
+            // Calculate GRN QTY whenever relevant quantity fields change
+            if (["invQty", "recQty", "shortQty", "damageQty"].includes(field)) {
+              const recQty = parseFloat(updatedRow.recQty) || 0;
+              const shortQty = parseFloat(updatedRow.shortQty) || 0;
+              const damageQty = parseFloat(updatedRow.damageQty) || 0;
 
-      console.log("DATA TO SAVE IS:", saveFormData);
+              // Validate that short + damage doesn't exceed received quantity
+              if (shortQty + damageQty > recQty) {
+                // You can show a warning toast here if needed
+                console.warn(
+                  "Short + Damage quantity cannot exceed Received quantity"
+                );
+              }
 
-      try {
-        const response = await axios.put(
-          `${API_URL}/gatePassIn/createUpdateGatePassIn`,
-          saveFormData
-        );
-        if (response.status === true) {
-          console.log("Response:", response);
-          showToast(
-            "success",
-            editId
-              ? "Gate Pass Updated Successfully"
-              : "Gate Pass created successfully"
-          );
-          handleClear();
-          getAllGatePasses();
-          setIsLoading(false);
-        } else {
-          showToast(
-            "error",
-            response.paramObjectsMap.errorMessage || "Gate Pass creation failed"
-          );
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error("Error:", error);
-        showToast("error", "Gate Pass creation failed");
-        setIsLoading(false);
-      }
+              // Calculate GRN QTY: Rec QTY - (Short QTY + Damage QTY)
+              const grnQty = Math.max(0, recQty - (shortQty + damageQty));
+
+              updatedRow.grnQty = grnQty.toString();
+            }
+
+            return updatedRow;
+          }
+          return row;
+        })
+      );
     } else {
-      setFieldErrors(errors);
+      // This is a table control change (pagination, filters, sorter)
+      const pagination = idOrPagination;
+      const filters = fieldOrFilters;
+      const sorter = valueOrSorter;
+
+      // Your table control implementation here
+      setPagination(pagination);
+      setFilters(filters);
+      setSorter(sorter);
+      // Or any other logic you need for table changes
     }
   };
 
@@ -1119,11 +1463,11 @@ const GatePassIn = () => {
       partNo: "",
       partDesc: "",
       sku: "",
-      invQty: "",
-      recQty: "",
-      shortQty: "",
-      damageQty: "",
-      grnQty: "",
+      invQty: "0",
+      recQty: "0",
+      shortQty: "0",
+      damageQty: "0",
+      grnQty: "0",
       batch_PalletNo: "",
       batchDate: null,
       expDate: null,
@@ -1246,7 +1590,7 @@ const GatePassIn = () => {
             handleTableChange(
               record.id,
               "invDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -1430,7 +1774,7 @@ const GatePassIn = () => {
             handleTableChange(
               record.id,
               "batchDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -1452,7 +1796,7 @@ const GatePassIn = () => {
             handleTableChange(
               record.id,
               "expDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -1477,6 +1821,127 @@ const GatePassIn = () => {
       ),
     },
   ];
+
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState([]);
+
+  // Function to download Excel
+  const downloadExcel = async () => {
+    if (!selectedDateRange || selectedDateRange.length !== 2) {
+      message.error("Please select both from and to dates");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      const fromDate = selectedDateRange[0].format("YYYY-MM-DD");
+      const toDate = selectedDateRange[1].format("YYYY-MM-DD");
+
+      // Fetch all data from API
+      const response = await axios.get(
+        `${API_URL}/api/gatePassIn/gatePassIn?branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
+      );
+
+      if (response.data.status && response.data.paramObjectsMap.gatePassInVO) {
+        // Filter data by date range on the client side
+        const allGatePassData = response.data.paramObjectsMap.gatePassInVO;
+
+        // Filter data based on the selected date range
+        const filteredGatePassData = allGatePassData.filter((item) => {
+          const docDate = item.docdate;
+          return docDate >= fromDate && docDate <= toDate;
+        });
+
+        if (filteredGatePassData.length > 0) {
+          // Format filtered data for Excel
+          const excelData = formatDataForExcel(filteredGatePassData);
+
+          // Create workbook and worksheet
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          // Add worksheet to workbook
+          XLSX.utils.book_append_sheet(wb, ws, "Gate Pass In Data");
+
+          // Generate Excel file and download
+          XLSX.writeFile(wb, `GatePassIn_${fromDate}_to_${toDate}.xlsx`);
+
+          message.success("Excel file downloaded successfully");
+        } else {
+          message.error("No data found for the selected date range");
+        }
+      } else {
+        message.error("No data available");
+      }
+    } catch (error) {
+      console.error("Error downloading Excel:", error);
+      message.error("Failed to download Excel file");
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  // Format the data for Excel export
+  const formatDataForExcel = (gatePassData) => {
+    const excelData = [];
+
+    gatePassData.forEach((mainRecord) => {
+      if (
+        mainRecord.gatePassDetailsVO &&
+        mainRecord.gatePassDetailsVO.length > 0
+      ) {
+        // Create a row for each detail record
+        mainRecord.gatePassDetailsVO.forEach((detail) => {
+          excelData.push({
+            "Document ID": mainRecord.docId,
+            "Document Date": mainRecord.docdate,
+            "Entry Date": mainRecord.entryDate,
+            Supplier: mainRecord.supplier,
+            "Mode of Shipment": mainRecord.modeOfShipment,
+            Carrier: mainRecord.carrier,
+            "IR No/HAW": detail.irNoHaw,
+            "Invoice No": detail.invoiceNo,
+            "Invoice Date": detail.invoiceDate,
+            "Part No": detail.partNo,
+            "Part Description": detail.partDescription,
+            SKU: detail.sku,
+            "Invoice Qty": detail.invQty,
+            "Received Qty": detail.recQty,
+            "Short Qty": detail.shortQty,
+            "Damage Qty": detail.damageQty,
+            "GRN Qty": detail.grnQty,
+            "Created By": mainRecord.createdBy,
+            Branch: mainRecord.branch,
+          });
+        });
+      } else {
+        // Create a row even if there are no details
+        excelData.push({
+          "Document ID": mainRecord.docId,
+          "Document Date": mainRecord.docdate,
+          "Entry Date": mainRecord.entryDate,
+          Supplier: mainRecord.supplier,
+          "Mode of Shipment": mainRecord.modeOfShipment,
+          Carrier: mainRecord.carrier,
+          "IR No/HAW": "",
+          "Invoice No": "",
+          "Invoice Date": "",
+          "Part No": "",
+          "Part Description": "",
+          SKU: "",
+          "Invoice Qty": "",
+          "Received Qty": "",
+          "Short Qty": "",
+          "Damage Qty": "",
+          "GRN Qty": "",
+          "Created By": mainRecord.createdBy,
+          Branch: mainRecord.branch,
+        });
+      }
+    });
+
+    return excelData;
+  };
 
   return (
     <ConfigProvider theme={themeConfig}>
@@ -1607,7 +2072,7 @@ const GatePassIn = () => {
                     onClick={handleSave}
                     loading={isLoading}
                     style={{
-                      background: "rgba(108, 99, 255, 0.7)",
+                      background: "rgba(108, 99, 255, 0.3)",
                       color: "#fff",
                       border: "none",
                     }}
@@ -1705,13 +2170,14 @@ const GatePassIn = () => {
                                 }
                               >
                                 <DatePicker
-                                  style={datePickerStyle}
+                                  className="white-datepicker"
                                   value={
                                     formData.docDate
                                       ? dayjs(formData.docDate)
                                       : null
                                   }
                                   disabled
+                                  format="DD-MM-YYYY"
                                 />
                               </Form.Item>
                             </Col>
@@ -1726,12 +2192,41 @@ const GatePassIn = () => {
                                 <Input
                                   name="entrySlNo"
                                   value={formData.entrySlNo}
-                                  onChange={handleInputChange}
+                                  onChange={(e) => {
+                                    const value = e.target.value.toUpperCase();
+                                    setFormData({
+                                      ...formData,
+                                      entrySlNo: value,
+                                    });
+                                  }}
+                                  onBlur={(e) =>
+                                    handleEntryNoChange(e.target.value)
+                                  }
+                                  onKeyPress={(e) => {
+                                    if (e.key === "Enter") {
+                                      handleEntryNoChange(e.target.value);
+                                    }
+                                  }}
                                   disabled={formData.freeze}
                                   style={inputStyle}
+                                  suffix={
+                                    loadingEntry ? <Spin size="small" /> : null
+                                  }
                                 />
+                                {loadingEntry && (
+                                  <div
+                                    style={{
+                                      color: "white",
+                                      fontSize: "12px",
+                                      marginTop: "5px",
+                                    }}
+                                  >
+                                    Loading entry details...
+                                  </div>
+                                )}
                               </Form.Item>
                             </Col>
+
                             <Col span={4}>
                               <Form.Item
                                 label={
@@ -1741,12 +2236,19 @@ const GatePassIn = () => {
                                 <DatePicker
                                   style={datePickerStyle}
                                   value={
-                                    formData.date ? dayjs(formData.date) : null
-                                  }
+                                    formData.date
+                                      ? dayjs(formData.date, "DD-MM-YYYY")
+                                      : null
+                                  } // Parse as DD/MM/YYYY
                                   onChange={(date) =>
-                                    handleDateChange("date", date)
+                                    setFormData({
+                                      ...formData,
+                                      date: date
+                                        ? date.format("DD-MM-YYYY")
+                                        : null, // Store as DD/MM/YYYY
+                                    })
                                   }
-                                  disabled={formData.freeze}
+                                  format="DD-MM-YYYY"
                                 />
                               </Form.Item>
                             </Col>
@@ -2342,7 +2844,7 @@ const GatePassIn = () => {
                               }
                               danger
                               type="text"
-                              style={{ color: "#ff4d4f" }}
+                              style={{ color: "white" }}
                             />
                           </td>
 
@@ -2407,14 +2909,19 @@ const GatePassIn = () => {
                           <td style={{ padding: "8px" }}>
                             <DatePicker
                               style={datePickerStyle}
-                              value={row.invDate ? dayjs(row.invDate) : null}
+                              value={
+                                row.invDate
+                                  ? dayjs(row.invDate, "DD-MM-YYYY")
+                                  : null
+                              } // Add format for parsing
                               onChange={(date) =>
                                 handleTableChange(
                                   row.id,
                                   "invDate",
-                                  date ? date.format("YYYY-MM-DD") : null
+                                  date ? date.format("DD-MM-YYYY") : null
                                 )
                               }
+                              format="DD-MM-YYYY"
                             />
                           </td>
 
@@ -2495,17 +3002,13 @@ const GatePassIn = () => {
 
                           {/* Short QTY */}
                           <td style={{ padding: "8px" }}>
-                            <Input
-                              value={row.shortQty}
-                              readOnly
-                              style={readOnlyInputStyle}
-                            />
+                            <Input value={row.shortQty} readOnly />
                           </td>
 
                           {/* Damage QTY */}
                           <td style={{ padding: "8px" }}>
                             <Input
-                              value={row.damageQty}
+                              value={row.damageQty || ""}
                               onChange={(e) =>
                                 handleTableChange(
                                   row.id,
@@ -2542,34 +3045,45 @@ const GatePassIn = () => {
                           </td>
 
                           {/* Batch Date */}
+                          {/* Batch Date */}
+                          {/* Batch Date */}
                           <td style={{ padding: "8px" }}>
                             <DatePicker
                               style={datePickerStyle}
                               value={
-                                row.batchDate ? dayjs(row.batchDate) : null
+                                row.batchDate
+                                  ? dayjs(row.batchDate, "DD-MM-YYYY")
+                                  : null
                               }
                               onChange={(date) =>
                                 handleTableChange(
                                   row.id,
                                   "batchDate",
-                                  date ? date.format("YYYY-MM-DD") : null
+                                  date ? date.format("DD-MM-YYYY") : null
                                 )
                               }
+                              format="DD-MM-YYYY"
                             />
                           </td>
 
                           {/* Exp Date */}
+                          {/* Exp Date */}
                           <td style={{ padding: "8px" }}>
                             <DatePicker
                               style={datePickerStyle}
-                              value={row.expDate ? dayjs(row.expDate) : null}
+                              value={
+                                row.expDate
+                                  ? dayjs(row.expDate, "DD-MM-YYYY")
+                                  : null
+                              }
                               onChange={(date) =>
                                 handleTableChange(
                                   row.id,
                                   "expDate",
-                                  date ? date.format("YYYY-MM-DD") : null
+                                  date ? date.format("DD-MM-YYYY") : null
                                 )
                               }
+                              format="DD-MM-YYYY"
                             />
                           </td>
 
@@ -2596,308 +3110,494 @@ const GatePassIn = () => {
             </div>
           ) : (
             <div
+              className="form-containerSG"
               style={{
-                padding: "20px",
-                marginTop: "20px",
-                display: "revert",
-                placeContent: "center",
-                overflowY: "none",
-                minHeight: "20dvh",
+                minHeight: "90vh",
                 background: "#159957",
                 background: "var(--bg-body-gradient)",
+                marginTop: "40px",
               }}
             >
-              {/* List View Header */}
-              <div className="form-containerSG">
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  background: "#159957",
+                  background: "var(--bg-body-gradient)",
+                }}
+              >
+                <div>
+                  <Typography.Title
+                    level={3}
+                    style={{
+                      color: "#fff",
+                      margin: 0,
+                      paddingLeft: "20px",
+                      paddingTop: "20px",
+                    }}
+                  >
+                    Gate Pass In List
+                  </Typography.Title>
+                  <Typography.Text
+                    style={{
+                      color: "rgba(255, 255, 255, 0.8)",
+                      paddingLeft: "20px",
+                    }}
+                  >
+                    View and manage Gate Pass In entries
+                  </Typography.Text>
+                </div>
+                <div></div>
+              </div>
+
+              <div
+                className="table-container"
+                style={{
+                  position: "relative",
+                  width: "95%",
+                  margin: "0 auto",
+                  overflowX: "auto",
+                  fontSize: "11px",
+                  maxHeight: "calc(100vh - 250px)",
+                  overflowY: "auto",
+                  marginTop: "20px",
+                  background: "#159957",
+                  background: "var(--bg-body-gradient)",
+                }}
+              >
                 <div
                   style={{
+                    marginBottom: "16px",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    background: "#159957",
-                    background: "var(--bg-body-gradient)",
                   }}
                 >
-                  <div>
-                    <Typography.Title
-                      level={3}
+                  <Input
+                    placeholder="Search by Doc ID, Supplier, or Driver Name"
+                    allowClear
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      width: "300px",
+                      background: "rgba(255, 255, 255, 0.1)",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                    prefix={
+                      <SearchOutlined
+                        style={{ color: "rgba(255, 255, 255, 0.5)" }}
+                      />
+                    }
+                  />
+
+                  <Space>
+                    <RangePicker
+                      className="white-datepicker"
+                      value={selectedDateRange}
+                      onChange={setSelectedDateRange}
+                      placeholder={["From Date", "To Date"]}
+                      format="DD-MM-YYYY"
+                    />
+
+                    <Button
+                      icon={<DownloadOutlined />}
+                      loading={downloadLoading}
+                      onClick={downloadExcel}
                       style={{
-                        color: "#fff",
-                        margin: 0,
-                        alignItems: "center",
+                        backgroundColor: "transparent",
+                        color: "white",
+                        border: "1px solid rgba(255, 255, 255, 0.3)",
                       }}
                     >
-                      Gate Pass In List
-                    </Typography.Title>
-                    <Typography.Text
-                      style={{ color: "rgba(255, 255, 255, 0.8)" }}
-                    >
-                      View and manage Gate Pass In entries
-                    </Typography.Text>
-                  </div>
-                  <div>
+                      Download Excel
+                    </Button>
                     <Button
                       icon={<PlusOutlined />}
                       onClick={toggleViewMode}
                       style={{
                         backgroundColor: "transparent",
                         color: "white",
-                        border: "none",
+                        // marginRight: "20px",
+                        // marginTop: "20px",
+                        // border: "none",
                       }}
                     >
-                      New Entry
+                      Add Entry
                     </Button>
-                  </div>
+                  </Space>
                 </div>
-              </div>
 
-              {/* List View Content */}
-              <div
-                style={{
-                  backdropFilter: "blur(10px)",
-                  background: "rgba(255, 255, 255, 0.1)",
-                  borderRadius: "20px",
-                  padding: "20px",
-                  boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.2)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  marginBottom: "20px",
-                }}
-              >
-                <div
+                <table
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "16px",
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    background: "#159957",
+                    background: "var(--bg-body-gradient)",
                   }}
                 >
-                  <div style={{ display: "flex", gap: "10px" }}>
-                    <Input
-                      placeholder="Search..."
-                      prefix={<SearchOutlined />}
+                  <thead style={{ backgroundColor: "revert" }}>
+                    <tr
                       style={{
-                        width: 200,
-                        background: "rgba(255, 255, 255, 0.1)",
-                        border: "1px solid rgba(255, 255, 255, 0.3)",
-                        color: "white",
-                      }}
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <Button
-                      icon={<RestartAltIcon />}
-                      onClick={() => {
-                        setSearchTerm("");
-                        getAllGatePasses();
-                      }}
-                      style={{
-                        background: "rgba(108, 99, 255, 0.3)",
-                        color: "#fff",
-                        border: "none",
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.3)",
+                        backgroundColor: "rgba(255, 255, 255, 0.1)",
                       }}
                     >
-                      Reset
-                    </Button>
-                  </div>
-                </div>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Action
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Doc Date
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Doc ID
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Supplier
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Mode of Shipment
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Vehicle Type
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Driver Name
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Security Person
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listViewData
+                      .filter(
+                        (item) =>
+                          !searchTerm ||
+                          (item.docId &&
+                            item.docId
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase())) ||
+                          (item.supplier &&
+                            item.supplier
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase())) ||
+                          (item.driverName &&
+                            item.driverName
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase()))
+                      )
+                      .slice(
+                        (currentPage - 1) * pageSize,
+                        currentPage * pageSize
+                      )
+                      .map((item, index) => (
+                        <tr
+                          key={`gatepass-${index}-${item.id}`}
+                          style={{
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                            color: "white",
+                            backgroundColor:
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)",
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            <Button
+                              type="link"
+                              icon={<RightCircleOutlined />}
+                              onClick={() => getGatePassById(item)}
+                              style={{ color: "white" }}
+                            />
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {formatDate(item.docdate)}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.docId}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.supplier}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.modeOfShipment}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.vehicleType}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.driverName}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.securityName}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
 
-                <div
-                  style={{
-                    overflowX: "auto",
-                    maxHeight: "calc(100vh - 300px)",
-                  }}
-                >
-                  <Table
-                    columns={[
-                      {
-                        title: "Action",
-                        key: "action",
-                        render: (_, record) => (
-                          <Button
-                            icon={<RightCircleOutlined />}
-                            onClick={() => getGatePassById(record)}
-                            type="text"
-                            style={{ color: "#6C63FF" }}
-                          />
-                        ),
-                      },
-                      {
-                        title: "Doc Date",
-                        dataIndex: "docDate",
-                        key: "docDate",
-                        render: (text) =>
-                          text ? dayjs(text).format("DD-MM-YYYY") : "",
-                      },
-                      {
-                        title: "Doc ID",
-                        dataIndex: "docId",
-                        key: "docId",
-                      },
-                      {
-                        title: "Supplier",
-                        dataIndex: "supplier",
-                        key: "supplier",
-                      },
-                      {
-                        title: "Mode of Shipment",
-                        dataIndex: "modeOfShipment",
-                        key: "modeOfShipment",
-                      },
-                      {
-                        title: "Vehicle Type",
-                        dataIndex: "vehicleType",
-                        key: "vehicleType",
-                      },
-                      {
-                        title: "Driver Name",
-                        dataIndex: "driverName",
-                        key: "driverName",
-                      },
-                      {
-                        title: "Security Person",
-                        dataIndex: "securityName",
-                        key: "securityName",
-                      },
-                    ]}
-                    dataSource={listViewData}
-                    rowKey="id"
-                    pagination={{
-                      pageSize: 10,
-                      showSizeChanger: true,
-                      pageSizeOptions: ["10", "20", "50", "100"],
-                    }}
+                {listViewData.length > 0 && (
+                  <div
                     style={{
-                      backgroundColor: "transparent",
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginTop: "16px",
+                      paddingRight: "20px",
                       color: "white",
                     }}
-                  />
-                </div>
+                  >
+                    <span style={{ marginRight: "16px", fontSize: "12px" }}>
+                      {(currentPage - 1) * pageSize + 1}-
+                      {Math.min(currentPage * pageSize, listViewData.length)} of{" "}
+                      {listViewData.length} items
+                    </span>
+
+                    <button
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.max(prev - 1, 1))
+                      }
+                      disabled={currentPage === 1}
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "white",
+                        border: "1px solid white",
+                        margin: "0 4px",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                        opacity: currentPage === 1 ? 0.5 : 1,
+                      }}
+                    >
+                      Prev
+                    </button>
+
+                    {Array.from(
+                      { length: Math.ceil(listViewData.length / pageSize) },
+                      (_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setCurrentPage(i + 1)}
+                          style={{
+                            backgroundColor:
+                              currentPage === i + 1
+                                ? "rgba(255,255,255,0.2)"
+                                : "transparent",
+                            color: "white",
+                            border: "1px solid white",
+                            margin: "0 2px",
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            minWidth: "28px",
+                          }}
+                        >
+                          {i + 1}
+                        </button>
+                      )
+                    )}
+
+                    <button
+                      onClick={() =>
+                        setCurrentPage((prev) =>
+                          Math.min(
+                            prev + 1,
+                            Math.ceil(listViewData.length / pageSize)
+                          )
+                        )
+                      }
+                      disabled={
+                        currentPage ===
+                        Math.ceil(listViewData.length / pageSize)
+                      }
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "white",
+                        border: "1px solid white",
+                        margin: "0 4px",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        cursor:
+                          currentPage ===
+                          Math.ceil(listViewData.length / pageSize)
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity:
+                          currentPage ===
+                          Math.ceil(listViewData.length / pageSize)
+                            ? 0.5
+                            : 1,
+                      }}
+                    >
+                      Next
+                    </button>
+
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        backgroundColor: "rgba(255,255,255,0.1)",
+                        color: "white",
+                        border: "1px solid white",
+                        marginLeft: "8px",
+                        padding: "2px 4px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      <option value="5" style={{ background: "#1A1A2E" }}>
+                        5 / page
+                      </option>
+                      <option value="10" style={{ background: "#1A1A2E" }}>
+                        10 / page
+                      </option>
+                      <option value="20" style={{ background: "#1A1A2E" }}>
+                        20 / page
+                      </option>
+                      <option value="50" style={{ background: "#1A1A2E" }}>
+                        50 / page
+                      </option>
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
 
         {/* Bulk Upload Dialog */}
-        <Modal
-          title={
-            <div
-              style={{
-                backgroundColor: "#6C63FF",
-                color: "white",
-                padding: "16px",
-                margin: "-20px -24px 20px -24px",
-                borderRadius: "8px 8px 0 0",
-              }}
-            >
-              Bulk Upload Gate Pass In
-            </div>
-          }
+        {/* Bulk Upload Dialog */}
+        {/* <Modal
           visible={uploadOpen}
           onCancel={() => setUploadOpen(false)}
           footer={null}
-          width={500}
+          width={600}
           closable={false}
           className="upload-modal"
-          bodyStyle={{
-            padding: "24px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
+          style={{
+            padding: "0",
           }}
-        >
-          <Button
-            type="text"
-            icon={<CloseOutlined />}
-            onClick={() => setUploadOpen(false)}
-            style={{
-              position: "absolute",
-              right: 8,
-              top: 8,
-              color: "white",
-            }}
-          />
-
-          {/* Upload Area */}
-          <div
-            style={{
-              width: "100%",
-              padding: "40px 20px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "16px",
-              background: "rgba(108, 99, 255, 0.05)",
-              borderRadius: "8px",
-              border: "2px dashed rgba(108, 99, 255, 0.5)",
-              cursor: "pointer",
-              marginBottom: "20px",
-              textAlign: "center",
-            }}
-            onClick={() => document.getElementById("bulk-upload-input").click()}
-          >
-            <CloudUploadOutlined
-              style={{ fontSize: "48px", color: "#6C63FF" }}
-            />
-            <Text strong style={{ color: "#6C63FF" }}>
-              {selectedFile
-                ? selectedFile.name
-                : "Drag and drop your file here or click to browse"}
-            </Text>
-            <Text type="secondary">Supported formats: .xls, .xlsx</Text>
-          </div>
-
-          <input
-            type="file"
-            accept=".xlsx, .xls"
-            onChange={handleFileUpload}
-            style={{ display: "none" }}
-            id="bulk-upload-input"
-          />
-
-          <div style={{ display: "flex", gap: "10px", marginBottom: "24px" }}>
-            <Button
-              type="primary"
-              onClick={() =>
-                document.getElementById("bulk-upload-input").click()
-              }
-              style={{ background: "#6C63FF", borderColor: "#6C63FF" }}
-            >
-              Choose File
-            </Button>
-            <Button
-              onClick={handleSampleDownload}
-              style={{ color: "#6C63FF", borderColor: "#6C63FF" }}
-            >
-              Download Sample
-            </Button>
-          </div>
-
-          <Text type="secondary" style={{ marginBottom: "24px" }}>
-            Note: Please ensure the Excel file follows the sample format.
-          </Text>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              width: "100%",
-              justifyContent: "flex-end",
-            }}
-          >
-            <Button
-              onClick={() => setUploadOpen(false)}
-              style={{ color: "#6C63FF", borderColor: "#6C63FF" }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="primary"
-              onClick={handleSubmit}
-              style={{ background: "#6C63FF", borderColor: "#6C63FF" }}
-            >
-              Upload
-            </Button>
-          </div>
-        </Modal>
+        > */}
+        <CommonBulkUpload
+          open={uploadOpen}
+          handleClose={() => setUploadOpen(false)}
+          title="Upload Gate Pass In Files"
+          uploadText="Upload file"
+          downloadText="Sample File"
+          onSubmit={handleSubmit}
+          sampleFileDownload={sampleFile}
+          handleFileUpload={handleFileUpload}
+          apiUrl={`${API_URL}/api/grn/ExcelUploadForGrn?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&createdBy=${loginUserName}&customer=${loginCustomer}&finYear=${loginFinYear}&orgId=${orgId}`}
+          screen="GatePassIn"
+        />
+        {/* </Modal> */}
       </div>
     </ConfigProvider>
   );
@@ -2924,6 +3624,7 @@ const datePickerStyle = {
   width: "100%",
   background: "rgba(255, 255, 255, 0.1)",
   border: "1px solid rgba(255, 255, 255, 0.3)",
+  color: "white",
 };
 
 const selectStyle = {

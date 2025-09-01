@@ -16,6 +16,7 @@ import {
   Checkbox,
   Divider,
   Tabs,
+  message,
 } from "antd";
 import {
   SearchOutlined,
@@ -32,6 +33,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import axios from "axios";
 import SaveIcon from "@mui/icons-material/Save";
+import { showToast } from "../utils/toast-component";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
 
@@ -73,14 +75,14 @@ const PendingPickRequest = () => {
       title: "Buyer Order Date",
       dataIndex: "buyerOrderDate",
       key: "buyerOrderDate",
-      width: 120,
+      width: 200,
       render: (text) => dayjs(text).format("DD-MM-YYYY"),
     },
     {
       title: "Buyer Ref Date",
       dataIndex: "buyerRefDate",
       key: "buyerRefDate",
-      width: 120,
+      width: 200,
       render: (text) => dayjs(text).format("DD-MM-YYYY"),
     },
     {
@@ -99,7 +101,7 @@ const PendingPickRequest = () => {
       title: "Buyers Reference Date",
       dataIndex: "buyersReferenceDate",
       key: "buyersReferenceDate",
-      width: 150,
+      width: 200,
       render: (text) => dayjs(text).format("DD-MM-YYYY"),
     },
     {
@@ -114,24 +116,24 @@ const PendingPickRequest = () => {
       key: "clientName",
       width: 200,
     },
-    {
-      title: "Client Short Name",
-      dataIndex: "clientShortName",
-      key: "clientShortName",
-      width: 150,
-    },
-    {
-      title: "Customer Name",
-      dataIndex: "customerName",
-      key: "customerName",
-      width: 200,
-    },
-    {
-      title: "Customer Short Name",
-      dataIndex: "customerShortName",
-      key: "customerShortName",
-      width: 150,
-    },
+    // {
+    //   title: "Client Short Name",
+    //   dataIndex: "clientShortName",
+    //   key: "clientShortName",
+    //   width: 150,
+    // },
+    // {
+    //   title: "Customer Name",
+    //   dataIndex: "customerName",
+    //   key: "customerName",
+    //   width: 200,
+    // },
+    // {
+    //   title: "Customer Short Name",
+    //   dataIndex: "customerShortName",
+    //   key: "customerShortName",
+    //   width: 150,
+    // },
   ];
 
   useEffect(() => {
@@ -144,60 +146,68 @@ const PendingPickRequest = () => {
       const response = await axios.get(
         `${API_URL}/api/pickrequest/getPendingPickDetails?branchCode=${loginBranchCode}&finYear=${loginFinYear}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
-      if (response.status === true) {
+      if (response.data.status === true) {
         setRowData(
-          response.paramObjectsMap.pendingPickdetails.map((item, index) => ({
-            ...item,
-            key: index,
-            sno: index + 1,
-          }))
+          response.data.paramObjectsMap.pendingPickdetails.map(
+            (item, index) => ({
+              ...item,
+              key: index,
+              sno: index + 1,
+            })
+          )
         );
       } else {
-        toast.error(
-          response.paramObjectsMap.errorMessage || "Report Fetch failed"
+        showToast(
+          "error",
+          response.data.paramObjectsMap?.errorMessage || "Report Fetch failed"
         );
       }
     } catch (error) {
       console.error("Error:", error);
-      toast.error("Report Fetch failed");
+      showToast("error", "Report Fetch failed");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSelectedRows = async (selectedRows) => {
-    const selectedRowsData = selectedRows.map((row) => row);
-    setSelectedRows(selectedRowsData);
-    console.log("selectedRowsData", selectedRowsData);
+  // ✅ Utility to normalize date
+  const formatDateForAPI = (dateValue) => {
+    if (!dateValue) return "";
 
-    if (selectedRowsData.length === 0) {
-      toast.error("Please select at least one order");
+    // If it's already in YYYY-MM-DD format
+    if (
+      typeof dateValue === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
+    ) {
+      return dateValue;
+    }
+
+    // If it's like "2025-08-24 00:00:00.0"
+    if (typeof dateValue === "string" && dateValue.includes(" ")) {
+      return dateValue.split(" ")[0]; // keep only date part
+    }
+
+    // If it's a Date or other string
+    const parsed = dayjs(dateValue);
+    return parsed.isValid() ? parsed.format("YYYY-MM-DD") : "";
+  };
+
+  const handleSelectedRows = async () => {
+    if (selectedRows.length === 0) {
+      showToast("error", "Please select at least one order");
       return;
     }
 
-    const errors = {};
-    if (!loginBranch) errors.loginBranch = "Branch is required";
-    if (!loginBranchCode) errors.loginBranchCode = "BranchCode is required";
-    if (!loginClient) errors.loginClient = "Client is required";
-    if (!loginCustomer) errors.loginCustomer = "Customer is required";
-    if (!loginWarehouse) errors.loginWarehouse = "Warehouse is required";
-    if (!loginFinYear) errors.loginFinYear = "FinYear is required";
+    setIsLoading(true);
 
-    if (Object.keys(errors).length > 0) {
-      toast.error("Please fix validation errors");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    const saveFormData = selectedRowsData.map((row) => ({
+    const saveFormData = selectedRows.map((row) => ({
       branch: loginBranch,
       branchCode: loginBranchCode,
-      buyerOrderDate: row.buyerOrderDate,
+      buyerOrderDate: formatDateForAPI(row.buyerOrderDate),
       buyerOrderNo: row.buyerOrderNo,
-      buyerRefDate: row.buyerRefDate,
+      buyerRefDate: formatDateForAPI(row.buyerRefDate),
       buyerRefNo: row.buyerRefNo,
-      buyersReference: row.buyersReference,
+      buyersReference: row.buyersReference || "",
       client: loginClient,
       clientName: row.clientName,
       clientShortName: row.clientShortName,
@@ -206,50 +216,118 @@ const PendingPickRequest = () => {
       customerName: row.customerName,
       customerShortName: row.customerShortName,
       finYear: loginFinYear,
-      invoiceNo: row.invoiceNo,
-      orgId: orgId,
+      invoiceNo: row.invoiceNo || "",
+      orgId: parseInt(orgId, 10) || 0,
       warehouse: loginWarehouse,
     }));
 
-    console.log("DATA TO SAVE IS:", saveFormData);
+    console.log("📦 Final payload to API:", saveFormData);
 
     try {
-      const result = await axios.post(
+      const response = await axios.post(
         `${API_URL}/api/pickrequest/createMultiplePickRequest`,
-        saveFormData
+        saveFormData,
+        { headers: { "Content-Type": "application/json" } }
       );
 
-      if (result.status === true) {
-        console.log("Response:", result);
-        toast.success("Multiple Pick Request created successfully");
+      if (response.data.status === true) {
+        showToast("success", "Multiple Pick Requests created successfully");
         handleClear();
         getPendingPickDetails();
       } else {
-        toast.error(
-          result.paramObjectsMap.errorMessage ||
+        showToast(
+          "error",
+          response.data.paramObjectsMap?.errorMessage ||
             "Multiple Pick Request creation failed"
         );
       }
     } catch (err) {
-      console.log("error", err);
-      toast.error("Multiple Pick Request creation failed");
+      console.error("❌ API Error:", err);
+      showToast(
+        "error",
+        err.response?.data?.paramObjectsMap?.errorMessage ||
+          "Multiple Pick Request creation failed"
+      );
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
+
+  // In the JSX, update the onClick handler:
 
   const handleClear = () => {
     setSelectedRows([]);
   };
 
-  const rowSelection = {
-    onChange: (selectedRowKeys, selectedRows) => {
-      setSelectedRows(selectedRows);
-    },
-  };
-
   const toggleViewMode = () => {
     setViewMode(viewMode === "form" ? "list" : "form");
+  };
+
+  // Handle select all on current page
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      // Select all rows on current page
+      const currentPageRows = rowData.slice(
+        (currentPage - 1) * pageSize,
+        currentPage * pageSize
+      );
+      // Merge with existing selected rows, avoiding duplicates
+      const newSelectedRows = [...selectedRows];
+      currentPageRows.forEach((row) => {
+        if (
+          !newSelectedRows.some((selectedRow) => selectedRow.key === row.key)
+        ) {
+          newSelectedRows.push(row);
+        }
+      });
+      setSelectedRows(newSelectedRows);
+    } else {
+      // Deselect all rows on current page
+      const currentPageRowKeys = rowData
+        .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+        .map((row) => row.key);
+      setSelectedRows(
+        selectedRows.filter((row) => !currentPageRowKeys.includes(row.key))
+      );
+    }
+  };
+
+  // Handle individual row selection
+  const handleRowSelect = (row, e) => {
+    if (e.target.checked) {
+      setSelectedRows([...selectedRows, row]);
+    } else {
+      setSelectedRows(
+        selectedRows.filter((selectedRow) => selectedRow.key !== row.key)
+      );
+    }
+  };
+
+  // Check if all rows on current page are selected
+  const isAllSelected = () => {
+    const currentPageRows = rowData.slice(
+      (currentPage - 1) * pageSize,
+      currentPage * pageSize
+    );
+    return (
+      currentPageRows.length > 0 &&
+      currentPageRows.every((row) =>
+        selectedRows.some((selectedRow) => selectedRow.key === row.key)
+      )
+    );
+  };
+
+  // Check if some but not all rows on current page are selected
+  const isSomeSelected = () => {
+    const currentPageRows = rowData.slice(
+      (currentPage - 1) * pageSize,
+      currentPage * pageSize
+    );
+    return (
+      currentPageRows.some((row) =>
+        selectedRows.some((selectedRow) => selectedRow.key === row.key)
+      ) && !isAllSelected()
+    );
   };
 
   return (
@@ -362,7 +440,7 @@ const PendingPickRequest = () => {
               </Button>
               <Button
                 icon={<SaveOutlined />}
-                onClick={() => handleSelectedRows(selectedRows)}
+                onClick={handleSelectedRows} // Now it will work correctly
                 loading={isSubmitting}
                 className="primary-action-btn"
                 style={{
@@ -402,7 +480,7 @@ const PendingPickRequest = () => {
               className="table-container"
               style={{
                 position: "relative",
-                width: "80%",
+                width: "90%",
                 overflowX: "auto",
                 fontSize: "11px",
                 maxHeight: "200px",
@@ -428,6 +506,21 @@ const PendingPickRequest = () => {
                       backgroundColor: "rgba(255, 255, 255, 0.1)",
                     }}
                   >
+                    {/* Add checkbox column header */}
+                    <th
+                      style={{
+                        padding: "12px",
+                        textAlign: "left",
+                        color: "white",
+                        width: "50px",
+                      }}
+                    >
+                      <Checkbox
+                        onChange={handleSelectAll}
+                        checked={isAllSelected()}
+                        indeterminate={isSomeSelected()}
+                      />
+                    </th>
                     {columns.map((column) => (
                       <th
                         key={column.key}
@@ -445,24 +538,25 @@ const PendingPickRequest = () => {
                 <tbody>
                   {rowData
                     .slice((currentPage - 1) * pageSize, currentPage * pageSize)
-                    .map((row, index) => (
-                      <tr
-                        key={`row-${index}-${row.key || index}`}
-                        style={{
-                          borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                          color: "white",
-                          backgroundColor:
-                            index % 2 === 0
-                              ? "rgba(255, 255, 255, 0.02)"
-                              : "rgba(255, 255, 255, 0.05)",
-                          "&:hover": {
-                            backgroundColor: "rgba(255, 255, 255, 0.1)",
-                          },
-                        }}
-                      >
-                        {columns.map((column) => (
+                    .map((row, index) => {
+                      const isSelected = selectedRows.some(
+                        (selectedRow) => selectedRow.key === row.key
+                      );
+
+                      return (
+                        <tr
+                          key={`row-${index}-${row.key || index}`}
+                          style={{
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                            color: "white",
+                            backgroundColor:
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)",
+                          }}
+                        >
+                          {/* Add checkbox for each row */}
                           <td
-                            key={column.key}
                             style={{
                               padding: "12px",
                               textAlign: "left",
@@ -470,16 +564,33 @@ const PendingPickRequest = () => {
                               fontSize: "11px",
                             }}
                           >
-                            {column.render
-                              ? column.render(row[column.dataIndex], row)
-                              : row[column.dataIndex]}
+                            <Checkbox
+                              checked={isSelected}
+                              onChange={(e) => handleRowSelect(row, e)}
+                            />
                           </td>
-                        ))}
-                      </tr>
-                    ))}
+                          {columns.map((column) => (
+                            <td
+                              key={column.key}
+                              style={{
+                                padding: "12px",
+                                textAlign: "left",
+                                color: "white",
+                                fontSize: "11px",
+                              }}
+                            >
+                              {column.render
+                                ? column.render(row[column.dataIndex], row)
+                                : row[column.dataIndex]}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
 
+              {/* Pagination */}
               <div
                 style={{
                   display: "flex",

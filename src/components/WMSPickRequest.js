@@ -1,3 +1,4 @@
+import React, { useRef, useState, useEffect } from "react";
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -8,6 +9,8 @@ import {
   CloudUploadOutlined,
   CloudDownloadOutlined,
   RightCircleOutlined,
+  BarcodeOutlined,
+  PrinterOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -26,19 +29,24 @@ import {
   Checkbox,
   Modal,
   message,
+  InputNumber,
 } from "antd";
 import dayjs from "dayjs";
-import { useEffect, useState } from "react";
 import Draggable from "react-draggable";
 import axios from "axios";
+import Barcode from "react-barcode";
 import { getAllActiveGroups } from "../utils/CommonFunctions";
 import CommonListViewTable from "./CommonListViewTable";
 import GeneratePdfTempPick from "./PickRequestPdf";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import WMSGeneratePdfTempPick from "./WMSPickRequestPdf";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
 const { TextArea } = Input;
+const { Title, Text } = Typography;
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
 
 function PaperComponent(props) {
@@ -52,7 +60,515 @@ function PaperComponent(props) {
   );
 }
 
-export const PickRequest = () => {
+const LabelPrintModal = ({ visible, onClose, formData, items }) => {
+  const [numberOfLabels, setNumberOfLabels] = useState(1);
+  const labelRef = useRef(null);
+
+  const handlePrintLabels = () => {
+    if (numberOfLabels <= InputNumber) {
+      message.error("Number of labels must be greater than 0");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print Labels</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 0;
+              padding: 15px;
+            }
+            .labels-container {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 15px;
+              width: 100%;
+            }
+            .label {
+              border: 1px solid #ddd;
+              padding: 10px;
+              page-break-inside: avoid;
+              break-inside: avoid;
+              font-size: 12px;
+            }
+            .label-header {
+              text-align: center;
+              margin-bottom: 8px;
+              border-bottom: 1px dashed #ccc;
+              padding-bottom: 5px;
+            }
+            .label-addresses {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 10px;
+            }
+            .company-address, .customer-address {
+              width: 48%;
+            }
+            .label-info {
+              margin: 3px 0;
+              line-height: 1.2;
+            }
+            .label-footer {
+              text-align: center;
+              margin-top: 8px;
+              border-top: 1px dashed #ccc;
+              padding-top: 5px;
+              font-weight: bold;
+            }
+            @media print {
+              .no-print {
+                display: none;
+              }
+              body {
+                padding: 0;
+              }
+              .labels-container {
+                gap: 10px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="labels-container">
+            ${Array.from(
+              { length: numberOfLabels },
+              (_, i) => `
+              <div class="label">
+                <div class="label-header">
+                  <strong>SHIPPING LABEL</strong>
+                </div>
+                <div class="label-addresses">
+                  <div class="company-address">
+                    <strong>From:</strong><br/>
+                    "Uniworld Logistics pvt ltd"}<br/>
+                    "Bilapur tauru road mewat 122105"}
+                  </div>
+                  <div class="customer-address">
+                    <strong>To:</strong><br/>
+                    ${formData.customerName || "N/A"}<br/>
+                    ${formData.customerAddress || "N/A"}
+                  </div>
+                </div>
+                <div class="label-info"><strong>Buyer Order No:</strong> ${
+                  formData.buyerOrderNo || "N/A"
+                }</div>
+                <div class="label-info"><strong>Buyer Ref No:</strong> ${
+                  formData.buyerRefNo || "N/A"
+                }</div>
+                <div class="label-info"><strong>Date:</strong> ${
+                  formData.docDate || "N/A"
+                }</div>
+                <div class="label-footer">
+                  Label ${i + 1} of ${numberOfLabels}
+                </div>
+              </div>
+            `
+            ).join("")}
+          </div>
+          <div class="no-print" style="margin-top:20px; text-align:center;">
+            <button onclick="window.print()">Print</button>
+            <button onclick="window.close()">Close</button>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleDownloadLabels = () => {
+    if (numberOfLabels <= 0) {
+      message.error("Number of labels must be greater than 0");
+      return;
+    }
+
+    // Create a temporary container for all labels
+    const container = document.createElement("div");
+    container.style.display = "grid";
+    container.style.gridTemplateColumns = "repeat(2, 1fr)";
+    container.style.gap = "15px";
+    container.style.width = "210mm"; // A4 width
+    container.style.padding = "15px";
+
+    // Create labels
+    for (let i = 0; i < numberOfLabels; i++) {
+      const label = document.createElement("div");
+      label.style.border = "1px solid #ddd";
+      label.style.padding = "10px";
+      label.style.fontSize = "12px";
+      label.style.boxSizing = "border-box";
+
+      label.innerHTML = `
+        <div style="text-align: center; margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
+          <strong>SHIPPING LABEL</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+          <div style="width: 48%;">
+            <strong>From:</strong><br/>
+            ${formData.clientName || "N/A"}<br/>
+            ${formData.clientAddress || "N/A"}
+          </div>
+          <div style="width: 48%;">
+            <strong>To:</strong><br/>
+            ${formData.customerName || "N/A"}<br/>
+            ${formData.customerAddress || "N/A"}
+          </div>
+        </div>
+        <div style="margin: 3px 0;"><strong>Buyer Order No:</strong> ${
+          formData.buyerOrderNo || "N/A"
+        }</div>
+        <div style="margin: 3px 0;"><strong>Buyer Ref No:</strong> ${
+          formData.buyerRefNo || "N/A"
+        }</div>
+        <div style="margin: 3px 0;"><strong>Date:</strong> ${
+          formData.docDate || "N/A"
+        }</div>
+        <div style="text-align: center; margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 5px; font-weight: bold;">
+          Label ${i + 1} of ${numberOfLabels}
+        </div>
+      `;
+
+      container.appendChild(label);
+    }
+
+    // Append to body temporarily
+    document.body.appendChild(container);
+
+    // Generate PDF
+    html2canvas(container, { scale: 2 }).then((canvas) => {
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add additional pages if needed
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`shipping_labels_${formData.buyerOrderNo || "labels"}.pdf`);
+
+      // Clean up
+      document.body.removeChild(container);
+    });
+  };
+
+  return (
+    <Modal
+      title="Print Shipping Labels"
+      visible={visible}
+      onCancel={onClose}
+      footer={[
+        <Button
+          key="print"
+          icon={<PrinterOutlined />}
+          onClick={handlePrintLabels}
+        >
+          Print Labels
+        </Button>,
+        <Button key="download" onClick={handleDownloadLabels}>
+          Download PDF
+        </Button>,
+        <Button key="close" onClick={onClose}>
+          Close
+        </Button>,
+      ]}
+      width={600}
+    >
+      <div>
+        <p>
+          This will generate shipping labels with company and customer
+          addresses.
+        </p>
+
+        <div style={{ margin: "16px 0" }}>
+          <label style={{ marginRight: "8px" }}>
+            Number of labels to print:
+          </label>
+          <InputNumber
+            min={1}
+            max={100}
+            value={numberOfLabels}
+            onChange={setNumberOfLabels}
+          />
+        </div>
+
+        <div style={{ marginTop: "16px" }}>
+          <p>
+            <strong>Label Preview:</strong>
+          </p>
+          <div
+            ref={labelRef}
+            style={{
+              border: "1px solid #d9d9d9",
+              padding: "10px",
+              fontSize: "12px",
+              marginBottom: "10px",
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+          >
+            <div
+              style={{
+                textAlign: "center",
+                marginBottom: "8px",
+                borderBottom: "1px dashed #ccc",
+                paddingBottom: "5px",
+              }}
+            >
+              <strong>SHIPPING LABEL</strong>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "10px",
+              }}
+            >
+              <div style={{ width: "48%" }}>
+                <strong>From:</strong>
+                <br />
+                Uniworld Logistics pvt ltd
+                <br />
+                Bilapur tauru road mewat 122105
+              </div>
+              <div style={{ width: "48%" }}>
+                <strong>To:</strong>
+                <br />
+                {formData.customerName || "N/A"}
+                <br />
+                {formData.customerAddress || "N/A"}
+              </div>
+            </div>
+            <div style={{ margin: "3px 0" }}>
+              <strong>Buyer Order No:</strong> {formData.buyerOrderNo || "N/A"}
+            </div>
+            <div style={{ margin: "3px 0" }}>
+              <strong>Buyer Ref No:</strong> {formData.buyerRefNo || "N/A"}
+            </div>
+            <div style={{ margin: "3px 0" }}>
+              <strong>Date:</strong> {formData.docDate || "N/A"}
+            </div>
+            <div
+              style={{
+                textAlign: "center",
+                marginTop: "8px",
+                borderTop: "1px dashed #ccc",
+                paddingTop: "5px",
+                fontWeight: "bold",
+              }}
+            >
+              Label 1 of {numberOfLabels}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const BulkBarcodePrint = ({ visible, onClose, items, formData }) => {
+  const printRef = useRef(null);
+
+  // Generate barcode data with only the required fields
+  const generateBarcodeData = (item) => {
+    // Create a compact format without JSON structure
+    return `${formData.buyerRefNo}_${item.partNo}_${item.bin}_${
+      item.sqty || item.pickQty || 0
+    }`;
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Bulk Barcode Print</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 0;
+              padding: 15px;
+            }
+            .barcode-sheet {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 10px;
+              width: 100%;
+            }
+            .barcode-item {
+              border: 1px solid #ddd;
+              padding: 8px;
+              page-break-inside: avoid;
+              break-inside: avoid;
+              text-align: center;
+            }
+            .barcode-header {
+              text-align: center;
+              margin-bottom: 15px;
+            }
+            .barcode-info {
+              font-size: 11px;
+              margin: 3px 0;
+              line-height: 1.2;
+            }
+            @media print {
+              .no-print {
+                display: none;
+              }
+              body {
+                padding: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="barcode-header">
+            <h2>Barcodes for ${formData.buyerRefNo || "N/A"}</h2>
+            <p><strong>Customer:</strong> ${formData.customerName || "N/A"}</p>
+          </div>
+          <div class="barcode-sheet">
+            ${items
+              .map(
+                (item) => `
+              <div class="barcode-item">
+                <div class="barcode-info"><strong>${
+                  item.partNo || "N/A"
+                }</strong></div>
+                <div class="barcode-info">${item.partDesc || "N/A"}</div>
+                <div style="margin:5px 0;">
+                  <!-- Barcode will be generated by the browser's print function -->
+                </div>
+                <div class="barcode-info"><strong>Bin:</strong> ${
+                  item.bin || "N/A"
+                }</div>
+                <div class="barcode-info"><strong>Qty:</strong> ${
+                  item.sqty || item.pickQty || 0
+                }</div>
+              </div>
+            `
+              )
+              .join("")}
+          </div>
+          <div class="no-print" style="margin-top:20px; text-align:center;">
+            <button onclick="window.print()">Print</button>
+            <button onclick="window.close()">Close</button>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  // Add the return statement with the modal JSX
+  return (
+    <Modal
+      title="Print All Barcodes"
+      visible={visible}
+      onCancel={onClose}
+      footer={[
+        <Button key="print" icon={<PrinterOutlined />} onClick={handlePrint}>
+          Print All
+        </Button>,
+        <Button key="close" onClick={onClose}>
+          Close
+        </Button>,
+      ]}
+      width={800}
+    >
+      <div>
+        <Text>
+          This will generate a printable sheet with barcodes for all{" "}
+          {items.length} items.
+        </Text>
+        <div style={{ marginTop: "16px" }}>
+          <Text strong>Details:</Text>
+          <br />
+          <Text>Buyer Ref: {formData.buyerOrderNo || "N/A"}</Text>
+          <br />
+          <Text>Customer: {formData.customerName || "N/A"}</Text>
+          <br />
+          <Text>Items: {items.length}</Text>
+        </div>
+
+        {/* Preview of barcodes */}
+        <div
+          style={{ marginTop: "20px", maxHeight: "300px", overflowY: "auto" }}
+        >
+          <Row gutter={[16, 16]}>
+            {items.map((item, index) => (
+              <Col xs={24} sm={12} md={8} key={index}>
+                <div
+                  style={{
+                    border: "1px solid #d9d9d9",
+                    borderRadius: "4px",
+                    padding: "8px",
+                    textAlign: "center",
+                    marginBottom: "10px",
+                  }}
+                >
+                  <Text strong style={{ display: "block", fontSize: "11px" }}>
+                    {item.partNo || "N/A"}
+                  </Text>
+                  <Text
+                    style={{
+                      display: "block",
+                      fontSize: "10px",
+                      marginBottom: "5px",
+                    }}
+                  >
+                    {item.partDesc || "N/A"}
+                  </Text>
+                  <div style={{ margin: "5px 0" }}>
+                    <Barcode
+                      value={generateBarcodeData(item)}
+                      width={0.8}
+                      height={25}
+                      fontSize={7}
+                      margin={1}
+                    />
+                  </div>
+                  <Text style={{ display: "block", fontSize: "9px" }}>
+                    <strong>Bin:</strong> {item.bin || "N/A"}
+                  </Text>
+                  <Text style={{ display: "block", fontSize: "9px" }}>
+                    <strong>Qty:</strong> {item.sqty || item.pickQty || 0}
+                  </Text>
+                </div>
+              </Col>
+            ))}
+          </Row>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+export const WMSPickRequest = () => {
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
   const [orgId, setOrgId] = useState(localStorage.getItem("orgId"));
   const [isLoading, setIsLoading] = useState(false);
@@ -66,19 +582,163 @@ export const PickRequest = () => {
     localStorage.getItem("userName")
   );
   const [branch, setBranch] = useState(localStorage.getItem("branch"));
-  const [branchCode, setBranchCode] = useState(
-    localStorage.getItem("branchcode")
-  );
+  const [branchCode, setBranchCode] = useState("HARW");
 
-  const [client, setClient] = useState(localStorage.getItem("client"));
+  const [client, setClient] = useState("CASIO WATCH");
   const [customer, setCustomer] = useState(localStorage.getItem("customer"));
   const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
   const [orderItems, setOrderItems] = useState([]);
-  const [finYear, setFinYear] = useState("2024");
-  const [downloadPdf, setDownloadPdf] = useState(false);
-  const [pdfData, setPdfData] = useState([]);
+  const [bulkPrintVisible, setBulkPrintVisible] = useState(false);
+  const [finYear, setFinYear] = useState(localStorage.getItem("finYear"));
+
+  // const [downloadPdf, setDownloadPdf] = useState(false);
+  // const [pdfData, setPdfData] = useState([]);
   const [partNoList, setPartNoList] = useState([]);
   const [form] = Form.useForm();
+  const [scannedItems, setScannedItems] = useState([]);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState("");
+
+  const [barcodeModalVisible, setBarcodeModalVisible] = useState(false);
+  const [selectedItemForBarcode, setSelectedItemForBarcode] = useState(null);
+  const [generatedBarcodes, setGeneratedBarcodes] = useState({});
+  const barcodeRef = useRef(null);
+
+  // Barcode generation function with all required fields
+
+  // Generate barcode for an item
+
+  // Print barcode
+
+  // Download barcode as PDF
+  const handleDownloadBarcode = () => {
+    if (barcodeRef.current && selectedItemForBarcode) {
+      html2canvas(barcodeRef.current).then((canvas) => {
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jsPDF();
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`barcode_${selectedItemForBarcode.partNo}.pdf`);
+      });
+    }
+  };
+  const handleGenerateBarcode = (item) => {
+    const barcodeData = generateBarcodeData(item);
+    setSelectedItemForBarcode({ ...item, barcodeData });
+    setBarcodeModalVisible(true);
+
+    // Store the generated barcode
+    setGeneratedBarcodes((prev) => ({
+      ...prev,
+      [item.id]: barcodeData,
+    }));
+  };
+
+  const handlePrintBarcode = () => {
+    if (barcodeRef.current) {
+      html2canvas(barcodeRef.current).then((canvas) => {
+        const imgData = canvas.toDataURL("image/png");
+        const printWindow = window.open("", "_blank");
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Print Barcode</title>
+              <style>
+                body { 
+                  display: flex; 
+                  justify-content: center; 
+                  align-items: center; 
+                  height: 100vh; 
+                  margin: 0; 
+                }
+                img { 
+                  max-width: 100%; 
+                  max-height: 100%; 
+                }
+              </style>
+            </head>
+            <body>
+              <img src="${imgData}" />
+              <script>
+                window.onload = function() {
+                  window.print();
+                  setTimeout(function() { window.close(); }, 500);
+                }
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      });
+    }
+  };
+  // Enhanced barcode scanning with validation
+
+  // Validate scanned barcode against expected data
+  const validateBarcode = (scannedData) => {
+    // Check if all required fields are present
+    const requiredFields = [
+      "buyerRefNo",
+      "customerName",
+      "partNo",
+      "partDesc",
+      "bin",
+      "sqty",
+      "dtlId",
+    ];
+    const hasAllFields = requiredFields.every((field) =>
+      scannedData.hasOwnProperty(field)
+    );
+
+    if (!hasAllFields) return false;
+
+    // Check if the scanned data matches our form data and item data
+    const itemMatch = fillGridData.find(
+      (item) => item.id === scannedData.dtlId
+    );
+
+    if (!itemMatch) return false;
+
+    return (
+      scannedData.buyerRefNo === formData.buyerRefNo &&
+      scannedData.customerName === formData.customerName &&
+      scannedData.partNo === itemMatch.partNo &&
+      scannedData.partDesc === itemMatch.partDesc &&
+      scannedData.bin === itemMatch.bin &&
+      Number(scannedData.sqty) ===
+        Number(itemMatch.sqty || itemMatch.pickQty || 0)
+    );
+  };
+
+  // Add a column for barcode actions in the table
+  const addBarcodeColumnToTable = () => {
+    return <col style={{ width: "100px" }} />;
+  };
+
+  // Add barcode action cell to each row
+  const addBarcodeActionCell = (item) => {
+    return (
+      <td
+        style={{
+          padding: "2px", // reduce padding inside cell
+          textAlign: "center",
+          maxHeight: "8px",
+          maxWidth: "40px",
+        }}
+      >
+        <Button
+          icon={<BarcodeOutlined />}
+          onClick={() => handleGenerateBarcode(item)}
+          type="text"
+          style={{ color: "white" }}
+          title="Generate Barcode"
+        />
+      </td>
+    );
+  };
 
   const [formData, setFormData] = useState({
     docId: "",
@@ -99,6 +759,7 @@ export const PickRequest = () => {
     pickOrder: "FIFO",
     buyerOrderDate: null,
     freeze: false,
+    InputNumber: 0,
   });
 
   const [value, setValue] = useState(0);
@@ -112,13 +773,13 @@ export const PickRequest = () => {
   const [pageSize, setPageSize] = useState(5);
   const [buyerOrderList, setBuyerOrderList] = useState([]);
   const [pickRequestItems, setPickRequestItems] = useState([]);
-
   const [loading, setLoading] = useState(false);
 
-  const [loginFinYear, setLoginFinYear] = useState(
-    localStorage.getItem("finYear")
-  );
+  const [pdfVisible, setPdfVisible] = useState(false);
+  const [currentPdfData, setCurrentPdfData] = useState(null);
+  const [labelPrintVisible, setLabelPrintVisible] = useState(false);
 
+  const [loginFinYear, setLoginFinYear] = useState("2025");
   const [loginBranchCode, setLoginBranchCode] = useState(
     localStorage.getItem("branchcode")
   );
@@ -135,18 +796,38 @@ export const PickRequest = () => {
     localStorage.getItem("customer")
   );
 
+  // State for bulk barcode printing
+
+  const [barcodePrintItems, setBarcodePrintItems] = useState([]);
+  const [barcodeFormData, setBarcodeFormData] = useState({});
+
+  // Function to handle bulk barcode printing
+  const handleBulkPrintClick = (order) => {
+    if (order && order.wmsPickrequestdtlVO) {
+      setBarcodePrintItems(order.wmsPickrequestdtlVO);
+      setBarcodeFormData({
+        buyerRefNo: order.buyerRefNo,
+        customerName: order.customerName,
+      });
+    } else {
+      // Use the current form data and items
+      setBarcodePrintItems(fillGridData);
+      setBarcodeFormData({
+        buyerRefNo: formData.buyerRefNo,
+        customerName: formData.customerName,
+      });
+    }
+    setBulkPrintVisible(true);
+  };
   const paginatedData = buyerOrderList.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
+
   const toggleViewMode = () => {
-    if (viewMode === "form") {
-      // When switching to list view, refresh the data
-      getAllPickRequest();
-    }
     setViewMode(viewMode === "form" ? "list" : "form");
-    handleClear();
   };
+
   const muiTheme = createTheme({
     palette: {
       mode: theme === "dark" ? "dark" : "light",
@@ -214,6 +895,7 @@ export const PickRequest = () => {
     buyersReference: "",
     invoiceNo: "",
     clientShortName: "",
+    InputNumber: 0,
   });
 
   const listViewColumns = [
@@ -234,749 +916,6 @@ export const PickRequest = () => {
   ];
 
   const [listViewData, setListViewData] = useState([]);
-
-  useEffect(() => {
-    console.log("LISTVIEW FIELD CURRENT VALUE IS", listView);
-    getAllPickRequest();
-    getbuyerRefNo();
-    getAllGroups();
-    getDocId();
-  }, []);
-  const handleAddItem = () => {
-    const newItem = {
-      id: Date.now(),
-      partNo: "",
-      partDesc: "",
-      core: "",
-      bin: "",
-      sku: "",
-      batchNo: "",
-      batchDate: "",
-      orderQty: 0,
-      availQty: 0,
-      pickQty: 0,
-      status: "PENDING", // Optional if you're tracking status
-    };
-    setPickRequestItems([...pickRequestItems, newItem]);
-  };
-
-  const handleDeleteItem = (id) => {
-    setOrderItems(orderItems.filter((item) => item.id !== id));
-  };
-
-  const handleEditOrder = (order) => {
-    setEditId(order.id);
-    setFormData({
-      orderNo: order.orderNo || "",
-      orderDate: dayjs(order.orderDate),
-      customer: order.customerId || "",
-      customerName: order.customerName || "",
-      supplier: order.supplierId || "",
-      supplierName: order.supplierName || "",
-      deliveryDate: dayjs(order.deliveryDate),
-      paymentTerms: order.paymentTerms || "",
-      shippingMethod: order.shippingMethod || "",
-      remarks: order.remarks || "",
-      status: order.status || "PENDING",
-      totalAmount: order.totalAmount || 0,
-      totalQuantity: order.totalQuantity || 0,
-    });
-    setOrderItems(
-      order.items?.map((item) => ({
-        id: Date.now() + Math.random(),
-        partNo: item.partNo || "",
-        partDesc: item.partDesc || "",
-        quantity: item.quantity || 0,
-        unitPrice: item.unitPrice || 0,
-        amount: item.amount || 0,
-        deliveryDate: dayjs(item.deliveryDate),
-        status: item.status || "PENDING",
-      })) || []
-    );
-    setViewMode("form");
-  };
-
-  useEffect(() => {
-    const totalQty = itemTableData.reduce(
-      (sum, row) => sum + (parseInt(row.pickQty, 10) || 0),
-      0
-    );
-
-    setFormData((prevFormData) => ({
-      ...prevFormData,
-      totalPickedQty: totalQty,
-    }));
-  }, [itemTableData]);
-
-  const getDocId = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/api/pickrequest/getPickRequestDocId?orgId=${orgId}&branchCode=${loginBranchCode}&client=${loginClient}&branch=${loginBranch}&finYear=${loginFinYear}`
-      );
-      console.log("API Response:", response);
-
-      if (response.data.status === true) {
-        setFormData((prevFormData) => ({
-          ...prevFormData,
-          docId: response.data.paramObjectsMap.pickRequestDocId,
-        }));
-      } else {
-        console.error("API Error:", response);
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const getAllPickRequest = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/api/pickrequest/getAllPickRequestByOrgId?orgId=${orgId}&branchCode=${loginBranchCode}&branch=${loginBranch}&client=${loginClient}&warehouse=${loginWarehouse}&finYear=${loginFinYear}`
-      );
-      console.log("API Response:", response);
-
-      if (response.data.status === true) {
-        const pickRequests = response.data.paramObjectsMap.pickRequestVO.map(
-          (item) => ({
-            ...item,
-            totalAmount: item.totalAmount || 0,
-          })
-        );
-        setListViewData(pickRequests);
-        setBuyerOrderList(pickRequests);
-      } else {
-        console.error("API Error:", response);
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const getbuyerRefNo = async () => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/api/pickrequest/getBuyerRefNoForPickRequest?orgId=${orgId}&branchCode=${loginBranchCode}&client=${loginClient}&warehouse=${loginWarehouse}&finYear=${loginFinYear}`
-      );
-      console.log("API Response:", response);
-
-      if (response.data.status === true) {
-        setBuyerOrderNoList(response.data.paramObjectsMap.buyerOrderVO);
-      } else {
-        console.error("API Error:", response);
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const getCurrentTime = () => {
-    return dayjs().format("HH:mm:ss");
-  };
-
-  const getOutTime = () => {
-    setFormData((prev) => ({ ...prev, outTime: getCurrentTime() }));
-  };
-
-  useEffect(() => {
-    getOutTime();
-  }, []);
-
-  const getAllGroups = async () => {
-    try {
-      const groupData = await getAllActiveGroups(orgId);
-      console.log("THE GROUP DATA IS:", groupData);
-      setGroupList(groupData);
-    } catch (error) {
-      console.error("Error fetching country data:", error);
-    }
-  };
-
-  const getAllItemById = async (row) => {
-    console.log("THE SELECTED ITEM ID IS:", row.id);
-    setEditId(row.id);
-
-    try {
-      const response = await axios.get(
-        `${API_URL}/api/pickrequest/getPickRequestById?id=${row.id}`
-      );
-      console.log("API Response:", response.data);
-
-      if (response.data.status === true) {
-        setListView(false);
-        const data = response.data.paramObjectsMap.pickRequestVO;
-
-        // FIX: Return dayjs objects instead of strings
-        const formatDate = (dateString) => {
-          if (!dateString) return null;
-          return dayjs(dateString); // Return dayjs object
-        };
-
-        const totalPickedQty = data.pickRequestDetailsVO.reduce(
-          (sum, detail) => sum + (detail.pickQty || 0),
-          0
-        );
-
-        console.log("Total Picked Qty:", totalPickedQty);
-
-        setFormData({
-          docId: data.docId,
-          // docDate: formatDate(data.docDate), // Now returns dayjs object
-          docDate: formatDate(data.docDate).format("DD-MM-YYYY"),
-          buyerOrderNo: data.buyerOrderNo,
-          buyerRefNo: data.buyerRefNo,
-          buyerRefDate: formatDate(data.buyerRefDate),
-          clientName: data.clientName,
-          customerName: data.customerName,
-          customerShortName: data.customerShortName,
-          outTime: data.outTime,
-          buyerOrderDate: formatDate(data.buyerOrderDate),
-          clientAddress: data.clientAddress,
-          customerAddress: data.customerAddress,
-          status: data.status,
-          buyersReference: data.buyersReference,
-          invoiceNo: data.invoiceNo,
-          clientShortName: data.clientShortName,
-          pickOrder: data.pickOrder,
-          freeze: data.freeze,
-          totalPickedQty: totalPickedQty,
-          totalOrderQty: data.totalOrderQty,
-        });
-
-        // FIX: Also ensure item table data uses dayjs objects
-        setItemTableData(
-          data.pickRequestDetailsVO.map((detail) => ({
-            id: detail.id,
-            availQty: detail.availQty,
-            batchDate: formatDate(detail.batchDate),
-            batchNo: detail.batchNo || "",
-            binClass: detail.binClass || "",
-            binType: detail.binType || "",
-            cellType: detail.cellType || "",
-            clientCode: detail.clientCode || "",
-            core: detail.core || "",
-            bin: detail.bin || "",
-            orderQty: detail.orderQty || "",
-            partDesc: detail.partDesc || "",
-            partNo: detail.partNo || "",
-            pcKey: detail.pcKey || "",
-            pickQty: detail.pickQty || "",
-            remainQty: detail.remainingQty || "",
-            sku: detail.sku || "",
-            ssku: detail.ssku || "",
-            status: detail.status || "",
-            grnNo: detail.grnNo || "",
-            grnDate: formatDate(detail.grnDate),
-            stockDate: formatDate(detail.stockDate),
-            expDate: formatDate(detail.expDate),
-            qcFlag: detail.qcFlag || "",
-            remarks: detail.remarks || "",
-          }))
-        );
-
-        setFillGridData(data.pickRequestDetailsVO);
-      }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      message.error("Error loading pick request data");
-    }
-  };
-
-  const handleChange = (event, newValue) => {
-    setValue(newValue);
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    const cursorPosition = e.target.selectionStart;
-
-    const processedValue =
-      name !== "status" && typeof value === "string"
-        ? value.toUpperCase()
-        : value;
-
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: processedValue,
-    }));
-
-    setTimeout(() => {
-      const inputField = document.querySelector(`[name="${name}"]`);
-      if (inputField) {
-        inputField.setSelectionRange(cursorPosition, cursorPosition);
-      }
-    }, 0);
-
-    if (name === "buyerRefNo") {
-      const selectedOrder = buyerOrderNoList.find(
-        (order) =>
-          order.docId &&
-          processedValue &&
-          order.docId.toLowerCase() === processedValue.toLowerCase()
-      );
-
-      if (selectedOrder) {
-        const refDate = selectedOrder.refDate
-          ? dayjs(selectedOrder.refDate)
-          : null;
-
-        setFormData((prevFormData) => ({
-          ...prevFormData,
-          buyerRefNo: selectedOrder.docId || "",
-          buyerRefDate: refDate,
-          clientName: selectedOrder.billToName || "",
-          clientShortName: selectedOrder.billToShortName || "",
-          customerName: selectedOrder.buyer || "",
-          customerAddress: selectedOrder.buyerAddress || "",
-          clientAddress: selectedOrder.billToAddress || "",
-          buyerOrderNo: selectedOrder.docId || "",
-          buyersReference: selectedOrder.refNo || "",
-          invoiceNo: selectedOrder.invoiceNo || "",
-          buyerOrderDate: selectedOrder.docDate || "",
-          totalOrderQty: selectedOrder.totalOrderQty || "",
-        }));
-      } else {
-        console.warn("No matching order found for the selected buyerRefNo.");
-      }
-    }
-  };
-
-  const handleAddRow = () => {
-    const newRow = {
-      availQty: "",
-      batchDate: "",
-      batchNo: "",
-      binClass: "",
-      binType: "",
-      cellType: "",
-      clientCode: "",
-      core: "",
-      bin: "",
-      orderQty: "",
-      partDesc: "",
-      partNo: "",
-      pcKey: "",
-      pickQty: "",
-      remainQty: "",
-      sku: "",
-      ssku: "",
-      status: "",
-    };
-    setItemTableData([...itemTableData, newRow]);
-    setItemTableErrors([
-      ...itemTableErrors,
-      {
-        availQty: "",
-        batchDate: "",
-        batchNo: "",
-        binClass: "",
-        binType: "",
-        cellType: "",
-        clientCode: "",
-        core: "",
-        bin: "",
-        orderQty: "",
-        partDesc: "",
-        partNo: "",
-        pcKey: "",
-        pickQty: "",
-        remainQty: "",
-        sku: "",
-        ssku: "",
-        status: "",
-        grnNo: "",
-        grnDate: "",
-        expDate: "",
-        stockDate: "",
-        qcFlag: "",
-        remarks: "",
-      },
-    ]);
-  };
-
-  const handleDeleteRow = (id) => {
-    const rowIndex = itemTableData.findIndex((row) => row.id === id);
-    if (rowIndex !== -1) {
-      const updatedData = itemTableData.filter((row) => row.id !== id);
-      const updatedErrors = itemTableErrors.filter(
-        (_, index) => index !== rowIndex
-      );
-      setItemTableData(updatedData);
-      setItemTableErrors(updatedErrors);
-    }
-  };
-
-  const handleKeyDown = (e, row) => {
-    if (
-      e.key === "Tab" &&
-      row.id === itemTableData[itemTableData.length - 1].id
-    ) {
-      e.preventDefault();
-      handleAddRow();
-    }
-  };
-
-  const handleClear = () => {
-    setFormData({
-      docId: "",
-      docDate: dayjs(),
-      buyerOrderNo: "",
-      buyerRefNo: "",
-      buyerRefDate: null,
-      clientName: "",
-      customerName: "",
-      customerShortName: "",
-      clientAddress: "",
-      customerAddress: "",
-      status: "Edit",
-      buyersReference: "",
-      invoiceNo: "",
-      clientShortName: "",
-      pickOrder: "FIFO",
-      buyerOrderDate: null,
-    });
-    setItemTableData([]);
-    setItemTableErrors([]);
-    setFieldErrors({
-      docDate: "",
-      pickRequestId: "",
-      dispatch: "",
-      buyerOrderNo: "",
-      buyerRefNo: "",
-      buyerRefDate: "",
-      shipmentMethod: "",
-      refNo: "",
-      noOfBoxes: "",
-      dueDays: "",
-      clientName: "",
-      customerName: "",
-      outTime: "",
-      clientAddress: "",
-      customerAddress: "",
-      status: "",
-      boAmentment: "",
-      controlBranch: localStorage.getItem("branchCode"),
-      active: true,
-      charges: "",
-      lineDiscount: "",
-      roundOff: "",
-      invDiscountAmount: "",
-      watAmountWithoutForm: "",
-      totalAmount: 0,
-    });
-    getDocId();
-    getOutTime();
-    setEditId("");
-  };
-
-  const formatDateForAPI = (dateValue) => {
-    if (!dateValue) return null;
-
-    try {
-      // Normalize input by stripping time if present
-      if (typeof dateValue === "string") {
-        // Example: "2025-08-24 00:00:00.0"
-        const cleaned = dateValue.split(" ")[0]; // take only date part
-        const date = dayjs(cleaned, ["YYYY-MM-DD", "DD-MM-YYYY"]);
-        return date.isValid() ? date.format("YYYY-MM-DD") : null;
-      }
-
-      // Handle dayjs or Date objects
-      const date = dayjs(dateValue);
-      return date.isValid() ? date.format("YYYY-MM-DD") : null;
-    } catch (error) {
-      console.warn("Date conversion error:", error, dateValue);
-      return null;
-    }
-  };
-
-  const handleSave = async () => {
-    if (loading) return;
-    const errors = {};
-    if (!formData.buyerRefNo) {
-      errors.buyerRefNo = "Buyer Order Ref No is required";
-    }
-
-    if (!formData.status) {
-      errors.status = "Status is required";
-    }
-
-    setFieldErrors(errors);
-
-    let itemTableDataValid = true;
-    if (
-      !itemTableData ||
-      !Array.isArray(itemTableData) ||
-      itemTableData.length === 0
-    ) {
-      itemTableDataValid = false;
-      setItemTableErrors([{ general: "Table Data is required" }]);
-    } else {
-      const newTableErrors = itemTableData.map((row, index) => {
-        const rowErrors = {};
-
-        if (!row.partNo) rowErrors.partNo = "Part No is required";
-        if (!row.grnNo) rowErrors.grnNo = "Grn No is required";
-        if (!row.batchNo) rowErrors.batchNo = "Batch No is required";
-        if (!row.bin) rowErrors.bin = "Bin is required";
-
-        if (Object.keys(rowErrors).length > 0) itemTableDataValid = false;
-
-        return rowErrors;
-      });
-
-      setItemTableErrors(newTableErrors);
-    }
-
-    // ADD DEBUGGING TO SEE WHAT'S HAPPENING
-    console.log("Validation check:", {
-      formErrors: Object.keys(errors).length,
-      tableValid: itemTableDataValid,
-      itemTableData: itemTableData,
-      fillGridData: fillGridData,
-    });
-
-    // Only proceed if validation passes
-
-    setIsLoading(true);
-
-    // Use itemTableData instead of fillGridData
-    const itemVo = fillGridData.map((row) => ({
-      availQty: row.availQty,
-      batchDate: formatDateForAPI(row.batchDate),
-      batchNo: row.batchNo,
-      binClass: row.binClass,
-      binType: row.binType,
-      cellType: row.cellType,
-      core: row.core,
-      bin: row.bin,
-      grnNo: row.grnNo,
-      orderQty: row.orderQty,
-      partDesc: row.partDesc,
-      partNo: row.partNo,
-      pickQty: row.pickQty,
-      remainQty: row.remainQty,
-      sku: row.sku,
-      qcFlag: row.qcFlag,
-      remarks: row.remarks,
-      stockDate: formatDateForAPI(row.stockDate),
-      status: row.status,
-      expDate: formatDateForAPI(row.expDate),
-      grnDate: formatDateForAPI(row.grnDate),
-    }));
-
-    console.log("itemVO", itemVo);
-
-    const saveFormData = {
-      ...(editId && { id: editId }),
-      docId: formData.docId,
-      docDate: formatDateForAPI(formData.docDate),
-      buyerOrderNo: formData.buyerOrderNo,
-      buyerRefNo: formData.buyerRefNo,
-      buyerRefDate: formatDateForAPI(formData.buyerRefDate),
-      clientName: formData.clientName,
-      client: client,
-      customerName: formData.customerName,
-      customerShortName: formData.customerShortName,
-      outTime: formData.outTime,
-      clientAddress: formData.clientAddress,
-      customerAddress: formData.customerAddress,
-      status: formData.status,
-      buyersReference: formData.buyersReference,
-      invoiceNo: formData.invoiceNo,
-      clientShortName: formData.clientShortName,
-      pickOrder: formData.pickOrder,
-      pickRequestDetailsDTO: itemVo,
-      branch: branch,
-      branchCode: branchCode,
-      finYear: loginFinYear,
-      warehouse: warehouse,
-      orgId: orgId,
-      customer: customer,
-      client: client,
-      createdBy: loginUserName,
-      orgId: parseInt(orgId),
-      buyerOrderDate: formatDateForAPI(formData.buyerOrderDate),
-    };
-
-    console.log("DATA TO SAVE IS:", saveFormData);
-
-    try {
-      const response = await axios.put(
-        `${API_URL}/api/pickrequest/createUpdatePickRequest`,
-        saveFormData
-      );
-      if (response.data.status === true) {
-        // Fixed: response.data.status
-        console.log("Response:", response);
-        handleClear();
-        message.success(
-          editId ? "Pick Updated Successfully" : "Pick created successfully"
-        );
-        getAllPickRequest();
-      } else {
-        message.error(
-          response.data.paramObjectsMap?.errorMessage || "Pick creation failed" // Fixed: response.data
-        );
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      message.error("Pick creation failed");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  const handleView = () => {
-    setListView(!listView);
-    setDownloadPdf(false);
-  };
-
-  const handleClose = () => {
-    setFormData({
-      itemType: "",
-      partNo: "",
-      partDesc: "",
-      custPartNo: "",
-      groupName: "",
-      styleCode: "",
-      baseSku: "",
-      addDesc: "",
-      purchaseUnit: "",
-      storageUnit: "",
-      fixedCapAcrossLocn: "",
-      fsn: "",
-      saleUnit: "",
-      type: "",
-      serialNoFlag: "",
-      sku: "",
-      skuQty: "",
-      ssku: "",
-      sskuQty: "",
-      zoneType: "",
-      weightSkuUom: "",
-      hsnCode: "",
-      parentChildKey: "",
-      controlBranch: "",
-      criticalStockLevel: "",
-      criticalStock: "",
-      bchk: "",
-      status: "",
-      barcode: "",
-      active: true,
-      freeze: false,
-    });
-  };
-
-  const handleBuyerRefNoSelect = (value) => {
-    const selectedOrder = buyerOrderNoList.find(
-      (order) => order.orderNo === value
-    );
-
-    if (selectedOrder) {
-      setFormData((prevFormData) => ({
-        ...prevFormData,
-        buyerRefNo: selectedOrder.orderNo || "",
-        buyerRefDate: selectedOrder.refDate
-          ? dayjs(selectedOrder.refDate)
-          : null,
-        clientName: selectedOrder.billToName || "",
-        clientShortName: selectedOrder.billToShortName || "",
-        customerName: selectedOrder.buyer || "",
-        customerAddress: selectedOrder.buyerAddress || "",
-        clientAddress: selectedOrder.billToAddress || "",
-        buyerOrderNo: selectedOrder.docId || "",
-        buyersReference: selectedOrder.refNo || "",
-        invoiceNo: selectedOrder.invoiceNo || "",
-        buyerOrderDate: selectedOrder.orderDate
-          ? dayjs(selectedOrder.orderDate)
-          : null,
-        totalOrderQty: selectedOrder.totalOrderQty || "",
-      }));
-    }
-  };
-
-  const handleDateChange = (field, date) => {
-    setFormData((prevData) => ({ ...prevData, [field]: date })); // keep as dayjs
-  };
-
-  const getAllFillGrid = async () => {
-    const errors = {};
-    if (!formData.buyerRefNo) {
-      errors.buyerRefNo = "Buyer Order Ref No is required";
-    }
-    if (Object.keys(errors).length === 0) {
-      setModalOpen(true);
-      try {
-        const response = await axios.get(
-          `${API_URL}/api/pickrequest/getFillGridDetailsForPickRequest?orgId=${orgId}&branchCode=${loginBranchCode}&client=${loginClient}&buyerOrderDocId=${formData.buyerOrderNo}&pickStatus=${formData.status}`
-        );
-        console.log("API Response:", response);
-
-        if (response.data.status === true) {
-          const fillGridDetails = response.data.paramObjectsMap.fillGridDetails;
-          setFillGridData(fillGridDetails);
-          setItemTableErrors([{ general: "" }]);
-        } else {
-          console.error("API Error:", response);
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    } else {
-      setFieldErrors(errors);
-    }
-  };
-
-  const handleSaveSelectedRows = () => {
-    const selectedData = selectedRows.map((index) => fillGridData[index]);
-    const binValues = selectedData.map((row) => row.bin);
-
-    setItemTableData([...itemTableData, ...selectedData]);
-
-    console.log("Selected Data:", selectedData);
-
-    setSelectedRows([]);
-    setSelectAll(false);
-  };
-
-  // const handleCloseModal = () => {
-  //   setModalOpen(false);
-  // };
-
-  const handleSelectAll = () => {
-    if (selectAll) {
-      setSelectedRows([]);
-    } else {
-      setSelectedRows(fillGridData.map((_, index) => index));
-    }
-    setSelectAll(!selectAll);
-  };
-
-  const GeneratePdf = (row) => {
-    console.log("PDF-Data =>", row);
-    setPdfData(row);
-    setDownloadPdf(true);
-  };
-
-  const handleItemChange = (id, field, value) => {
-    setOrderItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    );
-
-    if (field === "quantity" || field === "unitPrice") {
-      const item = orderItems.find((i) => i.id === id);
-      if (item) {
-        const qty = field === "quantity" ? value : item.quantity;
-        const price = field === "unitPrice" ? value : item.unitPrice;
-        const amount = (parseFloat(qty) || 0) * (parseFloat(price) || 0);
-
-        setOrderItems((prev) =>
-          prev.map((item) =>
-            item.id === id ? { ...item, amount: amount.toFixed(2) } : item
-          )
-        );
-      }
-    }
-  };
 
   const inputStyle = {
     background: "rgba(255, 255, 255, 0.1)",
@@ -1005,6 +944,207 @@ export const PickRequest = () => {
     border: "1px solid rgba(255, 255, 255, 0.3)",
   };
 
+  // Barcode generation function
+  const generateBarcodeData = (item) => {
+    return `${formData.docId}_${formData.customerName}_${item.partNo}_${
+      item.bin
+    }_${item.sqty || item.pickQty || item.id || 0}`;
+  };
+
+  // Handle barcode scan
+  const handleBarcodeScan = (e) => {
+    if (e.key === "Enter") {
+      try {
+        const scannedData = JSON.parse(barcodeInput);
+        const matchingItem = fillGridData.find(
+          (item) =>
+            item.partNo === scannedData.partNo && item.id === scannedData.dtlId
+        );
+
+        if (matchingItem) {
+          // Update the item's qcFlag
+          const updatedData = fillGridData.map((item) =>
+            item.id === matchingItem.id
+              ? { ...item, qcFlag: "T", scanned: true }
+              : item
+          );
+
+          setFillGridData(updatedData);
+          setScannedItems((prev) => [...prev, matchingItem.id]);
+
+          message.success(`Scanned: ${matchingItem.partNo}`);
+        } else {
+          message.error("No matching item found");
+        }
+        setBarcodeInput("");
+      } catch (error) {
+        console.error("Invalid barcode format", error);
+        message.error("Invalid barcode format");
+        setBarcodeInput("");
+      }
+    }
+  };
+
+  // Update picked items
+  const handleUpdatePickedItems = async () => {
+    if (scannedItems.length === 0) {
+      message.warning("No items scanned");
+      return;
+    }
+
+    try {
+      const updateData = {
+        pickRequestHdrId: editId,
+        pickRequestDtlId: scannedItems,
+        status: "COMPLETED",
+      };
+
+      const response = await axios.post(
+        `${API_URL}/api/wmspickrequest/updatePick`,
+        updateData
+      );
+
+      if (response.data.status === true) {
+        message.success("Pick updated successfully");
+        setScannedItems([]);
+        setIsEditMode(false);
+        // Refresh data or update local state
+        getAllPickRequest();
+      } else {
+        message.error("Update failed");
+      }
+    } catch (error) {
+      console.error("Error updating pick:", error);
+      message.error("Update failed");
+    }
+  };
+
+  // Toggle edit mode
+  const toggleEditMode = () => {
+    setIsEditMode(!isEditMode);
+    if (isEditMode) {
+      setScannedItems([]);
+    }
+  };
+
+  // Get all pick request (example function)
+  const getAllPickRequest = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(
+        `${API_URL}/api/wmspickrequest/findAllPick?branchCode=${branchCode}&client=${client}&finYear=${loginFinYear}`
+      );
+      setBuyerOrderList(response.data);
+    } catch (error) {
+      console.error("Error fetching pick requests:", error);
+      message.error("Failed to fetch pick requests");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Get item by ID (example function)
+  const getAllItemById = async (order) => {
+    try {
+      setLoading(true);
+      const response = await axios.get(
+        `${API_URL}/api/wmspickrequest/${order.id}`
+      );
+      setFormData({
+        ...formData,
+        docId: response.data.docId,
+        buyerOrderNo: response.data.buyerOrderNo,
+        clientName: response.data.clientName,
+        customerName: response.data.customerName,
+        clientAddress: response.data.clientAddress,
+        customerAddress: response.data.customerAddress,
+        // Set other fields as needed
+      });
+      setFillGridData(response.data.wmsPickrequestdtlVO || []);
+      setEditId(response.data.id);
+    } catch (error) {
+      console.error("Error fetching item:", error);
+      message.error("Failed to fetch item details");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle clear function
+  const handleClear = () => {
+    setFormData({
+      docId: "",
+      docDate: dayjs().format("DD-MM-YYYY"),
+      buyerOrderNo: "",
+      buyerRefNo: "",
+      buyerRefDate: null,
+      clientName: "",
+      customerName: "",
+      customerShortName: "",
+      outTime: "",
+      clientAddress: "",
+      customerAddress: "",
+      status: "Confirm",
+      buyersReference: "",
+      invoiceNo: "",
+      clientShortName: "",
+      pickOrder: "FIFO",
+      buyerOrderDate: null,
+      freeze: false,
+      InputNumber: 0,
+    });
+    setFillGridData([]);
+    setScannedItems([]);
+    setIsEditMode(false);
+  };
+
+  // Handle save function
+  const handleSave = async () => {
+    // Implement save logic here
+    message.info("Save functionality to be implemented");
+  };
+
+  // Handle add item function
+  const handleAddItem = () => {
+    // Implement add item logic here
+    message.info("Add item functionality to be implemented");
+  };
+
+  // Get all fill grid function
+  const getAllFillGrid = () => {
+    // Implement fill grid logic here
+    message.info("Fill grid functionality to be implemented");
+  };
+
+  // Handle item change function
+  const handleItemChange = (id, field, value) => {
+    const updatedData = fillGridData.map((item) =>
+      item.id === id ? { ...item, [field]: value } : item
+    );
+    setFillGridData(updatedData);
+  };
+
+  // Handle delete item function
+  const handleDeleteItem = (id) => {
+    const updatedData = fillGridData.filter((item) => item.id !== id);
+    setFillGridData(updatedData);
+  };
+
+  // Handle buyer ref no select function
+  const handleBuyerRefNoSelect = (value) => {
+    setFormData({ ...formData, buyerRefNo: value });
+  };
+
+  // Handle date change function
+  const handleDateChange = (field, date) => {
+    setFormData({ ...formData, [field]: date });
+  };
+
+  useEffect(() => {
+    // Fetch initial data
+    getAllPickRequest();
+  }, []);
+
   return (
     <ConfigProvider
       theme={{
@@ -1016,6 +1156,66 @@ export const PickRequest = () => {
           theme === "dark" ? "dark-mode" : ""
         }`}
       >
+        {/* Barcode Modal */}
+        <Modal
+          title="Barcode"
+          visible={barcodeModalVisible}
+          onCancel={() => setBarcodeModalVisible(false)}
+          footer={[
+            <Button
+              key="print"
+              icon={<PrinterOutlined />}
+              onClick={handlePrintBarcode}
+            >
+              Print
+            </Button>,
+            <Button key="download" onClick={handleDownloadBarcode}>
+              Download PDF
+            </Button>,
+            <Button key="close" onClick={() => setBarcodeModalVisible(false)}>
+              Close
+            </Button>,
+          ]}
+          width={400}
+        >
+          {selectedItemForBarcode && (
+            <div style={{ textAlign: "center" }} ref={barcodeRef}>
+              <Typography.Title level={5}>
+                {selectedItemForBarcode.partNo}
+              </Typography.Title>
+              <Typography.Text>
+                {selectedItemForBarcode.partDesc}
+              </Typography.Text>
+              <div style={{ margin: "20px 0" }}>
+                <Barcode
+                  value={selectedItemForBarcode.barcodeData}
+                  width={0.2}
+                  height={40}
+                  fontSize={10}
+                  margin={5}
+                />
+              </div>
+              <Typography.Text type="secondary">
+                Buyer Ref: {formData.buyerRefNo}
+              </Typography.Text>
+              <br />
+              <Typography.Text type="secondary">
+                Customer: {formData.customerName}
+              </Typography.Text>
+              <br />
+              <Typography.Text type="secondary">
+                Bin: {selectedItemForBarcode.bin}
+              </Typography.Text>
+              <br />
+              <Typography.Text type="secondary">
+                Qty:{" "}
+                {selectedItemForBarcode.sqty ||
+                  selectedItemForBarcode.pickQty ||
+                  0}
+              </Typography.Text>
+            </div>
+          )}
+        </Modal>
         {isSubmitting && (
           <div
             style={{
@@ -1057,6 +1257,77 @@ export const PickRequest = () => {
                 background: "var(--bg-body-gradient)",
               }}
             >
+              {/* Barcode Modal */}
+              <Modal
+                title="Barcode"
+                visible={barcodeModalVisible}
+                onCancel={() => setBarcodeModalVisible(false)}
+                footer={[
+                  <Button
+                    key="print"
+                    icon={<PrinterOutlined />}
+                    onClick={handlePrintBarcode}
+                  >
+                    Print
+                  </Button>,
+                  <Button key="download" onClick={handleDownloadBarcode}>
+                    Download PDF
+                  </Button>,
+                  <Button
+                    key="close"
+                    onClick={() => setBarcodeModalVisible(false)}
+                  >
+                    Close
+                  </Button>,
+                ]}
+                width={400}
+              >
+                {selectedItemForBarcode && (
+                  <div style={{ textAlign: "center" }} ref={barcodeRef}>
+                    <Typography.Title level={5}>
+                      {selectedItemForBarcode.partNo}
+                    </Typography.Title>
+                    <Typography.Text>
+                      {selectedItemForBarcode.partDesc}
+                    </Typography.Text>
+                    <div style={{ margin: "20px 0" }}>
+                      <Barcode
+                        value={selectedItemForBarcode.barcodeData}
+                        width={0.2}
+                        height={40}
+                        fontSize={10}
+                        margin={5}
+                      />
+                    </div>
+                    <Typography.Text type="secondary">
+                      Buyer Ref: {formData.buyerRefNo}
+                    </Typography.Text>
+                    <br />
+                    <Typography.Text type="secondary">
+                      Customer: {formData.customerName}
+                    </Typography.Text>
+                    <br />
+                    <Typography.Text type="secondary">
+                      Bin: {selectedItemForBarcode.bin}
+                    </Typography.Text>
+                    <br />
+                    <Typography.Text type="secondary">
+                      Qty:{" "}
+                      {selectedItemForBarcode.sqty ||
+                        selectedItemForBarcode.pickQty ||
+                        0}
+                    </Typography.Text>
+                  </div>
+                )}
+              </Modal>
+
+              {/* Bulk Barcode Print Modal - MOVED OUTSIDE THE TABLE */}
+              <BulkBarcodePrint
+                visible={bulkPrintVisible}
+                onClose={() => setBulkPrintVisible(false)}
+                items={barcodePrintItems}
+                formData={barcodeFormData}
+              />
               {/* Header */}
               <div
                 className="form-containerSG"
@@ -1073,12 +1344,12 @@ export const PickRequest = () => {
                     level={3}
                     style={{ color: "#fff", margin: 0 }}
                   >
-                    Pick Request
+                    Delivery Challan
                   </Typography.Title>
                   <Typography.Text
                     style={{ color: "rgba(255, 255, 255, 0.8)" }}
                   >
-                    Create and manage Pick Requests
+                    Create and manage Delivery Challans
                   </Typography.Text>
                 </div>
                 <div>
@@ -1157,7 +1428,106 @@ export const PickRequest = () => {
                 >
                   Download
                 </Button>
+
+                <Button
+                  icon={<BarcodeOutlined />}
+                  onClick={() => setBulkPrintVisible(true)}
+                  style={{
+                    background: "rgba(108, 99, 255, 0.3)",
+                    color: "#fff",
+                    border: "none",
+                    marginRight: "8px",
+                  }}
+                >
+                  Print All Barcodes
+                </Button>
+
+                {/* Bulk barcode print modal */}
+                <BulkBarcodePrint
+                  visible={bulkPrintVisible}
+                  onClose={() => setBulkPrintVisible(false)}
+                  items={fillGridData}
+                  formData={formData}
+                />
+
+                {/* Edit Mode Toggle Button */}
+                <Button
+                  icon={<BarcodeOutlined />}
+                  onClick={toggleEditMode}
+                  className="action-btn"
+                  style={{
+                    background: isEditMode
+                      ? "rgba(76, 175, 80, 0.5)"
+                      : "rgba(108, 99, 255, 0.3)",
+                    color: "#fff",
+                    border: "none",
+                  }}
+                >
+                  {isEditMode ? "Exit Edit Mode" : "Edit Mode"}
+                </Button>
+
+                {/* Update Picked Items Button */}
+                {isEditMode && (
+                  <Button
+                    onClick={handleUpdatePickedItems}
+                    className="action-btn"
+                    style={{
+                      background: "rgba(255, 193, 7, 0.5)",
+                      color: "#fff",
+                      border: "none",
+                    }}
+                  >
+                    Update Picked Items
+                  </Button>
+                )}
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => setLabelPrintVisible(true)}
+                  style={{
+                    background: "rgba(108, 99, 255, 0.3)",
+                    color: "#fff",
+                    border: "none",
+                    marginRight: "8px",
+                  }}
+                >
+                  Print Labels
+                </Button>
+
+                <LabelPrintModal
+                  visible={labelPrintVisible}
+                  onClose={() => setLabelPrintVisible(false)}
+                  formData={formData}
+                  items={fillGridData}
+                />
               </div>
+
+              {/* Barcode Scanner Input */}
+              {isEditMode && (
+                <div
+                  style={{
+                    marginBottom: "16px",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <Input
+                    placeholder="Scan barcode..."
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    onKeyPress={handleBarcodeScan}
+                    style={{
+                      width: "300px",
+                      marginRight: "8px",
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                  />
+                  <span style={{ color: "white", fontSize: "12px" }}>
+                    Press Enter after scanning
+                  </span>
+                </div>
+              )}
 
               {/* Main Form */}
               <div
@@ -1216,12 +1586,6 @@ export const PickRequest = () => {
                                   }
                                   readOnly
                                   style={readOnlyInputStyle}
-                                  // style={{
-                                  //   background: "rgba(255, 255, 255, 0.1)",
-                                  //   border:
-                                  //     "1px solid rgba(255, 255, 255, 0.3)",
-                                  //   color: "white",
-                                  // }}
                                 />
                               </Form.Item>
                             </Col>
@@ -1248,27 +1612,18 @@ export const PickRequest = () => {
                                   </span>
                                 }
                               >
-                                <Select
-                                  showSearch
+                                <Input
                                   value={formData.buyerRefNo}
-                                  onChange={handleBuyerRefNoSelect}
-                                  filterOption={(input, option) =>
-                                    option.children
-                                      .toLowerCase()
-                                      .indexOf(input.toLowerCase()) >= 0
+                                  onChange={(e) =>
+                                    setFormData({
+                                      ...formData,
+                                      buyerRefNo: e.target.value,
+                                    })
                                   }
-                                  style={selectStyle}
-                                  placeholder="Select Buyer Ref No"
-                                >
-                                  {buyerOrderNoList.map((order) => (
-                                    <Option
-                                      key={order.orderNo}
-                                      value={order.orderNo}
-                                    >
-                                      {order.orderNo}
-                                    </Option>
-                                  ))}
-                                </Select>
+                                  style={readOnlyInputStyle}
+                                  readOnly
+                                />
+
                                 {fieldErrors.buyerRefNo && (
                                   <div
                                     style={{ color: "red", fontSize: "12px" }}
@@ -1287,14 +1642,9 @@ export const PickRequest = () => {
                                 }
                               >
                                 <DatePicker
-                                  style={{
-                                    width: "100%",
-                                    background: "rgba(255, 255, 255, 0.1)",
-                                    border:
-                                      "1px solid rgba(255, 255, 255, 0.3)",
-                                    color: "white",
-                                  }}
-                                  value={formData.buyerOrderDate} // now a dayjs object
+                                  style={readOnlyInputStyle}
+                                  readOnly
+                                  value={formData.buyerOrderDate}
                                   format="DD-MM-YYYY"
                                   onChange={(date) =>
                                     handleDateChange("buyerOrderDate", date)
@@ -1318,12 +1668,8 @@ export const PickRequest = () => {
                                       buyerOrderNo: e.target.value,
                                     })
                                   }
-                                  style={{
-                                    background: "rgba(255, 255, 255, 0.1)",
-                                    border:
-                                      "1px solid rgba(255, 255, 255, 0.3)",
-                                    color: "white",
-                                  }}
+                                  style={readOnlyInputStyle}
+                                  readOnly
                                 />
                               </Form.Item>
                             </Col>
@@ -1337,13 +1683,7 @@ export const PickRequest = () => {
                                 }
                               >
                                 <DatePicker
-                                  style={{
-                                    width: "100%",
-                                    background: "rgba(255, 255, 255, 0.1)",
-                                    border:
-                                      "1px solid rgba(255, 255, 255, 0.3)",
-                                    color: "white",
-                                  }}
+                                  style={readOnlyInputStyle}
                                   value={formData.buyerRefDate}
                                   onChange={(date) =>
                                     setFormData({
@@ -1374,12 +1714,8 @@ export const PickRequest = () => {
                                       clientName: e.target.value,
                                     })
                                   }
-                                  style={{
-                                    background: "rgba(255, 255, 255, 0.1)",
-                                    border:
-                                      "1px solid rgba(255, 255, 255, 0.3)",
-                                    color: "white",
-                                  }}
+                                  style={readOnlyInputStyle}
+                                  readOnly
                                 />
                               </Form.Item>
                             </Col>
@@ -1399,12 +1735,8 @@ export const PickRequest = () => {
                                       customerName: e.target.value,
                                     })
                                   }
-                                  style={{
-                                    background: "rgba(255, 255, 255, 0.1)",
-                                    border:
-                                      "1px solid rgba(255, 255, 255, 0.3)",
-                                    color: "white",
-                                  }}
+                                  style={readOnlyInputStyle}
+                                  readOnly
                                 />
                               </Form.Item>
                             </Col>
@@ -1424,33 +1756,9 @@ export const PickRequest = () => {
                                       customerShortName: e.target.value,
                                     })
                                   }
-                                  style={{
-                                    background: "rgba(255, 255, 255, 0.1)",
-                                    border:
-                                      "1px solid rgba(255, 255, 255, 0.3)",
-                                    color: "white",
-                                  }}
+                                  style={readOnlyInputStyle}
+                                  readOnly
                                 />
-                              </Form.Item>
-                            </Col>
-
-                            <Col span={4}>
-                              <Form.Item
-                                label={
-                                  <span style={{ color: "#fff" }}>Status</span>
-                                }
-                              >
-                                <Select
-                                  value={formData.status}
-                                  onChange={(value) =>
-                                    setFormData({ ...formData, status: value })
-                                  }
-                                  style={selectStyle}
-                                >
-                                  <Option value="Edit">Edit</Option>
-                                  <Option value="Confirm">Confirm</Option>
-                                  <Option value="Freeze">Freeze</Option>
-                                </Select>
                               </Form.Item>
                             </Col>
                           </Row>
@@ -1672,53 +1980,6 @@ export const PickRequest = () => {
                       }}
                     >
                       <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: "16px",
-                        }}
-                      >
-                        <div>
-                          <Button
-                            icon={<PlusOutlined />}
-                            onClick={handleAddItem}
-                            style={{
-                              marginRight: "8px",
-                              background: "rgba(108, 99, 255, 0.3)",
-                              color: "#fff",
-                              border: "none",
-                            }}
-                          >
-                            Add Item
-                          </Button>
-                          <Button
-                            icon={<ClearOutlined />}
-                            onClick={getAllFillGrid}
-                            style={{
-                              marginRight: "8px",
-                              background: "rgba(255, 99, 132, 0.3)",
-                              color: "#fff",
-                              border: "none",
-                            }}
-                          >
-                            Fill Grid
-                          </Button>
-                          <Button
-                            icon={<ClearOutlined />}
-                            onClick={() => setOrderItems([])}
-                            style={{
-                              marginRight: "8px",
-                              background: "rgba(255, 99, 132, 0.3)",
-                              color: "#fff",
-                              border: "none",
-                            }}
-                          >
-                            Clear
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div
                         className="table-container"
                         style={{
                           position: "relative",
@@ -1757,15 +2018,15 @@ export const PickRequest = () => {
                           <colgroup>
                             {/* <col style={{ width: "68px" }} />  */}
                             <col style={{ width: "50px" }} /> {/* S.No */}
-                            <col style={{ width: "120px" }} /> {/* Part No */}
-                            <col style={{ width: "200px" }} /> {/* Part Desc */}
-                            <col style={{ width: "100px" }} /> {/* Bin */}
-                            <col style={{ width: "100px" }} /> {/* SKU */}
-                            <col style={{ width: "100px" }} /> {/* Batch No */}
+                            <col style={{ width: "50px" }} /> {/* Part No */}
+                            <col style={{ width: "120px" }} /> {/* Part Desc */}
+                            <col style={{ width: "250px" }} /> {/* Bin */}
+                            <col style={{ width: "120px" }} /> {/* SKU */}
                             {/* Batch Date */}
                             <col style={{ width: "100px" }} /> {/* Order Qty */}
-                            <col style={{ width: "100px" }} /> {/* Avail Qty */}
-                            <col style={{ width: "100px" }} /> {/* Pick Qty */}
+                            <col style={{ width: "80px" }} /> {/* Avail Qty */}
+                            <col style={{ width: "80px" }} /> {/* Pick Qty */}
+                            <col style={{ width: "80px" }} /> {/* Pick Qty */}
                           </colgroup>
                           <thead
                             style={{
@@ -1798,6 +2059,15 @@ export const PickRequest = () => {
                                 }}
                               >
                                 S.No
+                              </th>
+                              <th
+                                style={{
+                                  padding: "8px",
+                                  textAlign: "center",
+                                  color: "white",
+                                }}
+                              >
+                                Barcode
                               </th>
                               <th
                                 style={{
@@ -1835,15 +2105,6 @@ export const PickRequest = () => {
                                 }}
                               >
                                 SKU
-                              </th>
-                              <th
-                                style={{
-                                  padding: "8px",
-                                  textAlign: "left",
-                                  color: "white",
-                                }}
-                              >
-                                Batch No
                               </th>
 
                               <th
@@ -1884,23 +2145,6 @@ export const PickRequest = () => {
                                   color: "white",
                                 }}
                               >
-                                {/* Action */}
-                                {/* <td
-                                  style={{
-                                    padding: "8px",
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  <Button
-                                    icon={<DeleteOutlined />}
-                                    onClick={() => handleDeleteItem(item.id)}
-                                    danger
-                                    type="text"
-                                    style={{ color: "white" }}
-                                  />
-                                </td> */}
-
-                                {/* S.No */}
                                 <td
                                   style={{
                                     padding: "8px",
@@ -1911,6 +2155,8 @@ export const PickRequest = () => {
                                 >
                                   {index + 1}
                                 </td>
+
+                                <td>{addBarcodeActionCell(item)}</td>
 
                                 {/* Part No */}
                                 <td style={{ padding: "8px" }}>
@@ -1948,15 +2194,6 @@ export const PickRequest = () => {
                                   />
                                 </td>
 
-                                {/* Batch No */}
-                                <td style={{ padding: "8px" }}>
-                                  <Input
-                                    value={item.batchNo}
-                                    readOnly
-                                    style={readOnlyInputStyle}
-                                  />
-                                </td>
-
                                 {/* Order Qty */}
                                 <td style={{ padding: "8px" }}>
                                   <Input
@@ -1978,7 +2215,7 @@ export const PickRequest = () => {
                                 {/* Pick Qty */}
                                 <td style={{ padding: "8px" }}>
                                   <Input
-                                    value={item.pickQty}
+                                    value={item.sqty}
                                     onChange={(e) =>
                                       handleItemChange(
                                         item.id,
@@ -1986,7 +2223,7 @@ export const PickRequest = () => {
                                         e.target.value
                                       )
                                     }
-                                    style={inputStyle}
+                                    style={readOnlyInputStyle}
                                   />
                                 </td>
                               </tr>
@@ -2003,9 +2240,9 @@ export const PickRequest = () => {
             <div
               className="form-containerSG"
               style={{
-                minHeight: "70vh",
+                minHeight: "80vh",
                 background: "var(--bg-body-gradient)",
-                marginTop: "40px",
+                marginTop: "10px",
               }}
             >
               <div
@@ -2021,9 +2258,9 @@ export const PickRequest = () => {
                   level={3}
                   style={{ color: "#fff", margin: "20px 0" }}
                 >
-                  Buyer Orders List
+                  Delivery Challan List
                 </Typography.Title>
-                <Button
+                {/* <Button
                   icon={<PlusOutlined />}
                   onClick={toggleViewMode}
                   style={{
@@ -2034,7 +2271,7 @@ export const PickRequest = () => {
                   }}
                 >
                   New Order
-                </Button>
+                </Button> */}
               </div>
 
               <div
@@ -2098,9 +2335,6 @@ export const PickRequest = () => {
                             index % 2 === 0
                               ? "rgba(255, 255, 255, 0.02)"
                               : "rgba(255, 255, 255, 0.05)",
-                          "&:hover": {
-                            backgroundColor: "rgba(255, 255, 255, 0.1)",
-                          },
                         }}
                       >
                         <td
@@ -2111,6 +2345,7 @@ export const PickRequest = () => {
                             fontSize: "11px",
                           }}
                         >
+                          {/* View Button */}
                           <Button
                             type="link"
                             icon={<RightCircleOutlined />}
@@ -2118,24 +2353,48 @@ export const PickRequest = () => {
                               getAllItemById(order);
                               toggleViewMode();
                             }}
-                            style={{ color: "white" }}
-                          ></Button>
+                            style={{ color: "white", marginRight: "8px" }}
+                            title="View Details"
+                          />
+                          {/* PDF Download Button */}
                           <Button
                             type="link"
                             icon={<CloudDownloadOutlined />}
                             onClick={() => {
-                              if (order) {
-                                setPdfData(order); // store the order data for PDF
-                                setDownloadPdf(true);
+                              if (order && order.wmsPickrequestdtlVO) {
+                                setCurrentPdfData(order);
+                                setPdfVisible(true);
                               } else {
-                                message.warning("No order selected for PDF!");
+                                message.warning(
+                                  "No order data available for PDF generation!"
+                                );
                               }
                             }}
                             style={{ color: "white" }}
+                            title="Download PDF"
                           />
-
-                          {downloadPdf && <GeneratePdfTempPick row={pdfData} />}
+                          {/* Barcode Print Button */}
+                          <Button
+                            icon={<BarcodeOutlined />}
+                            onClick={() => handleBulkPrintClick(order)}
+                            style={{
+                              background: "rgba(108, 99, 255, 0.3)",
+                              color: "#fff",
+                              border: "none",
+                              marginRight: "8px",
+                            }}
+                          >
+                            Print All Barcodes
+                          </Button>
+                          <BulkBarcodePrint
+                            visible={bulkPrintVisible}
+                            onClose={() => setBulkPrintVisible(false)}
+                            items={barcodePrintItems} // ✅ use the state from handleBulkPrintClick
+                            formData={barcodeFormData} // ✅ correct buyerRefNo/customerName
+                          />
                         </td>
+
+                        {/* Table Columns */}
                         {listViewColumns.map((column) => (
                           <td
                             key={column.key}
@@ -2289,9 +2548,18 @@ export const PickRequest = () => {
         </div>
 
         {/* Fill Grid Modal */}
+        {/* PDF Generation Component - Add this at the end of your component */}
+        <WMSGeneratePdfTempPick
+          row={currentPdfData}
+          visible={pdfVisible}
+          onComplete={() => {
+            setPdfVisible(false);
+            setCurrentPdfData(null);
+          }}
+        />
       </div>
     </ConfigProvider>
   );
 };
 
-export default PickRequest;
+export default WMSPickRequest;

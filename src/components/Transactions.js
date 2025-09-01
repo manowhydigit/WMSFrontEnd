@@ -28,6 +28,7 @@ const clientReportData = [
   { name: "PUTAWAY" },
   { name: "BUYER ORDER" },
   { name: "PICK REQUEST" },
+
   { name: "CN - Branch Approved" },
   { name: "CN - Corp. Approved" },
   { name: "CN - Status" },

@@ -259,7 +259,7 @@ const Reports = () => {
         />
       </div>
 
-      <Button
+      {/* <Button
         className="button1"
         type="text"
         icon={theme === "light" ? <MoonOutlined /> : <SunOutlined />}
@@ -268,7 +268,7 @@ const Reports = () => {
         style={{ marginLeft: "550px", marginTop: "-90px" }}
       >
         {theme === "light" ? "Dark Mode" : "Light Mode"}
-      </Button>
+      </Button> */}
 
       {/* <div class="center">
         <h1> Subscribe </h1>

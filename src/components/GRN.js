@@ -4,6 +4,11 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import GridOnIcon from "@mui/icons-material/GridOn";
 import SendIcon from "@mui/icons-material/Send";
 import { Pagination } from "antd";
+import sampleFile from "../assets/sample-files/Sample_Grn_Upload.xls";
+import * as XLSX from "xlsx";
+import CommonBulkUpload from "../utils/CommonBulkUpload";
+import { Modal, message } from "antd";
+
 import {
   LogoutOutlined,
   MoonOutlined,
@@ -19,6 +24,7 @@ import {
   CloudDownloadOutlined,
   DeleteOutlined,
   PlusOutlined,
+  DownloadOutlined,
   CheckCircleOutlined,
 } from "@ant-design/icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -49,6 +55,7 @@ import { showToast } from "../utils/toast-component";
 import sampleGrnExcelFile from "../assets/sample-files/Sample_Grn_Upload.xls";
 import { Tabs } from "antd";
 const { TabPane } = Tabs;
+const { RangePicker } = DatePicker;
 
 const LrTable = ({
   lrTableData,
@@ -73,7 +80,7 @@ const LrTable = ({
           }
           danger
           type="text"
-          style={{ color: "#ff4d4f" }}
+          style={{ color: "white" }}
         />
       ),
     },
@@ -150,13 +157,18 @@ const LrTable = ({
       width: 120,
       render: (text, record) => (
         <DatePicker
-          style={datePickerStyle}
-          value={text ? dayjs(text) : null}
+          style={{
+            width: "100%",
+            background: "rgba(255, 255, 255, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.3)",
+          }}
+          format="DD-MM-YYYY"
+          value={text ? dayjs(text, "DD-MM-YYYY") : null} // Add format here
           onChange={(date) =>
             handleTableChange(
               record.id,
               "invDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -289,16 +301,20 @@ const LrTable = ({
       title: "Batch Date",
       dataIndex: "batchDate",
       key: "batchDate",
-      width: 120,
-      render: (text, record) => (
+      render: (text, record, index) => (
         <DatePicker
-          style={datePickerStyle}
-          value={text ? dayjs(text) : null}
+          style={{
+            width: "100%",
+            background: "rgba(255, 255, 255, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.3)",
+          }}
+          format="DD-MM-YYYY"
+          value={text ? dayjs(text, "DD-MM-YYYY") : null} // Add format here
           onChange={(date) =>
             handleTableChange(
               record.id,
               "batchDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -308,16 +324,20 @@ const LrTable = ({
       title: "Exp Date",
       dataIndex: "expDate",
       key: "expDate",
-      width: 120,
-      render: (text, record) => (
+      render: (text, record, index) => (
         <DatePicker
-          style={datePickerStyle}
-          value={text ? dayjs(text) : null}
+          style={{
+            width: "100%",
+            background: "rgba(255, 255, 255, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.3)",
+          }}
+          format="DD-MM-YYYY"
+          value={text ? dayjs(text, "DD-MM-YYYY") : null} // Add format here
           onChange={(date) =>
             handleTableChange(
               record.id,
               "expDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -416,10 +436,7 @@ const GRN = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [performanceGoalsData, setPerformanceGoalsData] = useState([]);
-  const paginatedData = performanceGoalsData.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
+
   const menuRef = useRef(null);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -450,6 +467,8 @@ const GRN = () => {
   const [loginFinYear, setLoginFinYear] = useState(
     localStorage.getItem("finYear")
   );
+
+  const [isLoadingGatePass, setIsLoadingGatePass] = useState(false);
   const [supplierList, setSupplierList] = useState([]);
   const [modeOfShipmentList, setModeOfShipmentList] = useState([]);
   const [carrierList, setCarrierList] = useState([]);
@@ -462,6 +481,8 @@ const GRN = () => {
   const [noDataFound, setnoDataFound] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [viewMode, setViewMode] = useState("form");
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -472,6 +493,7 @@ const GRN = () => {
     entrySlNo: "",
     date: dayjs(),
     tax: "",
+    grnType: "",
     gatePassId: "",
     gatePassDate: null,
     grnDate: dayjs(),
@@ -561,6 +583,14 @@ const GRN = () => {
   const [value, setValue] = useState(0);
   const [listView, setListView] = useState(false);
   const [listViewData, setListViewData] = useState([]);
+
+  const paginatedData = listViewData.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const [grnType, setGrnType] = useState(""); // Add this state for GRN Type
+
   const listViewColumns = [
     { accessorKey: "grnDate", header: "GRN Date", size: 140 },
     { accessorKey: "docId", header: "GRN No", size: 140 },
@@ -569,6 +599,97 @@ const GRN = () => {
     { accessorKey: "totalGrnQty", header: "GRN QTY", size: 140 },
   ];
 
+  // Add these improved date functions
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return null;
+
+    try {
+      // Handle various date formats
+      let date;
+
+      if (typeof dateString === "string") {
+        // Try different date formats
+        if (dateString.includes("-")) {
+          const parts = dateString.split("-");
+          if (parts[0].length === 4) {
+            // YYYY-MM-DD format
+            date = dayjs(dateString, "YYYY-MM-DD");
+          } else if (parts[0].length === 2) {
+            // DD-MM-YYYY format
+            date = dayjs(dateString, "DD-MM-YYYY");
+          }
+        } else {
+          // Try parsing as ISO string
+          date = dayjs(dateString);
+        }
+      } else if (dateString instanceof Date) {
+        date = dayjs(dateString);
+      } else if (dayjs.isDayjs(dateString)) {
+        date = dateString;
+      }
+
+      return date && date.isValid() ? date.format("DD-MM-YYYY") : null;
+    } catch (error) {
+      console.warn("Date conversion error:", error, dateString);
+      return null;
+    }
+  };
+
+  const formatDateForAPI = (dateString) => {
+    if (!dateString) return null;
+
+    try {
+      // If it's already in YYYY-MM-DD format, return as-is
+      if (
+        typeof dateString === "string" &&
+        dateString.includes("-") &&
+        dateString.split("-")[0].length === 4
+      ) {
+        return dateString;
+      }
+
+      // Convert from DD-MM-YYYY to YYYY-MM-DD
+      if (
+        typeof dateString === "string" &&
+        dateString.includes("-") &&
+        dateString.split("-")[0].length === 2
+      ) {
+        const date = dayjs(dateString, "DD-MM-YYYY");
+        return date.isValid() ? date.format("YYYY-MM-DD") : null;
+      }
+
+      // Handle dayjs objects
+      if (dayjs.isDayjs(dateString)) {
+        return dateString.format("YYYY-MM-DD");
+      }
+
+      return null;
+    } catch (error) {
+      console.warn("Date API conversion error:", error, dateString);
+      return null;
+    }
+  };
+
+  // Update the handleDateChange function
+  const handleDateChange = (field, date) => {
+    const formattedDate = date ? date.format("DD-MM-YYYY") : null;
+    setFormData({ ...formData, [field]: formattedDate });
+  };
+
+  // Update the handleTableChange function for date fields
+  const handleTableChange = (id, field, value) => {
+    // For date fields, ensure we're storing in DD-MM-YYYY format
+    if (["invDate", "batchDate", "expDate"].includes(field)) {
+      if (value && dayjs(value).isValid()) {
+        value = dayjs(value).format("DD-MM-YYYY");
+      }
+    }
+
+    setLrTableData((prevData) =>
+      prevData.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+    );
+  };
+
   // Theme configuration
   const themeConfig = {
     token: {
@@ -576,16 +697,34 @@ const GRN = () => {
     },
   };
 
+  const handleGrnTypeChange = (value) => {
+    setFormData((prev) => ({
+      ...prev,
+      grnType: value,
+      gatePassId: "", // Clear gate pass ID when changing GRN type
+    }));
+
+    // If GRN Type is "GATE PASS", fetch the gate pass IDs
+    if (value === "GATE PASS") {
+      getAllGatePassId();
+    } else {
+      // Clear the gate pass list if not GATE PASS
+      setGatePassIdList([]);
+    }
+  };
+
   // Get new GRN document ID
   const getNewGrnDocId = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/grn/getGRNDocid?branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
+        `${API_URL}/api/grn/getGRNDocid?branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
       );
-      setFormData((prevData) => ({
-        ...prevData,
-        docId: response.paramObjectsMap.grnDocid,
-      }));
+      if (response.data && response.data.paramObjectsMap) {
+        setFormData((prevData) => ({
+          ...prevData,
+          docId: response.data.paramObjectsMap.grnDocid || "", // Use empty string if null
+        }));
+      }
     } catch (error) {
       console.error("Error fetching GRN document ID:", error);
     }
@@ -595,11 +734,30 @@ const GRN = () => {
   const getAllGatePassId = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/grn/getGatePassInNoForPedningGRN?branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
+        `${API_URL}/api/grn/getGatePassInNoForPedningGRN?branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
       );
-      setGatePassIdList(response.paramObjectsMap.gatePassInVO);
+
+      if (response.data && response.data.paramObjectsMap) {
+        const gatePassList = response.data.paramObjectsMap.gatePassInVO || [];
+
+        // Make sure each gate pass object has both docId and id
+        const validGatePassList = gatePassList.filter(
+          (gp) => gp.id && gp.docId
+        );
+
+        setGatePassIdList(validGatePassList);
+
+        if (validGatePassList.length === 0) {
+          showToast("info", "No pending gate passes found");
+        }
+      } else {
+        setGatePassIdList([]);
+        showToast("warning", "No gate pass data available");
+      }
     } catch (error) {
       console.error("Error fetching gate passes:", error);
+      setGatePassIdList([]);
+      showToast("error", "Failed to fetch gate passes");
     }
   };
 
@@ -607,11 +765,22 @@ const GRN = () => {
   const getAllSuppliers = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/supplier/getAllActiveSupplier?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}`
+        `${API_URL}/api/warehousemastercontroller/supplier?cbranch=${loginBranch}&client=${loginClient}&orgid=${orgId}`
       );
-      setSupplierList(response.paramObjectsMap.supplierVO);
+
+      // Check response.data.status instead of response.status
+      if (response.data?.status) {
+        // Sort carriers by ID in descending order (highest ID first)
+        const sortedSupplier = (
+          response.data.paramObjectsMap.supplierVO || []
+        ).sort((a, b) => b.id - a.id);
+        setSupplierList(sortedSupplier);
+      } else {
+        showToast("warning", "No supplier data found");
+      }
     } catch (error) {
       console.error("Error fetching suppliers:", error);
+      showToast("error", "Error", "Failed to fetch suppliers");
     }
   };
 
@@ -619,9 +788,9 @@ const GRN = () => {
   const getAllModesOfShipment = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/shipment/getAllShipmentModes?orgId=${orgId}`
+        `${API_URL}/api/gatePassIn/getAllModeOfShipment?orgId=${orgId}`
       );
-      setModeOfShipmentList(response.paramObjectsMap.shipmentModeVO);
+      setModeOfShipmentList(response.data.paramObjectsMap.modOfShipments);
     } catch (error) {
       console.error("Error fetching modes of shipment:", error);
     }
@@ -631,9 +800,9 @@ const GRN = () => {
   const getAllCarriers = async (selectedModeOfShipment) => {
     try {
       const response = await axios.get(
-        `${API_URL}/carrier/getAllActiveCarrier?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&shipmentMode=${selectedModeOfShipment}`
+        `${API_URL}/api/warehousemastercontroller/getCarrierNameByCustomer?cbranch=${loginBranch}&client=${loginClient}&orgid=${orgId}&shipmentMode=${selectedModeOfShipment}`
       );
-      setCarrierList(response.paramObjectsMap.carrierVO);
+      setCarrierList(response.data.paramObjectsMap.CarrierVO);
     } catch (error) {
       console.error("Error fetching carriers:", error);
     }
@@ -642,51 +811,242 @@ const GRN = () => {
   // Get all part numbers
   const getAllPartNo = async () => {
     try {
+      // Validate required parameters
+      if (!loginBranchCode || !loginClient || !orgId) {
+        throw new Error(
+          "Missing required parameters (branch, client, or orgId)"
+        );
+      }
+
+      // Make the API request with proper parameter casing (orgid vs orgId)
       const response = await axios.get(
-        `${API_URL}/part/getAllActivePartDetails?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}`
+        `${API_URL}/api/warehousemastercontroller/material`,
+        {
+          params: {
+            cbranch: loginBranchCode,
+            client: loginClient,
+            orgid: orgId, // Note: using 'orgid' as it appears in your working endpoint
+          },
+        }
       );
-      setPartNoList(response.paramObjectsMap.partVO);
+
+      // Check response structure and status
+      if (!response.data?.paramObjectsMap?.materialVO) {
+        throw new Error("Invalid response structure from API");
+      }
+
+      // Transform the data for easier use in your application
+      const partNos = response.data.paramObjectsMap.materialVO
+        .filter((item) => item.partno) // Only include items with part numbers
+        .map((item) => ({
+          id: item.id,
+          partNo: item.partno,
+          description: item.partDesc,
+          sku: item.sku,
+          unit: item.purchaseUnit,
+          barcode: item.barcode,
+          // Include other relevant fields
+          ...item,
+        }));
+
+      setPartNoList(partNos);
+
+      return partNos; // Optional: return the data if needed elsewhere
     } catch (error) {
       console.error("Error fetching part numbers:", error);
+
+      // User-friendly error handling
+      let errorMessage = "Failed to load part numbers";
+      if (error.response) {
+        errorMessage =
+          error.response.data?.paramObjectsMap?.message ||
+          `Server responded with ${error.response.status}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      // Show error notification
+      notification.error({
+        message: "Error",
+        description: errorMessage,
+        duration: 5,
+      });
+
+      setPartNoList([]); // Reset or maintain previous state as needed
+      throw error; // Re-throw if you want calling code to handle it
     }
   };
 
   // Get all GRNs
+
   const getAllGrns = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/grn/getAllGrn?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
+        `${API_URL}/api/grn/getAllGrn?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
-      setListViewData(response.paramObjectsMap.grnVO);
+      const grnData = response?.data?.paramObjectsMap.grnVO || [];
+      setListViewData(grnData);
     } catch (error) {
       console.error("Error fetching GRN data:", error);
+      setListViewData([]);
+    }
+  };
+  // Function to fetch and populate data based on selected Gate Pass ID
+  // Update the handleGatePassIdChange function to properly handle dates
+  // Update the handleGatePassIdChange function to properly set all the date fields
+  const handleGatePassIdChange = async (gatePassId) => {
+    if (!gatePassId) return;
+
+    setIsLoadingGatePass(true);
+    try {
+      const selectedGatePass = gatePassIdList.find(
+        (gp) => gp.docId === gatePassId
+      );
+
+      if (!selectedGatePass || !selectedGatePass.id) {
+        showToast("error", "Invalid gate pass selection");
+        return;
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        gatePassId: gatePassId,
+      }));
+
+      const response = await axios.get(
+        `${API_URL}/api/gatePassIn/gatePassIn/${selectedGatePass.id}`
+      );
+
+      if (response.data && response.data.status === true) {
+        const gatePassData = response.data.paramObjectsMap.GatePassIn;
+
+        // Use the improved formatDateForDisplay function instead of parseAndFormatDate
+        // Populate form data with properly formatted dates
+        setFormData((prev) => ({
+          ...prev,
+          docId: gatePassData.docId || "",
+          docDate:
+            formatDateForDisplay(gatePassData.docdate) ||
+            dayjs().format("DD-MM-YYYY"),
+          entrySlNo: gatePassData.entryNo || "",
+          date:
+            formatDateForDisplay(gatePassData.entryDate) ||
+            dayjs().format("DD-MM-YYYY"),
+          gatePassDate:
+            formatDateForDisplay(gatePassData.docdate) ||
+            dayjs().format("DD-MM-YYYY"),
+          supplierShortName: gatePassData.supplierShortName || "",
+          supplier: gatePassData.supplier || "",
+          modeOfShipment: gatePassData.modeOfShipment || "",
+          carrier: gatePassData.carrier || "",
+          vehicleType: gatePassData.vehicleType || "",
+          contact: gatePassData.contact || "",
+          driverName: gatePassData.driverName || "",
+          securityName: gatePassData.securityName || "",
+          vehicleNo: gatePassData.vehicleNo || "",
+          goodsDesc: gatePassData.goodsDescription || "",
+          lotNo: gatePassData.lotNo || "",
+          freeze: gatePassData.freeze || false,
+        }));
+
+        // Populate table data with properly formatted dates using formatDateForDisplay
+        if (
+          gatePassData.gatePassDetailsVO &&
+          gatePassData.gatePassDetailsVO.length > 0
+        ) {
+          const tableData = gatePassData.gatePassDetailsVO.map(
+            (detail, index) => ({
+              id: detail.id || Date.now() + index,
+              qrCode: "",
+              lr_Hawb_Hbl_No: detail.irNoHaw || "",
+              invNo: detail.invoiceNo || "",
+              invDate: formatDateForDisplay(detail.invoiceDate),
+              partNo: detail.partNo || "",
+              partDesc: detail.partDescription || "",
+              sku: detail.sku || "",
+              invQty: detail.invQty?.toString() || "0",
+              recQty: detail.recQty?.toString() || "0",
+              shortQty: detail.shortQty?.toString() || "0",
+              damageQty: detail.damageQty?.toString() || "0",
+              grnQty: detail.grnQty?.toString() || "0",
+              batch_PalletNo: detail.batchNo || "",
+              batchDate: formatDateForDisplay(detail.batchDate),
+              expDate: formatDateForDisplay(detail.expDate),
+              palletQty: "",
+              noOfPallets: "",
+              remarks: detail.remarks || "",
+            })
+          );
+          setLrTableData(tableData);
+        }
+
+        if (gatePassData.modeOfShipment) {
+          getAllCarriers(gatePassData.modeOfShipment);
+        }
+
+        showToast("success", "Gate pass data loaded successfully");
+      }
+    } catch (error) {
+      console.error("Error fetching gate pass details:", error);
+      showToast("error", "Failed to load gate pass details");
+    } finally {
+      setIsLoadingGatePass(false);
     }
   };
 
   // Get GRN by ID
+  // Utility function for safe date formatting
+  const safeFormatDateForDisplay = (date) => {
+    if (!date) return "";
+
+    // Handle string dates, Date objects, and timestamps
+    try {
+      // If it's already a valid date string in display format, return as is
+      if (typeof date === "string" && date.match(/^\d{2}-\d{2}-\d{4}$/)) {
+        return date;
+      }
+
+      // Convert to Date object if it's a string or timestamp
+      const dateObj = new Date(date);
+
+      // Check if date is valid
+      if (isNaN(dateObj.getTime())) {
+        console.warn("Invalid date:", date);
+        return "";
+      }
+
+      // Format the date (adjust this based on your formatDateForDisplay implementation)
+      return dateObj.toLocaleDateString("en-GB"); // DD-MM-YYYY format
+    } catch (error) {
+      console.warn("Date formatting error:", error, "for date:", date);
+      return "";
+    }
+  };
+
   const getGrnById = async (row) => {
-    console.log("THE SELECTED GRN ID IS:", row.original.id);
-    setEditId(row.original.id);
+    console.log("THE SELECTED GRN ID IS:", row.id);
+    setEditId(row.id);
     try {
       const response = await axios.get(
-        `${API_URL}/grn/getGrnById?id=${row.original.id}`
+        `${API_URL}/api/grn/getGrnById?id=${row.id}`
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
+      if (response.data && response.data.status === true) {
+        setViewMode("form");
         setListView(false);
-        const particularGrn = response.paramObjectsMap.Grn;
+        const particularGrn = response.data.paramObjectsMap.Grn;
         setGatePassIdEdit(particularGrn.docId);
 
         setFormData({
           docId: particularGrn.docId,
-          editDocDate: particularGrn.docdate,
-          docDate: particularGrn.docDate,
+          editDocDate: formatDateForDisplay(particularGrn.docdate),
+          docDate: formatDateForDisplay(particularGrn.docDate),
           entrySlNo: particularGrn.entryNo,
-          date: particularGrn.entryDate,
+          date: formatDateForDisplay(particularGrn.entryDate),
           gatePassId: particularGrn.docId,
-          gatePassDate: particularGrn.gatePassDate,
-          grnDate: particularGrn.grnDate,
+          gatePassDate: formatDateForDisplay(particularGrn.gatePassDate),
+          grnDate: formatDateForDisplay(particularGrn.grnDate),
           customerPo: particularGrn.customerPo,
           vas: particularGrn.vas === true ? true : false,
           supplierShortName: particularGrn.supplierShortName,
@@ -703,7 +1063,7 @@ const GRN = () => {
           driverName: particularGrn.driverName,
           securityName: particularGrn.securityName,
           containerNo: particularGrn.containerNo,
-          lrDate: particularGrn.lrDate,
+          lrDate: formatDateForDisplay(particularGrn.lrDate),
           goodsDesc: particularGrn.goodsDescripition,
           vehicleNo: particularGrn.vehicleNo,
           vesselDetails: particularGrn.vesselDetails,
@@ -715,7 +1075,8 @@ const GRN = () => {
           noOfPacks: particularGrn.noOfPacks,
           totAmt: particularGrn.totAmt,
           totGrnQty: particularGrn.totalGrnQty,
-          freeze: particularGrn.freeze,
+
+          freeze: particularGrn.freeze !== null ? particularGrn.freeze : false,
           remarks: particularGrn.remarks,
         });
         getAllCarriers(particularGrn.modeOfShipment);
@@ -731,7 +1092,7 @@ const GRN = () => {
             lr_Hawb_Hbl_No: row.lrNoHawbNo,
             invNo: row.invoiceNo,
             shipmentNo: row.shipmentNo,
-            invDate: dayjs(row.invoiceDate).format("DD-MM-YYYY"),
+            invDate: formatDateForDisplay(row.invoiceDate),
             partNo: row.partNo,
             partDesc: row.partDesc,
             sku: row.sku,
@@ -741,8 +1102,8 @@ const GRN = () => {
             grnQty: row.grnQty,
             subStockQty: row.subStockQty,
             batch_PalletNo: row.batchNo,
-            batchDate: dayjs(row.batchDate).format("DD-MM-YYYY"),
-            expDate: dayjs(row.expDate).format("DD-MM-YYYY"),
+            batchDate: formatDateForDisplay(row.batchDate),
+            expDate: formatDateForDisplay(row.expDate),
             shortQty: row.shortQty,
             damageQty: row.damageQty,
             palletQty: row.binQty,
@@ -768,7 +1129,7 @@ const GRN = () => {
   const getGatePassGridDetailsByGatePassId = async (selectedGatePassId) => {
     try {
       const response = await axios.get(
-        `${API_URL}/grn/getGatePassInDetailsForPendingGRN?branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&gatePassDocId=${formData.gatePassId}&orgId=${orgId}`
+        `${API_URL}/api/grn/getGatePassInDetailsForPendingGRN?branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&gatePassDocId=${formData.gatePassId}&orgId=${orgId}`
       );
       console.log("THE GATE PASS IDS GRID DETAILS IS:", response);
       if (response.status === true) {
@@ -837,6 +1198,158 @@ const GRN = () => {
     }));
   }, [lrTableData]);
 
+  // Format the data for Excel export
+  const downloadExcel = async () => {
+    if (!selectedDateRange || selectedDateRange.length !== 2) {
+      message.error("Please select both from and to dates");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      const fromDate = selectedDateRange[0].format("YYYY-MM-DD");
+      const toDate = selectedDateRange[1].format("YYYY-MM-DD");
+
+      // Fetch GRN data from the correct API endpoint
+      const response = await axios.get(
+        `${API_URL}/api/grn/getAllGrn?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
+      );
+
+      if (response.data.status && response.data.paramObjectsMap.grnVO) {
+        const allGrnData = response.data.paramObjectsMap.grnVO;
+
+        // Filter data based on the selected date range
+        const filteredGrnData = allGrnData.filter((item) => {
+          // Convert the date string to a format that can be compared
+          let itemDate;
+          if (item.grnDate) {
+            // Handle different date formats that might come from the API
+            if (item.grnDate.includes("-")) {
+              const parts = item.grnDate.split("-");
+              if (parts[0].length === 4) {
+                // YYYY-MM-DD format
+                itemDate = item.grnDate;
+              } else if (parts[0].length === 2) {
+                // DD-MM-YYYY format, convert to YYYY-MM-DD
+                itemDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+              }
+            } else {
+              // If it's a timestamp or other format, try to parse it
+              itemDate = dayjs(item.grnDate).format("YYYY-MM-DD");
+            }
+          }
+
+          return itemDate && itemDate >= fromDate && itemDate <= toDate;
+        });
+
+        if (filteredGrnData.length > 0) {
+          // Format filtered data for Excel
+          const excelData = formatDataForExcel(filteredGrnData);
+
+          // Create workbook and worksheet
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          // Add worksheet to workbook
+          XLSX.utils.book_append_sheet(wb, ws, "GRN Data");
+
+          // Generate Excel file and download
+          XLSX.writeFile(wb, `GRN_${fromDate}_to_${toDate}.xlsx`);
+
+          message.success("Excel file downloaded successfully");
+        } else {
+          message.error("No data found for the selected date range");
+        }
+      } else {
+        message.error("No data available");
+      }
+    } catch (error) {
+      console.error("Error downloading Excel:", error);
+      message.error("Failed to download Excel file");
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  // Format the data for Excel export
+  const formatDataForExcel = (grnData) => {
+    const excelData = [];
+
+    grnData.forEach((mainRecord) => {
+      if (mainRecord.grnDetailsVO && mainRecord.grnDetailsVO.length > 0) {
+        // Create a row for each detail record
+        mainRecord.grnDetailsVO.forEach((detail) => {
+          excelData.push({
+            "Document ID": mainRecord.docId,
+            "Document Date": formatDateForDisplay(mainRecord.docdate),
+            "GRN Date": formatDateForDisplay(mainRecord.grnDate),
+            "Entry No": mainRecord.entryNo,
+            "Gate Pass ID": mainRecord.gatePassId,
+            Supplier: mainRecord.supplier,
+            "Supplier Short Name": mainRecord.supplierShortName,
+            "Mode of Shipment": mainRecord.modeOfShipment,
+            Carrier: mainRecord.carrier,
+            "E-Way Bill": mainRecord.billOfEnrtyNo,
+            "LR No/HAWB No": detail.lrNoHawbNo,
+            "Invoice No": detail.invoiceNo,
+            "Invoice Date": formatDateForDisplay(detail.invoiceDate),
+            "Part No": detail.partNo,
+            "Part Description": detail.partDesc,
+            SKU: detail.sku,
+            "Invoice Qty": detail.invQty,
+            "Received Qty": detail.recQty,
+            "Short Qty": detail.shortQty,
+            "Damage Qty": detail.damageQty,
+            "GRN Qty": detail.grnQty,
+            "Batch/Pallet No": detail.batchNo,
+            "Batch Date": formatDateForDisplay(detail.batchDt),
+            "Expiry Date": formatDateForDisplay(detail.expdate),
+            "Bin Qty": detail.binQty,
+            "No of Bins": detail.noOfBins,
+            "Created By": mainRecord.createdBy,
+            Branch: mainRecord.branch,
+            Remarks: mainRecord.remarks,
+          });
+        });
+      } else {
+        // Create a row even if there are no details
+        excelData.push({
+          "Document ID": mainRecord.docId,
+          "Document Date": formatDateForDisplay(mainRecord.docdate),
+          "GRN Date": formatDateForDisplay(mainRecord.grnDate),
+          "Entry No": mainRecord.entryNo,
+          "Gate Pass ID": mainRecord.gatePassId,
+          Supplier: mainRecord.supplier,
+          "Supplier Short Name": mainRecord.supplierShortName,
+          "Mode of Shipment": mainRecord.modeOfShipment,
+          Carrier: mainRecord.carrier,
+          "E-Way Bill": mainRecord.billOfEnrtyNo,
+          "LR No/HAWB No": "",
+          "Invoice No": "",
+          "Invoice Date": "",
+          "Part No": "",
+          "Part Description": "",
+          SKU: "",
+          "Invoice Qty": "",
+          "Received Qty": "",
+          "Short Qty": "",
+          "Damage Qty": "",
+          "GRN Qty": "",
+          "Batch/Pallet No": "",
+          "Batch Date": "",
+          "Expiry Date": "",
+          "Bin Qty": "",
+          "No of Bins": "",
+          "Created By": mainRecord.createdBy,
+          Branch: mainRecord.branch,
+          Remarks: mainRecord.remarks,
+        });
+      }
+    });
+
+    return excelData;
+  };
+
   // Update refs when table data changes
   useEffect(() => {
     lrNoDetailsRefs.current = lrTableData.map((_, index) => ({
@@ -852,7 +1365,89 @@ const GRN = () => {
   }, [lrTableData]);
 
   const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllGrns();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
+  };
+
+  // Add this function to handle Entry No changes and fetch data
+  const handleEntryNoChange = async (value) => {
+    if (!value) return;
+
+    try {
+      setLoading(true);
+
+      // Fetch entry details
+      const entryResponse = await axios.get(
+        `${API_URL}/api/gatePassIn/getEntryNoDetails?branchCode=${loginBranchCode}&client=${loginClient}&entryNo=${value}&finYear=${loginFinYear}&orgId=${orgId}`
+      );
+
+      if (
+        entryResponse.data.status &&
+        entryResponse.data.paramObjectsMap.entryNoDetails
+      ) {
+        const entryDetails =
+          entryResponse.data.paramObjectsMap.entryNoDetails[0];
+
+        // Update form with entry details
+        setFormData((prev) => ({
+          ...prev,
+          supplierShortName: entryDetails.supplierShortName || "",
+          supplier: entryDetails.supplier || "",
+          modeOfShipment: entryDetails.modeOfShipment || "",
+          carrier: entryDetails.carrierShortName || "",
+        }));
+
+        // Fetch carrier list based on mode of shipment
+        if (entryDetails.modeOfShipment) {
+          getAllCarriers(entryDetails.modeOfShipment);
+        }
+
+        // Fetch fill details for the grid
+        const fillResponse = await axios.get(
+          `${API_URL}/api/gatePassIn/getEntryNoFillDetails?branchCode=${loginBranchCode}&client=${loginClient}&entryNo=${value}&finYear=${loginFinYear}&orgId=${orgId}`
+        );
+
+        if (
+          fillResponse.data.status &&
+          fillResponse.data.paramObjectsMap.entryNoFillDetails
+        ) {
+          const fillDetails =
+            fillResponse.data.paramObjectsMap.entryNoFillDetails;
+
+          // Transform fill details to match table structure
+          const tableData = fillDetails.map((detail, index) => ({
+            id: index + 1,
+            qrCode: "",
+            lr_Hawb_Hbl_No: detail.irNoHaw || "",
+            invNo: detail.invoiceNo || "",
+            invDate: detail.invoiceDate || null,
+            partNo: detail.partNo || "",
+            partDesc: detail.partDesc || "",
+            sku: detail.sku || "",
+            invQty: detail.invQty?.toString() || "0",
+            recQty: detail.recQty?.toString() || "0",
+            shortQty: detail.shortQty?.toString() || "0",
+            damageQty: detail.damageQty?.toString() || "0",
+            grnQty: detail.grnQty?.toString() || "0",
+            batch_PalletNo: detail.batchNo || "",
+            batchDate: detail.batchDate || null,
+            expDate: detail.expDate || null,
+            remarks: "",
+          }));
+
+          setLrTableData(tableData);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching entry details:", error);
+      showToast("error", "Failed to fetch entry details");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -973,11 +1568,6 @@ const GRN = () => {
     }
   };
 
-  const handleDateChange = (field, date) => {
-    const formattedDate = date ? dayjs(date).format("YYYY-MM-DD") : null;
-    setFormData({ ...formData, [field]: formattedDate });
-  };
-
   const handleView = () => {
     setListView(!listView);
     handleClear();
@@ -989,6 +1579,8 @@ const GRN = () => {
       grnType: "GRN",
       entrySlNo: "",
       date: dayjs(),
+      grnType: "", // Reset GRN type
+      gatePassId: "", // Reset gate pass ID
       tax: "",
       vehicleDetails: "",
       gatePassDate: null,
@@ -1078,8 +1670,13 @@ const GRN = () => {
   };
 
   const handleSave = async () => {
+    if (loading) return;
+    console.log("Save button clicked"); // Debug log
+
     const errors = {};
     let firstInvalidFieldRef = null;
+
+    // Validate form fields
     if (!formData.grnDate) errors.grnDate = "GRN Date is required";
     if (!formData.billOfEntry) errors.billOfEntry = "E-way Bill is required";
     if (!formData.supplierShortName)
@@ -1088,143 +1685,73 @@ const GRN = () => {
       errors.modeOfShipment = "Mode of Shipment is required";
     if (!formData.carrier) errors.carrier = "Carrier is required";
 
-    let lrTableDataValid = true;
-    if (
-      !lrTableData ||
-      !Array.isArray(lrTableData) ||
-      lrTableData.length === 0
-    ) {
-      lrTableDataValid = false;
-      setLrTableErrors([{ general: "Lr Table Data is required" }]);
-    } else {
-      const newTableErrors = lrTableData.map((row, index) => {
-        const rowErrors = {};
-        if (!row.lr_Hawb_Hbl_No) {
-          rowErrors.lr_Hawb_Hbl_No = "Lr_Hawb_Hbl_No is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef =
-              lrNoDetailsRefs.current[index].lr_Hawb_Hbl_No;
-          lrTableDataValid = false;
-        }
-        if (!row.invNo) {
-          rowErrors.invNo = "Inv No is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].invNo;
-          lrTableDataValid = false;
-        }
-        if (!row.partNo) {
-          rowErrors.partNo = "Part No is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].partNo;
-          lrTableDataValid = false;
-        }
-        if (!row.invQty) {
-          rowErrors.invQty = "Inv QTY is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].invQty;
-          lrTableDataValid = false;
-        }
-        if (!row.palletQty) {
-          rowErrors.palletQty = "Bin Qty is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].palletQty;
-          lrTableDataValid = false;
-        }
-        if (!row.noOfPallets) {
-          rowErrors.noOfPallets = "No of Bins is required";
-          if (!firstInvalidFieldRef)
-            firstInvalidFieldRef = lrNoDetailsRefs.current[index].noOfPallets;
-          lrTableDataValid = false;
-        }
-        return rowErrors;
-      });
-      setLrTableErrors(newTableErrors);
-    }
-    setFieldErrors(errors);
+    // If validation passes, proceed with saving
+    setIsLoading(true);
 
-    if (!lrTableDataValid || Object.keys(errors).length > 0) {
-      if (firstInvalidFieldRef && firstInvalidFieldRef.current) {
-        firstInvalidFieldRef.current.focus();
-      }
-    }
-    if (Object.keys(errors).length === 0 && lrTableDataValid) {
-      setIsLoading(true);
-
+    try {
       const lrVo = lrTableData.map((row) => ({
         ...(editId && { id: row.id }),
-        qrCode: row.qrCode,
-        lrNoHawbNo: row.lr_Hawb_Hbl_No,
-        invoiceNo: row.invNo,
-        shipmentNo: row.shipmentNo,
-        invoiceDate: row.invDate
-          ? dayjs(row.invDate).format("YYYY-MM-DD")
-          : null,
-        partNo: row.partNo,
-        partDesc: row.partDesc,
-        sku: row.sku,
-        invQty: parseInt(row.invQty),
-        recQty: parseInt(row.recQty),
-        damageQty: parseInt(row.damageQty),
-        subStockQty: parseInt(row.subStockQty),
-        batchNo: row.batch_PalletNo,
-        batchDt: row.batchDate
-          ? dayjs(row.batchDate).format("YYYY-MM-DD")
-          : null,
-        expdate: row.expDate ? dayjs(row.expDate).format("YYYY-MM-DD") : null,
-        binQty: parseInt(row.palletQty),
-        noOfBins: parseInt(row.noOfPallets),
-        pkgs: parseInt(row.pkgs),
-        weight: row.weight,
-        mrp: parseInt(row.mrp),
-        amount: parseInt(row.amt),
-        // EXTRA FIELDS
+        qrCode: row.qrCode || "",
+        lrNoHawbNo: row.lr_Hawb_Hbl_No || "",
+        invoiceNo: row.invNo || "",
+        shipmentNo: row.shipmentNo || "",
+        invoiceDate: row.invDate ? formatDateForAPI(row.invDate) : null,
+        partNo: row.partNo || "",
+        partDesc: row.partDesc || "",
+        sku: row.sku || "",
+        invQty: parseInt(row.invQty) || 0,
+        recQty: parseInt(row.recQty) || 0,
+        damageQty: parseInt(row.damageQty) || 0,
+        subStockQty: parseInt(row.subStockQty) || 0,
+        batchNo: row.batch_PalletNo || "",
+        batchDt: row.batchDate ? formatDateForAPI(row.batchDate) : null,
+        expdate: row.expDate ? formatDateForAPI(row.expDate) : null,
+        binQty: parseInt(row.palletQty) || 0,
+        noOfBins: parseInt(row.noOfPallets) || 0,
+        pkgs: parseInt(row.pkgs) || 0,
+        weight: parseFloat(row.weight) || 0,
+        mrp: parseFloat(row.mrp) || 0,
+        amount: parseFloat(row.amt) || 0,
         batchQty: 0,
         rate: 0,
         binType: "RACK STORAGE",
+        freeze: row.freeze || false,
       }));
+
       const saveFormData = {
         ...(editId && { id: editId }),
-        entryNo: formData.entrySlNo,
-        entryDate: formData.date
-          ? dayjs(formData.date).format("YYYY-MM-DD")
-          : null,
-        gatePassId: editId ? gatePassIdEdit : formData.gatePassId,
+        entryNo: formData.entrySlNo || "",
+        entryDate: formData.date ? formatDateForAPI(formData.date) : null,
+        gatePassId: editId ? gatePassIdEdit : formData.gatePassId || "",
         gatePassDate: formData.gatePassDate
-          ? dayjs(formData.gatePassDate).format("YYYY-MM-DD")
+          ? formatDateForAPI(formData.gatePassDate)
           : null,
-        grnDate: formData.grnDate
-          ? dayjs(formData.grnDate).format("YYYY-MM-DD")
-          : null,
-        customerPo: formData.customerPo,
-        vas: formData.vas,
-        supplierShortName: formData.supplierShortName,
-        supplier: formData.supplier,
-        billOfEnrtyNo: formData.billOfEntry,
-        // capacity: formData.capacity,
-        modeOfShipment: formData.modeOfShipment,
-        carrier: formData.carrier,
-        vesselNo: formData.vesselNo,
-        hsnNo: formData.hsnNo,
-        vehicleType: formData.vehicleType,
-        contact: formData.contact,
-        sealNo: formData.sealNo,
-        lrNo: formData.lrNo,
-        driverName: formData.driverName,
-        securityName: formData.securityName,
-        containerNo: formData.containerNo,
-        lrDate: formData.lrDate
-          ? dayjs(formData.lrDate).format("YYYY-MM-DD")
-          : null,
-        goodsDescripition: formData.goodsDesc,
-        vehicleNo: formData.vehicleNo,
-        vesselDetails: formData.vesselDetails,
-        lotNo: formData.lotNo,
-        destinationFrom: formData.destinationFrom,
-        destinationTo: formData.destinationTo,
-        noOfBins: formData.noOfPallets,
-        invoiceNo: formData.invoiceNo,
-        // remarks: remarks,
-        // totGrnQty: formData.totGrnQty,
+        grnDate: formData.grnDate ? formatDateForAPI(formData.grnDate) : null,
+        customerPo: formData.customerPo || "",
+        vas: formData.vas || false,
+        supplierShortName: formData.supplierShortName || "",
+        supplier: formData.supplier || "",
+        billOfEnrtyNo: formData.billOfEntry || "",
+        modeOfShipment: formData.modeOfShipment || "",
+        carrier: formData.carrier || "",
+        vesselNo: formData.vesselNo || "",
+        hsnNo: formData.hsnNo || "",
+        vehicleType: formData.vehicleType || "",
+        contact: formData.contact || "",
+        sealNo: formData.sealNo || "",
+        lrNo: formData.lrNo || "",
+        driverName: formData.driverName || "",
+        securityName: formData.securityName || "",
+        containerNo: formData.containerNo || "",
+        lrDate: formData.lrDate ? formatDateForAPI(formData.lrDate) : null,
+        goodsDescripition: formData.goodsDesc || "",
+        vehicleNo: formData.vehicleNo || "",
+        vesselDetails: formData.vesselDetails || "",
+        lotNo: formData.lotNo || "",
+        destinationFrom: formData.destinationFrom || "",
+        destinationTo: formData.destinationTo || "",
+        noOfBins: parseInt(formData.noOfPallets) || 0,
+        invoiceNo: formData.invoiceNo || "",
         orgId: orgId,
         createdBy: loginUserName,
         grnDetailsDTO: lrVo,
@@ -1232,42 +1759,57 @@ const GRN = () => {
         branchCode: loginBranchCode,
         client: loginClient,
         customer: loginCustomer,
-        finYear: "2024",
+        finYear: loginFinYear,
         warehouse: loginWarehouse,
-        // EXTRA FIELDS
         fifoFlag: "abc",
         vehicleDetails: "abc",
+        freeze: false,
       };
+
       console.log("DATA TO SAVE IS:", saveFormData);
 
-      try {
-        const response = await axios.put(
-          `${API_URL}/grn/createUpdateGRN`,
-          saveFormData
-        );
-        if (response.status === true) {
-          console.log("Response:", response);
-          showToast(
-            "success",
-            editId ? "GRN Updated Successfully" : "GRN created successfully"
-          );
-          handleClear();
-          getAllGrns();
-          setIsLoading(false);
-        } else {
-          showToast(
-            "error",
-            response.paramObjectsMap.errorMessage || "GRN creation failed"
-          );
-          setIsLoading(false);
+      const response = await axios.put(
+        `${API_URL}/api/grn/createUpdateGRN`,
+        saveFormData,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
         }
-      } catch (error) {
-        console.error("Error:", error);
-        showToast("error", "GRN creation failed");
-        setIsLoading(false);
+      );
+
+      console.log("API Response:", response);
+
+      if (response.data && response.data.status === true) {
+        showToast(
+          "success",
+          editId ? "GRN Updated Successfully" : "GRN created successfully"
+        );
+        handleClear();
+        getAllGrns();
+      } else {
+        const errorMessage =
+          response.data?.paramObjectsMap?.errorMessage ||
+          response.data?.message ||
+          "GRN creation failed";
+        showToast("error", errorMessage);
       }
-    } else {
-      setFieldErrors(errors);
+    } catch (error) {
+      console.error("Error:", error);
+      let errorMessage = "GRN creation failed";
+
+      if (error.response) {
+        errorMessage =
+          error.response.data?.message ||
+          error.response.data?.paramObjectsMap?.errorMessage ||
+          `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        errorMessage = "Network error - please check your connection";
+      }
+
+      showToast("error", errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1397,11 +1939,6 @@ const GRN = () => {
   };
 
   // Add this function definition with other handler functions
-  const handleTableChange = (id, field, value) => {
-    setLrTableData((prevData) =>
-      prevData.map((row) => (row.id === id ? { ...row, [field]: value } : row))
-    );
-  };
 
   const handleAddRow = () => {
     const newRow = {
@@ -1524,6 +2061,7 @@ const GRN = () => {
           }
           danger
           type="text"
+          style={{ color: "white" }}
         />
       ),
     },
@@ -1620,7 +2158,7 @@ const GRN = () => {
             handleTableChange(
               record.id,
               "invDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -1804,7 +2342,7 @@ const GRN = () => {
             handleTableChange(
               record.id,
               "batchDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -1826,7 +2364,7 @@ const GRN = () => {
             handleTableChange(
               record.id,
               "expDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
         />
@@ -2007,20 +2545,19 @@ const GRN = () => {
                 >
                   Clear
                 </Button>
-                {!formData.freeze && (
-                  <Button
-                    icon={<SaveOutlined />}
-                    onClick={handleSave}
-                    loading={isLoading}
-                    style={{
-                      background: "rgba(108, 99, 255, 0.7)",
-                      color: "#fff",
-                      border: "none",
-                    }}
-                  >
-                    Save
-                  </Button>
-                )}
+                <Button
+                  icon={<SaveOutlined />}
+                  onClick={handleSave}
+                  loading={isLoading}
+                  style={{
+                    background: "rgba(108, 99, 255, 0.3)",
+                    color: "#fff",
+                    border: "none",
+                  }}
+                >
+                  Save
+                </Button>
+
                 <Button
                   icon={<CloudUploadOutlined />}
                   onClick={handleBulkUploadOpen}
@@ -2116,19 +2653,13 @@ const GRN = () => {
                                 }
                               >
                                 <DatePicker
-                                  style={{
-                                    width: "100%",
-                                    background: "rgba(255, 255, 255, 0.1)",
-                                    border:
-                                      "1px solid rgba(255, 255, 255, 0.3)",
-                                    color: "white",
-                                  }}
                                   className="white-datepicker"
+                                  format="DD-MM-YYYY"
                                   value={
                                     formData.docDate
-                                      ? dayjs(formData.docDate)
+                                      ? dayjs(formData.docDate, "DD-MM-YYYY")
                                       : null
-                                  }
+                                  } // Add format here
                                   disabled
                                 />
                               </Form.Item>
@@ -2175,6 +2706,26 @@ const GRN = () => {
                                 <Input
                                   name="entrySlNo"
                                   value={formData.entrySlNo}
+                                  onChange={(e) => {
+                                    setFormData({
+                                      ...formData,
+                                      entrySlNo: e.target.value,
+                                    });
+                                  }}
+                                  onBlur={() =>
+                                    handleEntryNoChange(formData.entrySlNo)
+                                  }
+                                  onKeyPress={(e) => {
+                                    if (e.key === "Enter") {
+                                      handleEntryNoChange(formData.entrySlNo);
+                                    }
+                                  }}
+                                  disabled={formData.freeze}
+                                  style={inputStyle}
+                                />
+                                {/* <Input
+                                  name="entrySlNo"
+                                  value={formData.entrySlNo}
                                   onChange={handleInputChange}
                                   disabled={
                                     formData.grnType === "GATE PASS" ||
@@ -2186,7 +2737,7 @@ const GRN = () => {
                                       "1px solid rgba(255, 255, 255, 0.3)",
                                     color: "white",
                                   }}
-                                />
+                                /> */}
                               </Form.Item>
                             </Col>
                             <Col span={4}>
@@ -2205,9 +2756,12 @@ const GRN = () => {
                                       "1px solid rgba(255, 255, 255, 0.3)",
                                   }}
                                   className="white-datepicker"
+                                  format="DD-MM-YYYY"
                                   value={
-                                    formData.date ? dayjs(formData.date) : null
-                                  }
+                                    formData.date
+                                      ? dayjs(formData.date, "DD-MM-YYYY")
+                                      : null
+                                  } // Add format here
                                   onChange={(date) =>
                                     handleDateChange("date", date)
                                   }
@@ -2249,30 +2803,33 @@ const GRN = () => {
                                   }
                                 >
                                   <Select
+                                    style={selectStyle}
                                     value={formData.gatePassId}
-                                    onChange={(value) =>
-                                      setFormData({
-                                        ...formData,
-                                        gatePassId: value,
-                                      })
-                                    }
+                                    onChange={handleGatePassIdChange}
                                     disabled={
-                                      formData.grnType === "GRN" ||
-                                      formData.freeze
+                                      formData.freeze ||
+                                      formData.grnType !== "GATE PASS"
+                                    } // Add this condition
+                                    loading={
+                                      gatePassIdList.length === 0 ||
+                                      isLoadingGatePass
                                     }
-                                    style={{
-                                      background: "rgba(255, 255, 255, 0.1)",
-                                      border:
-                                        "1px solid rgba(255, 255, 255, 0.3)",
-                                      color: "white",
-                                    }}
+                                    showSearch
+                                    optionFilterProp="children"
+                                    filterOption={(input, option) =>
+                                      option.children
+                                        .toLowerCase()
+                                        .indexOf(input.toLowerCase()) >= 0
+                                    }
                                   >
-                                    {gatePassIdList?.map((row) => (
+                                    <Option value="">Select Gate Pass</Option>
+                                    {gatePassIdList.map((gatePass) => (
                                       <Option
-                                        key={row.id}
-                                        value={row.docId.toUpperCase()}
+                                        key={gatePass.id}
+                                        value={gatePass.docId}
                                       >
-                                        {row.docId.toUpperCase()}
+                                        {gatePass.docId} -{" "}
+                                        {gatePass.supplierShortName}
                                       </Option>
                                     ))}
                                   </Select>
@@ -2299,11 +2856,15 @@ const GRN = () => {
                                       "1px solid rgba(255, 255, 255, 0.3)",
                                   }}
                                   className="white-datepicker"
+                                  format="DD-MM-YYYY"
                                   value={
                                     formData.gatePassDate
-                                      ? dayjs(formData.gatePassDate)
+                                      ? dayjs(
+                                          formData.gatePassDate,
+                                          "DD-MM-YYYY"
+                                        )
                                       : null
-                                  }
+                                  } // Add format here
                                   disabled
                                 />
                               </Form.Item>
@@ -2326,13 +2887,15 @@ const GRN = () => {
                                   }}
                                   value={
                                     formData.grnDate
-                                      ? dayjs(formData.grnDate)
+                                      ? dayjs(formData.grnDate, "DD-MM-YYYY")
                                       : null
                                   }
                                   onChange={(date) =>
                                     handleDateChange("grnDate", date)
                                   }
                                   disabled={formData.freeze}
+                                  format="DD-MM-YYYY"
+                                  className="white-datepicker"
                                 />
                               </Form.Item>
                             </Col>
@@ -2769,11 +3332,13 @@ const GRN = () => {
                                     border:
                                       "1px solid rgba(255, 255, 255, 0.3)",
                                   }}
+                                  format="DD-MM-YYYY"
+                                  className="white-datepicker"
                                   value={
                                     formData.lrDate
-                                      ? dayjs(formData.lrDate)
+                                      ? dayjs(formData.lrDate, "DD-MM-YYYY")
                                       : null
-                                  }
+                                  } // Add format here
                                   onChange={(date) =>
                                     handleDateChange("lrDate", date)
                                   }
@@ -3367,7 +3932,7 @@ const GRN = () => {
                               }
                               danger
                               type="text"
-                              style={{ color: "#ff4d4f" }}
+                              style={{ color: "white" }}
                             />
                           </td>
 
@@ -3444,17 +4009,24 @@ const GRN = () => {
                           </td>
 
                           {/* Inv Date */}
+
                           <td style={{ padding: "8px" }}>
                             <DatePicker
                               style={datePickerStyle}
-                              value={row.invDate ? dayjs(row.invDate) : null}
+                              value={
+                                row.invDate
+                                  ? dayjs(row.invDate, "DD-MM-YYYY")
+                                  : null
+                              }
                               onChange={(date) =>
                                 handleTableChange(
                                   row.id,
                                   "invDate",
-                                  date ? date.format("YYYY-MM-DD") : null
+                                  date ? date.format("DD-MM-YYYY") : null
                                 )
                               }
+                              format="DD-MM-YYYY"
+                              className="white-datepicker"
                             />
                           </td>
 
@@ -3586,15 +4158,19 @@ const GRN = () => {
                             <DatePicker
                               style={datePickerStyle}
                               value={
-                                row.batchDate ? dayjs(row.batchDate) : null
+                                row.batchDate
+                                  ? dayjs(row.batchDate, "DD-MM-YYYY")
+                                  : null
                               }
                               onChange={(date) =>
                                 handleTableChange(
                                   row.id,
                                   "batchDate",
-                                  date ? date.format("YYYY-MM-DD") : null
+                                  date ? date.format("DD-MM-YYYY") : null
                                 )
                               }
+                              format="DD-MM-YYYY"
+                              className="white-datepicker"
                             />
                           </td>
 
@@ -3602,14 +4178,20 @@ const GRN = () => {
                           <td style={{ padding: "8px" }}>
                             <DatePicker
                               style={datePickerStyle}
-                              value={row.expDate ? dayjs(row.expDate) : null}
+                              value={
+                                row.expDate
+                                  ? dayjs(row.expDate, "DD-MM-YYYY")
+                                  : null
+                              }
                               onChange={(date) =>
                                 handleTableChange(
                                   row.id,
                                   "expDate",
-                                  date ? date.format("YYYY-MM-DD") : null
+                                  date ? date.format("DD-MM-YYYY") : null
                                 )
                               }
+                              format="DD-MM-YYYY"
+                              className="white-datepicker"
                             />
                           </td>
 
@@ -3674,7 +4256,7 @@ const GRN = () => {
             <div
               className="form-containerSG"
               style={{
-                minHeight: "70vh",
+                minHeight: "90vh",
                 background: "#159957",
                 background: "var(--bg-body-gradient)",
                 marginTop: "40px",
@@ -3689,37 +4271,111 @@ const GRN = () => {
                   background: "var(--bg-body-gradient)",
                 }}
               >
-                <Button
-                  icon={<UnorderedListOutlined />}
-                  onClick={toggleViewMode}
-                  style={{
-                    backgroundColor: "transparent",
-                    color: "white",
-                    marginLeft: "870px",
-                    marginRight: "-20px",
-                    marginTop: "20px",
-                    border: "none",
-                  }}
-                >
-                  {viewMode === "form" ? "List" : "Form"}
-                </Button>
+                <div>
+                  <Typography.Title
+                    level={3}
+                    style={{
+                      color: "#fff",
+                      margin: 0,
+                      paddingLeft: "20px",
+                      paddingTop: "20px",
+                    }}
+                  >
+                    GRN List
+                  </Typography.Title>
+                  <Typography.Text
+                    style={{
+                      color: "rgba(255, 255, 255, 0.8)",
+                      paddingLeft: "20px",
+                    }}
+                  >
+                    View and manage GRN entries
+                  </Typography.Text>
+                </div>
+                <div></div>
               </div>
 
               <div
                 className="table-container"
                 style={{
                   position: "relative",
-                  width: "80%",
+                  width: "95%",
+                  margin: "0 auto",
                   overflowX: "auto",
                   fontSize: "11px",
-                  maxHeight: "200px",
+                  maxHeight: "calc(100vh - 250px)",
                   overflowY: "auto",
-                  marginTop: "40px",
-                  marginLeft: "60px",
+                  marginTop: "20px",
                   background: "#159957",
                   background: "var(--bg-body-gradient)",
                 }}
               >
+                <div
+                  style={{
+                    marginBottom: "16px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Input
+                    placeholder="Search by GRN No, Supplier, or Gate Pass ID"
+                    allowClear
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      width: "300px",
+                      background: "rgba(255, 255, 255, 0.1)",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                    prefix={
+                      <SearchOutlined
+                        style={{ color: "rgba(255, 255, 255, 0.5)" }}
+                      />
+                    }
+                  />
+
+                  <Space>
+                    <RangePicker
+                      className="white-datepicker"
+                      value={selectedDateRange}
+                      onChange={setSelectedDateRange}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.1)",
+                        border: "1px solid rgba(255, 255, 255, 0.3)",
+                        color: "white",
+                      }}
+                      placeholder={["From Date", "To Date"]}
+                      format="DD-MM-YYYY"
+                    />
+
+                    <Button
+                      icon={<DownloadOutlined />}
+                      loading={downloadLoading}
+                      onClick={downloadExcel}
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "white",
+                        border: "1px solid rgba(255, 255, 255, 0.3)",
+                      }}
+                    >
+                      Download Excel
+                    </Button>
+                    <Button
+                      icon={<PlusOutlined />}
+                      onClick={toggleViewMode}
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "white",
+                        border: "1px solid rgba(255, 255, 255, 0.3)",
+                      }}
+                    >
+                      Add Entry
+                    </Button>
+                  </Space>
+                </div>
+
                 <table
                   style={{
                     width: "100%",
@@ -3738,9 +4394,17 @@ const GRN = () => {
                       <th
                         style={{
                           padding: "12px",
+                          textAlign: "center",
+                          color: "white",
+                        }}
+                      >
+                        Action
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
                           textAlign: "left",
                           color: "white",
-                          fontWeight: "500",
                         }}
                       >
                         GRN Date
@@ -3761,7 +4425,7 @@ const GRN = () => {
                           color: "white",
                         }}
                       >
-                        Gate Pass Id
+                        Gate Pass ID
                       </th>
                       <th
                         style={{
@@ -3781,230 +4445,270 @@ const GRN = () => {
                       >
                         GRN QTY
                       </th>
-                      <th
-                        style={{
-                          padding: "12px",
-                          textAlign: "center",
-                          color: "white",
-                        }}
-                      >
-                        Action
-                      </th>
                     </tr>
                   </thead>
-
                   <tbody>
-                    {paginatedData.map((row, index) => (
-                      <tr
-                        key={`row-${index}-${row.id}`}
-                        style={{
-                          borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                          color: "white",
-                          backgroundColor:
-                            index % 2 === 0
-                              ? "rgba(255, 255, 255, 0.02)"
-                              : "rgba(255, 255, 255, 0.05)",
-                          "&:hover": {
-                            backgroundColor: "rgba(255, 255, 255, 0.1)",
-                          },
-                        }}
-                      >
-                        <td
+                    {listViewData
+                      .filter(
+                        (item) =>
+                          !searchTerm ||
+                          (item.docId &&
+                            item.docId
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase())) ||
+                          (item.supplier &&
+                            item.supplier
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase())) ||
+                          (item.gatePassId &&
+                            item.gatePassId
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase()))
+                      )
+                      .slice(
+                        (currentPage - 1) * pageSize,
+                        currentPage * pageSize
+                      )
+                      .map((item, index) => (
+                        <tr
+                          key={`grn-${index}-${item.id}`}
                           style={{
-                            padding: "12px",
-                            textAlign: "left",
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
                             color: "white",
-                            fontSize: "11px",
+                            backgroundColor:
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)",
                           }}
                         >
-                          {dayjs(row.grnDate).format("DD-MM-YYYY")}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          {row.docId}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          {row.gatePassId}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          {row.supplier}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          {row.totalGrnQty}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "center",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          <Button
-                            type="link"
-                            onClick={() => getGrnById({ original: row })}
-                            style={{ color: "#1890ff" }}
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "center",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
                           >
-                            Edit
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                            <Button
+                              type="link"
+                              icon={<RightCircleOutlined />}
+                              onClick={() =>
+                                item && item.id
+                                  ? getGrnById(item)
+                                  : alert("Invalid row data")
+                              }
+                              style={{ color: "white" }}
+                            />
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {dayjs(item.grnDate).format("DD-MM-YYYY")}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.docId}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.gatePassId}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.supplier}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.totalGrnQty}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "flex-end",
-                    marginTop: "16px",
-                    paddingRight: "50px",
-                    color: "white",
-                  }}
-                >
-                  <span style={{ marginRight: "16px", fontSize: "12px" }}>
-                    {(currentPage - 1) * pageSize + 1}-
-                    {Math.min(currentPage * pageSize, listViewData.length)} of{" "}
-                    {listViewData.length} items
-                  </span>
 
-                  <button
-                    onClick={() =>
-                      setCurrentPage((prev) => Math.max(prev - 1, 1))
-                    }
-                    disabled={currentPage === 1}
+                {listViewData.length > 0 && (
+                  <div
                     style={{
-                      backgroundColor: "transparent",
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      marginTop: "16px",
+                      paddingRight: "20px",
                       color: "white",
-                      border: "1px solid white",
-                      margin: "0 4px",
-                      padding: "2px 8px",
-                      borderRadius: "4px",
-                      cursor: currentPage === 1 ? "not-allowed" : "pointer",
-                      opacity: currentPage === 1 ? 0.5 : 1,
                     }}
                   >
-                    Prev
-                  </button>
+                    <span style={{ marginRight: "16px", fontSize: "12px" }}>
+                      {(currentPage - 1) * pageSize + 1}-
+                      {Math.min(currentPage * pageSize, listViewData.length)} of{" "}
+                      {listViewData.length} items
+                    </span>
 
-                  {Array.from(
-                    { length: Math.ceil(listViewData.length / pageSize) },
-                    (_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setCurrentPage(i + 1)}
-                        style={{
-                          backgroundColor:
-                            currentPage === i + 1
-                              ? "rgba(255,255,255,0.2)"
-                              : "transparent",
-                          color: "white",
-                          border: "1px solid white",
-                          margin: "0 2px",
-                          padding: "2px 8px",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          minWidth: "28px",
-                        }}
-                      >
-                        {i + 1}
-                      </button>
-                    )
-                  )}
+                    <button
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.max(prev - 1, 1))
+                      }
+                      disabled={currentPage === 1}
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "white",
+                        border: "1px solid white",
+                        margin: "0 4px",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                        opacity: currentPage === 1 ? 0.5 : 1,
+                      }}
+                    >
+                      Prev
+                    </button>
 
-                  <button
-                    onClick={() =>
-                      setCurrentPage((prev) =>
-                        Math.min(
-                          prev + 1,
-                          Math.ceil(listViewData.length / pageSize)
-                        )
+                    {Array.from(
+                      { length: Math.ceil(listViewData.length / pageSize) },
+                      (_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setCurrentPage(i + 1)}
+                          style={{
+                            backgroundColor:
+                              currentPage === i + 1
+                                ? "rgba(255,255,255,0.2)"
+                                : "transparent",
+                            color: "white",
+                            border: "1px solid white",
+                            margin: "0 2px",
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            minWidth: "28px",
+                          }}
+                        >
+                          {i + 1}
+                        </button>
                       )
-                    }
-                    disabled={
-                      currentPage === Math.ceil(listViewData.length / pageSize)
-                    }
-                    style={{
-                      backgroundColor: "transparent",
-                      color: "white",
-                      border: "1px solid white",
-                      margin: "0 4px",
-                      padding: "2px 8px",
-                      borderRadius: "4px",
-                      cursor:
-                        currentPage ===
-                        Math.ceil(listViewData.length / pageSize)
-                          ? "not-allowed"
-                          : "pointer",
-                      opacity:
-                        currentPage ===
-                        Math.ceil(listViewData.length / pageSize)
-                          ? 0.5
-                          : 1,
-                    }}
-                  >
-                    Next
-                  </button>
+                    )}
 
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      backgroundColor: "rgba(255,255,255,0.1)",
-                      color: "white",
-                      border: "1px solid white",
-                      marginLeft: "8px",
-                      padding: "2px 4px",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    <option value="5" style={{ background: "#1A1A2E" }}>
-                      5 / page
-                    </option>
-                    <option value="10" style={{ background: "#1A1A2E" }}>
-                      10 / page
-                    </option>
-                    <option value="20" style={{ background: "#1A1A2E" }}>
-                      20 / page
-                    </option>
-                    <option value="50" style={{ background: "#1A1A2E" }}>
-                      50 / page
-                    </option>
-                  </select>
-                </div>
+                    <button
+                      onClick={() =>
+                        setCurrentPage((prev) =>
+                          Math.min(
+                            prev + 1,
+                            Math.ceil(listViewData.length / pageSize)
+                          )
+                        )
+                      }
+                      disabled={
+                        currentPage ===
+                        Math.ceil(listViewData.length / pageSize)
+                      }
+                      style={{
+                        backgroundColor: "transparent",
+                        color: "white",
+                        border: "1px solid white",
+                        margin: "0 4px",
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        cursor:
+                          currentPage ===
+                          Math.ceil(listViewData.length / pageSize)
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity:
+                          currentPage ===
+                          Math.ceil(listViewData.length / pageSize)
+                            ? 0.5
+                            : 1,
+                      }}
+                    >
+                      Next
+                    </button>
+
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        backgroundColor: "rgba(255,255,255,0.1)",
+                        color: "white",
+                        border: "1px solid white",
+                        marginLeft: "8px",
+                        padding: "2px 4px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      <option value="5" style={{ background: "#1A1A2E" }}>
+                        5 / page
+                      </option>
+                      <option value="10" style={{ background: "#1A1A2E" }}>
+                        10 / page
+                      </option>
+                      <option value="20" style={{ background: "#1A1A2E" }}>
+                        20 / page
+                      </option>
+                      <option value="50" style={{ background: "#1A1A2E" }}>
+                        50 / page
+                      </option>
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
+
+        {/* <Modal
+                  visible={uploadOpen}
+                  onCancel={() => setUploadOpen(false)}
+                  footer={null}
+                  width={600}
+                  closable={false}
+                  className="upload-modal"
+                  style={{
+                    padding: "0",
+                  }}
+                > */}
+        <CommonBulkUpload
+          open={uploadOpen}
+          handleClose={() => setUploadOpen(false)}
+          title="Upload Gate Pass In Files"
+          uploadText="Upload file"
+          downloadText="Sample File"
+          onSubmit={handleSubmit}
+          sampleFileDownload={sampleFile}
+          handleFileUpload={handleFileUpload}
+          apiUrl={`${API_URL}/api/grn/ExcelUploadForGrn?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&createdBy=${loginUserName}&customer=${loginCustomer}&finYear=${loginFinYear}&orgId=${orgId}`}
+          screen="GRN"
+        />
+        {/* </Modal> */}
       </div>
     </ConfigProvider>
   );

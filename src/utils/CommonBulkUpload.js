@@ -156,6 +156,7 @@ const CommonBulkUpload = ({
         style={{
           textAlign: "center",
           marginBottom: "25px",
+          background: "rgba(255, 255, 255, 0.05)",
         }}
       >
         {/* Upload area */}

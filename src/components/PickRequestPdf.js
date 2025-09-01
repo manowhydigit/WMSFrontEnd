@@ -5,14 +5,16 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  useTheme,
 } from "@mui/material";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { useEffect, useState } from "react";
 
-const GeneratePdfTemp = ({ row, callBackFunction }) => {
+const GeneratePdfTempPick = ({ row, callBackFunction }) => {
   const [open, setOpen] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState("");
+  const theme = useTheme();
 
   // Function to open the dialog
   const handleOpen = () => {
@@ -40,7 +42,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`PUTAWAY_${row.grnNo}.pdf`);
+      pdf.save(`PICK_${row.docId}.pdf`);
 
       handleClose();
     } else {
@@ -88,13 +90,13 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
     >
       <DialogTitle
         sx={{
-          background: "linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)",
+          background: "linear-gradient(45deg, #673ab7 30%, #9575cd 90%)",
           color: "white",
           fontWeight: "bold",
           textAlign: "center",
         }}
       >
-        PUTAWAY DOCUMENT - PREVIEW
+        PICK REQUEST - PREVIEW
       </DialogTitle>
       <DialogContent sx={{ p: 0 }}>
         <div
@@ -119,7 +121,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
               alignItems: "center",
               marginBottom: "25px",
               paddingBottom: "15px",
-              borderBottom: "2px solid #1976d2",
+              borderBottom: "2px solid #673ab7",
             }}
           >
             <div style={{ textAlign: "left", width: "30%" }}>
@@ -127,7 +129,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 style={{
                   fontSize: "20px",
                   fontWeight: "bold",
-                  color: "#1976d2",
+                  color: "#673ab7",
                 }}
               >
                 UNIWORLD WMS
@@ -145,7 +147,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 color: "#333",
               }}
             >
-              PUTAWAY DOCUMENT
+              PICK REQUEST
             </div>
             <div
               style={{
@@ -169,9 +171,9 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
               justifyContent: "space-between",
               marginBottom: "25px",
               padding: "15px",
-              backgroundColor: "#e3f2fd",
+              backgroundColor: "#f9f5ff",
               borderRadius: "8px",
-              border: "1px solid #bbdefb",
+              border: "1px solid #e0d6ff",
             }}
           >
             <div style={{ flex: 1 }}>
@@ -186,12 +188,12 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                   style={{
                     minWidth: "120px",
                     fontWeight: "bold",
-                    color: "#1976d2",
+                    color: "#673ab7",
                   }}
                 >
-                  Supplier:
+                  Customer:
                 </div>
-                <div>{row.supplier}</div>
+                <div>{row.customerName || row.customer}</div>
               </div>
               <div
                 style={{
@@ -204,70 +206,10 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                   style={{
                     minWidth: "120px",
                     fontWeight: "bold",
-                    color: "#1976d2",
+                    color: "#673ab7",
                   }}
                 >
-                  Type:
-                </div>
-                <div>Auto</div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                <div
-                  style={{
-                    minWidth: "120px",
-                    fontWeight: "bold",
-                    color: "#1976d2",
-                  }}
-                >
-                  Invoice No:
-                </div>
-                <div>{row.invoiceNo}</div>
-              </div>
-            </div>
-
-            <div style={{ flex: 1, textAlign: "right" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "8px",
-                  alignItems: "center",
-                }}
-              >
-                <div
-                  style={{
-                    minWidth: "100px",
-                    fontWeight: "bold",
-                    color: "#1976d2",
-                    textAlign: "left",
-                  }}
-                >
-                  Client:
-                </div>
-                <div>{row.client}</div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "8px",
-                  alignItems: "center",
-                }}
-              >
-                <div
-                  style={{
-                    minWidth: "100px",
-                    fontWeight: "bold",
-                    color: "#1976d2",
-                    textAlign: "left",
-                  }}
-                >
-                  GRN No:
+                  Pick No:
                 </div>
                 <div
                   style={{
@@ -275,8 +217,68 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                     color: "#333",
                   }}
                 >
-                  {row.grnNo}
+                  {row.docId}
                 </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{
+                    minWidth: "120px",
+                    fontWeight: "bold",
+                    color: "#673ab7",
+                  }}
+                >
+                  Pick Date:
+                </div>
+                <div>{row.docDate}</div>
+              </div>
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "8px",
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{
+                    minWidth: "140px",
+                    fontWeight: "bold",
+                    color: "#673ab7",
+                    textAlign: "left",
+                  }}
+                >
+                  Order No:
+                </div>
+                <div>{row.buyerRefNo}</div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "8px",
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{
+                    minWidth: "140px",
+                    fontWeight: "bold",
+                    color: "#673ab7",
+                    textAlign: "left",
+                  }}
+                >
+                  Buyer Order No:
+                </div>
+                <div>{row.buyerOrderNo}</div>
               </div>
               <div
                 style={{
@@ -287,15 +289,15 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
               >
                 <div
                   style={{
-                    minWidth: "100px",
+                    minWidth: "140px",
                     fontWeight: "bold",
-                    color: "#1976d2",
-                    textAlign: "left",
+                    color: "#673ab7",
+                    textAlign: "right",
                   }}
                 >
-                  GRN Date:
+                  Buyer Order Date:
                 </div>
-                <div>{row.grnDate}</div>
+                <div>{row.buyerOrderDate}</div>
               </div>
             </div>
           </div>
@@ -315,7 +317,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
             <thead>
               <tr
                 style={{
-                  backgroundColor: "#1976d2",
+                  backgroundColor: "#673ab7",
                   color: "black",
                   textAlign: "center",
                 }}
@@ -323,7 +325,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 <th
                   style={{
                     padding: "12px 8px",
-                    border: "1px solid #90caf9",
+                    border: "1px solid #d4c6ff",
                     fontWeight: "bold",
                   }}
                 >
@@ -332,7 +334,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 <th
                   style={{
                     padding: "12px 8px",
-                    border: "1px solid #90caf9",
+                    border: "1px solid #d4c6ff",
                     fontWeight: "bold",
                   }}
                 >
@@ -341,7 +343,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 <th
                   style={{
                     padding: "12px 8px",
-                    border: "1px solid #90caf9",
+                    border: "1px solid #d4c6ff",
                     fontWeight: "bold",
                   }}
                 >
@@ -350,7 +352,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 <th
                   style={{
                     padding: "12px 8px",
-                    border: "1px solid #90caf9",
+                    border: "1px solid #d4c6ff",
                     fontWeight: "bold",
                   }}
                 >
@@ -359,7 +361,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 <th
                   style={{
                     padding: "12px 8px",
-                    border: "1px solid #90caf9",
+                    border: "1px solid #d4c6ff",
                     fontWeight: "bold",
                   }}
                 >
@@ -368,16 +370,16 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 <th
                   style={{
                     padding: "12px 8px",
-                    border: "1px solid #90caf9",
+                    border: "1px solid #d4c6ff",
                     fontWeight: "bold",
                   }}
                 >
-                  P. Qty
+                  Pick Qty
                 </th>
                 <th
                   style={{
                     padding: "12px 8px",
-                    border: "1px solid #90caf9",
+                    border: "1px solid #d4c6ff",
                     fontWeight: "bold",
                   }}
                 >
@@ -386,16 +388,25 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 <th
                   style={{
                     padding: "12px 8px",
-                    border: "1px solid #90caf9",
+                    border: "1px solid #d4c6ff",
                     fontWeight: "bold",
                   }}
                 >
                   Tick
                 </th>
+                <th
+                  style={{
+                    padding: "12px 8px",
+                    border: "1px solid #d4c6ff",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Avl Qty
+                </th>
               </tr>
             </thead>
             <tbody>
-              {row.putAwayDetailsVO?.map((item, index) => (
+              {row.pickRequestDetailsVO?.map((item, index) => (
                 <tr
                   key={index}
                   style={{
@@ -457,7 +468,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                       color: "#2e7d32",
                     }}
                   >
-                    {item.putAwayQty}
+                    {item.pickQty}
                   </td>
                   <td
                     style={{
@@ -481,12 +492,21 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                         width: "18px",
                         height: "18px",
                         borderRadius: "3px",
-                        border: "2px solid #1976d2",
+                        border: "2px solid #673ab7",
                         textAlign: "center",
                         lineHeight: "18px",
                         margin: "0 auto",
                       }}
                     ></div>
+                  </td>
+                  <td
+                    style={{
+                      padding: "10px 8px",
+                      border: "1px solid #e0e0e0",
+                      textAlign: "center",
+                    }}
+                  >
+                    {item.availQty}
                   </td>
                 </tr>
               ))}
@@ -505,7 +525,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
             <div
               style={{
                 padding: "15px",
-                backgroundColor: "#e3f2fd",
+                backgroundColor: "#f3e5f5",
                 borderRadius: "8px",
                 width: "45%",
                 minHeight: "100px",
@@ -515,7 +535,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 style={{
                   fontWeight: "bold",
                   marginBottom: "10px",
-                  color: "#1976d2",
+                  color: "#673ab7",
                 }}
               >
                 Remarks:
@@ -543,8 +563,8 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
                 }}
               >
                 TOTAL:{" "}
-                {row.putAwayDetailsVO?.reduce(
-                  (sum, item) => sum + (item.putAwayQty || 0),
+                {row.pickRequestDetailsVO?.reduce(
+                  (sum, item) => sum + (item.pickQty || 0),
                   0
                 )}
               </div>
@@ -578,7 +598,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
             >
               <div
                 style={{
-                  borderBottom: "1px solid #1976d2",
+                  borderBottom: "1px solid #673ab7",
                   paddingBottom: "25px",
                   marginBottom: "5px",
                   width: "80%",
@@ -598,7 +618,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
             >
               <div
                 style={{
-                  borderBottom: "1px solid #1976d2",
+                  borderBottom: "1px solid #673ab7",
                   paddingBottom: "25px",
                   marginBottom: "5px",
                   width: "80%",
@@ -618,7 +638,7 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
             >
               <div
                 style={{
-                  borderBottom: "1px solid #1976d2",
+                  borderBottom: "1px solid #673ab7",
                   paddingBottom: "25px",
                   marginBottom: "5px",
                   width: "80%",
@@ -639,13 +659,13 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
               textAlign: "center",
               fontSize: "11px",
               color: "#777",
-              borderTop: "2px solid #1976d2",
+              borderTop: "2px solid #673ab7",
             }}
           >
             <div>Uniworld Logistics - Warehouse Management System</div>
             <div>
               {localStorage.getItem("branch")} •{" "}
-              {localStorage.getItem("address") || "Warehouse Facility"}
+              {localStorage.getItem("address")}
             </div>
           </div>
         </div>
@@ -679,4 +699,4 @@ const GeneratePdfTemp = ({ row, callBackFunction }) => {
   );
 };
 
-export default GeneratePdfTemp;
+export default GeneratePdfTempPick;

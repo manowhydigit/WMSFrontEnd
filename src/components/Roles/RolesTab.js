@@ -16,7 +16,7 @@ const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8091";
 
 const RolesTab = ({ rolesData, handleRolesChange }) => {
   const [resData, setResData] = useState([]);
-  const [orgId] = useState(localStorage.getItem("orgId"));
+  const [orgId, setOrgId] = useState(localStorage.getItem("orgId"));
 
   useEffect(() => {
     getResponsibility();
@@ -25,13 +25,13 @@ const RolesTab = ({ rolesData, handleRolesChange }) => {
   const getResponsibility = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/auth/allResponsibilityByOrgId?orgId=${orgId})`
+        `${API_URL}/api/auth/allResponsibilityByOrgId?orgId=${orgId}`
       );
 
       if (response.status === 200) {
         // Extract only the responsibility values and set them in resData
         const responsibilities =
-          response.data.paramObjectsMap.resposResponsibilityVO.map(
+          response.data.paramObjectsMap.responsibilityVO.map(
             (screen) => screen.responsibility
           );
         setResData(responsibilities); // Setting responsibility values in the state

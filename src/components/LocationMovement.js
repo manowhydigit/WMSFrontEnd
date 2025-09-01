@@ -10,6 +10,8 @@ import {
   TableOutlined,
   CloudUploadOutlined,
   DownloadOutlined,
+  CloseOutlined,
+  RightCircleOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -69,7 +71,7 @@ export const LocationMovement = () => {
   const [client, setClient] = useState(localStorage.getItem("client"));
   const [customer, setCustomer] = useState(localStorage.getItem("customer"));
   const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
-  const [finYear, setFinYear] = useState("2024");
+  const [finYear, setFinYear] = useState(localStorage.getItem("finYear"));
   const [form] = Form.useForm();
   const [viewMode, setViewMode] = useState("form");
   const [currentPage, setCurrentPage] = useState(1);
@@ -124,7 +126,7 @@ export const LocationMovement = () => {
   const getDocId = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/locationMovement/getLocationMovementDocId?orgId=${orgId}&branchCode=${branchCode}&client=${client}&branch=${branch}&finYear=${finYear}`
+        `${API_URL}/api/locationMovement/getLocationMovementDocId?orgId=${orgId}&branchCode=${branchCode}&client=${client}&branch=${branch}&finYear=${finYear}`
       );
       if (response.data.status === true) {
         setFormData((prev) => ({
@@ -140,7 +142,7 @@ export const LocationMovement = () => {
   const getAllLocationMovements = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/locationMovement/getAllLocationMovementByOrgId?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&customer=${customer}&warehouse=${warehouse}&finYear=${finYear}`
+        `${API_URL}/api/locationMovement/getAllLocationMovementByOrgId?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&customer=${customer}&warehouse=${warehouse}&finYear=${finYear}`
       );
       if (response.data.status === true) {
         setLocationMovementList(
@@ -155,7 +157,7 @@ export const LocationMovement = () => {
   const getAllFromBin = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/locationMovement/getBinFromStockForLocationMovement?&orgId=${orgId}&branch=${branch}&branchCode=${branchCode}&client=${client}`
+        `${API_URL}/api/locationMovement/getBinFromStockForLocationMovement?&orgId=${orgId}&branch=${branch}&branchCode=${branchCode}&client=${client}`
       );
       if (response.data.status === true) {
         setFromBinList(response.data.paramObjectsMap.locationMovementDetailsVO);
@@ -168,7 +170,7 @@ export const LocationMovement = () => {
   const getToBinDetails = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/locationMovement/getToBinFromLocationStatusForLocationMovement?branch=${branch}&branchCode=${branchCode}&client=${client}&orgId=${orgId}&warehouse=${warehouse}`
+        `${API_URL}/api/locationMovement/getToBinFromLocationStatusForLocationMovement?branch=${branch}&branchCode=${branchCode}&client=${client}&orgId=${orgId}&warehouse=${warehouse}`
       );
       if (response.data.status === true) {
         setToBinList(response.data.paramObjectsMap.locationMovementDetailsVO);
@@ -225,9 +227,11 @@ export const LocationMovement = () => {
 
   const handleSave = async () => {
     setIsSubmitting(true);
+    const formattedDocDate = formData.docDate.format("YYYY-MM-DD");
     try {
       const saveData = {
         ...formData,
+        docDate: formattedDocDate,
         locationMovementDetailsDTO: locationMovementItems.map((item) => ({
           ...(editId && { id: item.id }),
           fromBin: item.fromBin,
@@ -253,7 +257,7 @@ export const LocationMovement = () => {
       };
 
       const response = await axios.put(
-        `${API_URL}/locationMovement/createUpdateLocationMovement`,
+        `${API_URL}/api/locationMovement/createUpdateLocationMovement`,
         saveData
       );
 
@@ -277,16 +281,20 @@ export const LocationMovement = () => {
       setIsSubmitting(false);
     }
   };
-
   const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllLocationMovements();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   const handleEditLocationMovement = (record) => {
     setEditId(record.id);
     setFormData({
       docId: record.docId,
-      docDate: record.docDate,
+      docDate: dayjs(record.docDate), // Convert string to Day.js object
       entryNo: record.entryNo,
       movedQty: record.movedQty,
     });
@@ -294,7 +302,7 @@ export const LocationMovement = () => {
     setLocationMovementItems(
       record.locationMovementDetailsVO?.map((item) => ({
         id: item.id,
-        fromBin: item.fromBin,
+        fromBin: item.fromBin || item.bin,
         partNo: item.partNo,
         partDesc: item.partDesc,
         sku: item.sku,
@@ -314,7 +322,7 @@ export const LocationMovement = () => {
   const getAllFillGrid = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/locationMovement/getAllForLocationMovementDetailsFillGrid?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&entryNo=${formData.entryNo}`
+        `${API_URL}/api/locationMovement/getAllForLocationMovementDetailsFillGrid?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&entryNo=${formData.entryNo}`
       );
 
       if (response.data.status === true) {
@@ -329,12 +337,40 @@ export const LocationMovement = () => {
   };
 
   const handleSaveSelectedRows = () => {
-    const selectedData = selectedRows.map((index) => fillGridData[index]);
+    const selectedData = selectedRows.map((index) => {
+      const item = fillGridData[index];
+      return {
+        id: Date.now() + index, // Generate unique ID
+        fromBin: item.bin, // Map "bin" to "fromBin"
+        partNo: item.partNo,
+        partDesc: item.partDesc,
+        sku: item.sku,
+        grnNo: item.grnNo,
+        batchNo: item.batchNo,
+        avlQty: item.avlQty,
+        toBin: "", // These will be filled by user
+        toBinType: "",
+        toQty: "",
+        remainQty: "",
+        rowPartNoList: [],
+        rowGrnNoList: [],
+        rowBatchNoList: [],
+      };
+    });
+
     setLocationMovementItems([...locationMovementItems, ...selectedData]);
     setSelectedRows([]);
     setSelectAll(false);
     setModalOpen(false);
   };
+
+  // const handleSaveSelectedRows = () => {
+  //   const selectedData = selectedRows.map((index) => fillGridData[index]);
+  //   setLocationMovementItems([...locationMovementItems, ...selectedData]);
+  //   setSelectedRows([]);
+  //   setSelectAll(false);
+  //   setModalOpen(false);
+  // };
 
   const handleSelectAll = () => {
     if (selectAll) {
@@ -379,7 +415,7 @@ export const LocationMovement = () => {
   const getPartNoList = async (id, fromBin) => {
     try {
       const response = await axios.get(
-        `${API_URL}/locationMovement/getPartNoAndPartDescFromStockForLocationMovement?&orgId=${orgId}&branch=${branch}&branchCode=${branchCode}&client=${client}&bin=${fromBin}`
+        `${API_URL}/api/locationMovement/getPartNoAndPartDescFromStockForLocationMovement?&orgId=${orgId}&branch=${branch}&branchCode=${branchCode}&client=${client}&bin=${fromBin}`
       );
       if (response.data.status === true) {
         setLocationMovementItems((prev) =>
@@ -438,7 +474,7 @@ export const LocationMovement = () => {
   const getGrnNoList = async (id, fromBin, partNo) => {
     try {
       const response = await axios.get(
-        `${API_URL}/locationMovement/getGrnNoDetailsForLocationMovement?bin=${fromBin}&branch=${branch}&branchCode=${branchCode}&client=${client}&orgId=${orgId}&partNo=${partNo}`
+        `${API_URL}/api/locationMovement/getGrnNoDetailsForLocationMovement?bin=${fromBin}&branch=${branch}&branchCode=${branchCode}&client=${client}&orgId=${orgId}&partNo=${partNo}`
       );
       if (response.data.status === true) {
         setLocationMovementItems((prev) =>
@@ -490,7 +526,7 @@ export const LocationMovement = () => {
   const getBatchNoList = async (id, fromBin, partNo, grnNo) => {
     try {
       const response = await axios.get(
-        `${API_URL}/locationMovement/getBatchNoDetailsForLocationMovement?bin=${fromBin}&branch=${branch}&branchCode=${branchCode}&client=${client}&grnNo=${grnNo}&orgId=${orgId}&partNo=${partNo}`
+        `${API_URL}/api/locationMovement/getBatchNoDetailsForLocationMovement?bin=${fromBin}&branch=${branch}&branchCode=${branchCode}&client=${client}&grnNo=${grnNo}&orgId=${orgId}&partNo=${partNo}`
       );
       if (response.data.status === true) {
         setLocationMovementItems((prev) =>
@@ -537,10 +573,70 @@ export const LocationMovement = () => {
     }
   };
 
+  const GlassModal = ({
+    open,
+    onCancel,
+    title,
+    children,
+    width = 1200,
+    footer = null,
+  }) => {
+    return (
+      <Modal
+        open={open}
+        onCancel={onCancel}
+        footer={footer}
+        width={width}
+        closeIcon={<CloseOutlined style={{ color: "white" }} />}
+        maskClosable={false}
+        keyboard={false}
+        styles={{
+          body: {
+            padding: 0,
+            background: "rgba(255, 255, 255, 0.1)",
+            backdropFilter: "blur(12px)",
+            borderRadius: "16px",
+            boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            color: "white",
+          },
+          header: {
+            background: "rgba(255, 255, 255, 0.05)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
+            borderRadius: "16px 16px 0 0",
+            color: "white",
+            padding: "16px 24px",
+          },
+          content: {
+            backdropFilter: "blur(5px)",
+            background: "transparent",
+            color: "white",
+          },
+          mask: {
+            backdropFilter: "blur(5px)",
+            background: "rgba(0, 0, 0, 0.5)",
+          },
+        }}
+        title={title}
+        modalRender={(modal) => <PaperComponent>{modal}</PaperComponent>}
+      >
+        <div
+          style={{
+            padding: "24px",
+            background: "transparent",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      </Modal>
+    );
+  };
+
   const getAvlQty = async (id, batchNo, fromBin, partNo, grnNo) => {
     try {
       const response = await axios.get(
-        `${API_URL}/locationMovement/getFromQtyForLocationMovement?batchNo=${batchNo}&bin=${fromBin}&branch=${branch}&branchCode=${branchCode}&client=${client}&grnNo=${grnNo}&orgId=${orgId}&partNo=${partNo}`
+        `${API_URL}/api/locationMovement/getFromQtyForLocationMovement?batchNo=${batchNo}&bin=${fromBin}&branch=${branch}&branchCode=${branchCode}&client=${client}&grnNo=${grnNo}&orgId=${orgId}&partNo=${partNo}`
       );
       if (response.data.status === true) {
         setLocationMovementItems((prev) =>
@@ -625,6 +721,10 @@ export const LocationMovement = () => {
   const handleUploadSubmit = () => {
     console.log("Submit clicked");
     setUploadOpen(false);
+  };
+
+  const handleOpenModal = () => {
+    getAllFillGrid();
   };
 
   return (
@@ -753,6 +853,7 @@ export const LocationMovement = () => {
                     color: "white",
                     border: "none",
                   }}
+                  disabled={editId > 0}
                 >
                   Save
                 </Button>
@@ -801,9 +902,15 @@ export const LocationMovement = () => {
                               }
                             >
                               <DatePicker
+                                className="white-datepicker"
                                 style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.docDate)}
+                                value={
+                                  formData.docDate
+                                    ? dayjs(formData.docDate)
+                                    : null
+                                } // Ensure it's a Day.js object
                                 disabled
+                                format="DD-MM-YYYY"
                               />
                             </Form.Item>
                           </Col>
@@ -879,7 +986,7 @@ export const LocationMovement = () => {
                         </Button>
                         <Button
                           icon={<TableOutlined />}
-                          onClick={getAllFillGrid}
+                          onClick={handleOpenModal}
                           style={{
                             marginRight: "8px",
                             background: "rgba(108, 99, 255, 0.3)",
@@ -1334,7 +1441,7 @@ export const LocationMovement = () => {
                     border: "none",
                   }}
                 >
-                  {viewMode === "form" ? "List View" : "New Cycle Count"}
+                  {viewMode === "form" ? "List View" : "New Location Movement"}
                 </Button>
               </div>
               <div
@@ -1378,6 +1485,15 @@ export const LocationMovement = () => {
                         backgroundColor: "rgba(255, 255, 255, 0.1)",
                       }}
                     >
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Action
+                      </th>
                       <th
                         style={{
                           padding: "12px",
@@ -1441,15 +1557,6 @@ export const LocationMovement = () => {
                       >
                         Created Date
                       </th>
-                      <th
-                        style={{
-                          padding: "12px",
-                          textAlign: "left",
-                          color: "white",
-                        }}
-                      >
-                        Action
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1466,6 +1573,21 @@ export const LocationMovement = () => {
                             color: "white",
                           }}
                         >
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            <Button
+                              type="link"
+                              icon={<RightCircleOutlined />}
+                              onClick={() => handleEditLocationMovement(record)}
+                              style={{ color: "white" }}
+                            ></Button>
+                          </td>
                           <td style={{ padding: "12px" }}>
                             {(currentPage - 1) * pageSize + index + 1}
                           </td>
@@ -1480,15 +1602,6 @@ export const LocationMovement = () => {
                           </td>
                           <td style={{ padding: "12px" }}>
                             {dayjs(record.createdDate).format("DD-MM-YYYY")}
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            <Button
-                              type="link"
-                              onClick={() => handleEditLocationMovement(record)}
-                              style={{ color: "#1890ff" }}
-                            >
-                              Edit
-                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -1519,7 +1632,7 @@ export const LocationMovement = () => {
         </div>
 
         {/* Fill Grid Modal */}
-        <Modal
+        <GlassModal
           title={
             <div
               style={{
@@ -1529,11 +1642,10 @@ export const LocationMovement = () => {
               }}
               id="draggable-dialog-title"
             >
-              Fill Grid
+              Fill Grid Details
             </div>
           }
           open={modalOpen}
-          onOk={handleSaveSelectedRows}
           onCancel={() => {
             setModalOpen(false);
             setSelectedRows([]);
@@ -1542,7 +1654,7 @@ export const LocationMovement = () => {
           modalRender={(modal) => <PaperComponent>{modal}</PaperComponent>}
           width={1200}
           bodyStyle={{
-            padding: "10px",
+            padding: "20px",
             background: "rgba(255, 255, 255, 0.1)",
             backdropFilter: "blur(10px)",
             borderRadius: "8px",
@@ -1550,7 +1662,7 @@ export const LocationMovement = () => {
           }}
           footer={[
             <Button
-              key="back"
+              key="cancel"
               onClick={() => {
                 setModalOpen(false);
                 setSelectedRows([]);
@@ -1559,236 +1671,298 @@ export const LocationMovement = () => {
               style={{
                 background: "transparent",
                 color: "white",
-                border: "none",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
               }}
             >
               Cancel
             </Button>,
             <Button
-              key="submit"
+              key="ok"
               type="primary"
               onClick={handleSaveSelectedRows}
+              disabled={selectedRows.length === 0}
               style={{
                 background: "rgba(108, 99, 255, 0.3)",
                 color: "white",
                 border: "none",
               }}
             >
-              Save Selected
+              OK ({selectedRows.length} selected)
             </Button>,
           ]}
         >
+          <Row gutter={16}>
+            <Col span={8}>
+              <Text
+                style={{ color: "white", fontSize: "16px", fontWeight: "bold" }}
+              >
+                Fill Grid Details
+              </Text>
+              <Form.Item
+                label={<span style={{ color: "#fff" }}>Selection</span>}
+              >
+                <Checkbox
+                  indeterminate={
+                    selectedRows.length > 0 &&
+                    selectedRows.length < fillGridData.length
+                  }
+                  checked={
+                    fillGridData.length > 0 &&
+                    selectedRows.length === fillGridData.length
+                  }
+                  onChange={handleSelectAll}
+                  style={{ color: "white" }}
+                >
+                  <span style={{ color: "#fff" }}>Select All</span> (
+                  <Text style={{ color: "white" }}>
+                    {selectedRows.length} selected
+                  </Text>
+                  )
+                </Checkbox>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                label={<span style={{ color: "#fff" }}>Part No Search</span>}
+              >
+                <Input
+                  placeholder="Search by part number..."
+                  prefix={<SearchOutlined />}
+                  allowClear
+                  style={{
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "white",
+                  }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                label={<span style={{ color: "#fff" }}>From Bin Search</span>}
+              >
+                <Input
+                  placeholder="Search by from bin..."
+                  prefix={<SearchOutlined />}
+                  allowClear
+                  style={{
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "white",
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Data Table */}
           <div
             style={{
-              maxHeight: "500px",
-              overflowY: "auto",
-              marginTop: "10px",
+              backdropFilter: "blur(10px)",
+              background: "rgba(255, 255, 255, 0.1)",
+              borderRadius: "20px",
+              padding: "20px",
+              boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.2)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              marginBottom: "20px",
             }}
           >
-            <table
+            <div
+              className="table-container"
               style={{
+                position: "relative",
                 width: "100%",
-                borderCollapse: "collapse",
+                overflowX: "auto",
+                fontSize: "11px",
                 backgroundColor: "transparent",
+                maxHeight: "500px",
+                overflowY: "auto",
+                marginTop: "10px",
               }}
             >
-              <colgroup>
-                <col style={{ width: "50px" }} /> {/* Select */}
-                <col style={{ width: "50px" }} /> {/* S.No */}
-                <col style={{ width: "120px" }} /> {/* From Bin */}
-                <col style={{ width: "120px" }} /> {/* Part No */}
-                <col style={{ width: "200px" }} /> {/* Part Desc */}
-                <col style={{ width: "120px" }} /> {/* SKU */}
-                <col style={{ width: "120px" }} /> {/* GRN No */}
-                <col style={{ width: "120px" }} /> {/* Batch No */}
-                <col style={{ width: "100px" }} /> {/* Avl Qty */}
-                <col style={{ width: "120px" }} /> {/* To Bin */}
-                <col style={{ width: "100px" }} /> {/* To Bin Type */}
-                <col style={{ width: "100px" }} /> {/* To Qty */}
-                <col style={{ width: "100px" }} /> {/* Remain Qty */}
-              </colgroup>
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: "1px dashed #000",
-                    position: "sticky",
-                    top: 0,
-                    backgroundColor: "transparent",
-                  }}
-                >
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "center",
-                      color: "white",
-                    }}
-                  >
-                    <Checkbox
-                      checked={selectAll}
-                      onChange={handleSelectAll}
-                      style={{ color: "white" }}
-                    />
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "center",
-                      color: "white",
-                    }}
-                  >
-                    S.No
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    From Bin
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    Part No
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    Part Description
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    SKU
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    GRN No
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    Batch No
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    Avl Qty
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    To Bin
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    To Bin Type
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    To Qty
-                  </th>
-                  <th
-                    style={{
-                      padding: "8px",
-                      textAlign: "left",
-                      color: "white",
-                    }}
-                  >
-                    Remain Qty
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {fillGridData.map((item, index) => (
+              <table
+                style={{
+                  width: "max-content",
+                  minWidth: "100%",
+                  borderCollapse: "collapse",
+                  backgroundColor: "transparent",
+                }}
+              >
+                <colgroup>
+                  <col style={{ width: "50px" }} /> {/* Select */}
+                  <col style={{ width: "50px" }} /> {/* S.No */}
+                  <col style={{ width: "120px" }} /> {/* From Bin */}
+                  <col style={{ width: "120px" }} /> {/* Part No */}
+                  <col style={{ width: "200px" }} /> {/* Part Desc */}
+                  <col style={{ width: "120px" }} /> {/* GRN No */}
+                  <col style={{ width: "120px" }} /> {/* Batch No */}
+                  <col style={{ width: "120px" }} /> {/* To Bin */}
+                  <col style={{ width: "100px" }} /> {/* Avl Qty */}
+                  <col style={{ width: "100px" }} /> {/* To Qty */}
+                </colgroup>
+                <thead>
                   <tr
-                    key={index}
                     style={{
-                      borderBottom: "1px dashed white",
-                      color: "white",
+                      borderBottom: "1px dashed #000",
+                      position: "sticky",
+                      top: 0,
+                      backgroundColor: "transparent",
                     }}
                   >
-                    <td style={{ padding: "8px", textAlign: "center" }}>
-                      <Checkbox
-                        checked={selectedRows.includes(index)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedRows([...selectedRows, index]);
-                          } else {
-                            setSelectedRows(
-                              selectedRows.filter((i) => i !== index)
-                            );
-                          }
-                        }}
-                        style={{ color: "white" }}
-                      />
-                    </td>
-                    <td
+                    <th
                       style={{
                         padding: "8px",
                         textAlign: "center",
                         color: "white",
+                        backgroundColor: "transparent",
                       }}
                     >
-                      {index + 1}
-                    </td>
-                    <td style={{ padding: "8px" }}>{item.fromBin}</td>
-                    <td style={{ padding: "8px" }}>{item.partNo}</td>
-                    <td style={{ padding: "8px" }}>{item.partDesc}</td>
-                    <td style={{ padding: "8px" }}>{item.sku}</td>
-                    <td style={{ padding: "8px" }}>{item.grnNo}</td>
-                    <td style={{ padding: "8px" }}>{item.batchNo}</td>
-                    <td style={{ padding: "8px" }}>{item.avlQty}</td>
-                    <td style={{ padding: "8px" }}>{item.toBin}</td>
-                    <td style={{ padding: "8px" }}>{item.toBinType}</td>
-                    <td style={{ padding: "8px" }}>{item.toQty}</td>
-                    <td style={{ padding: "8px" }}>{item.remainQty}</td>
+                      Select
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "center",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      S.No
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      From Bin
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Part No
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Part Description
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      GRN No
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Batch No
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      To Bin
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Avl Qty
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      To Qty
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {fillGridData.map((item, index) => (
+                    <tr
+                      key={index}
+                      style={{
+                        borderBottom: "1px dashed rgba(255, 255, 255, 0.2)",
+                        color: "white",
+                      }}
+                    >
+                      <td style={{ padding: "8px", textAlign: "center" }}>
+                        <Checkbox
+                          checked={selectedRows.includes(index)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedRows([...selectedRows, index]);
+                            } else {
+                              setSelectedRows(
+                                selectedRows.filter((i) => i !== index)
+                              );
+                            }
+                          }}
+                          style={{ color: "white" }}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px",
+                          textAlign: "center",
+                          color: "white",
+                        }}
+                      >
+                        {index + 1}
+                      </td>
+                      <td style={{ padding: "8px" }}>{item.fromBin}</td>
+                      <td style={{ padding: "8px" }}>{item.partNo}</td>
+                      <td style={{ padding: "8px" }}>{item.partDesc}</td>
+                      <td style={{ padding: "8px" }}>{item.grnNo}</td>
+                      <td style={{ padding: "8px" }}>{item.batchNo}</td>
+                      <td style={{ padding: "8px" }}>{item.toBin}</td>
+                      <td style={{ padding: "8px", textAlign: "right" }}>
+                        {item.avlQty}
+                      </td>
+                      <td style={{ padding: "8px", textAlign: "right" }}>
+                        {item.toQty}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </Modal>
+        </GlassModal>
 
         {/* Upload Modal */}
         <Modal
@@ -1949,6 +2123,7 @@ export const LocationMovement = () => {
           draggable
           pauseOnHover
           theme={theme === "dark" ? "dark" : "light"}
+          style={{ zIndex: 9999 }}
         />
       </div>
     </ConfigProvider>

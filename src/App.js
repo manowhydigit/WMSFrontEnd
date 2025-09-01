@@ -69,6 +69,7 @@ import StockMovements from "./components/StockMovements";
 import Kitting from "./components/Kitting";
 import DeKitting from "./components/DeKitting";
 import GatePassIn from "./components/GatePassIn";
+import WMSPickRequest from "./components/WMSPickRequest";
 
 function App() {
   const [isSelected, setIsSelected] = useState(false);
@@ -137,6 +138,7 @@ function App() {
                 element={<PendingPickRequest />}
               />
 
+              <Route path="WMSPickRequest" element={<WMSPickRequest />} />
               <Route path="ReversePick" element={<ReversePick />} />
               <Route path="SalesReturn" element={<SalesReturn />} />
               <Route path="CodeConversion" element={<CodeConversion />} />

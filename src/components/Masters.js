@@ -194,7 +194,7 @@ const Masters = () => {
         />
       </div>
 
-      <Button
+      {/* <Button
         className="button1"
         type="text"
         icon={theme === "light" ? <MoonOutlined /> : <SunOutlined />}
@@ -203,7 +203,7 @@ const Masters = () => {
         style={{ marginLeft: "550px", marginTop: "-90px" }}
       >
         {theme === "light" ? "Dark Mode" : "Light Mode"}
-      </Button>
+      </Button> */}
 
       {/* Grouped Buttons */}
       <div style={{ marginTop: "20px" }}>

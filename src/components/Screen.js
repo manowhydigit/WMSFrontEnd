@@ -126,10 +126,13 @@ export const Screen = () => {
   const screenHeaders = ["id", "screenName", "screenCode", "active"]; // Example header
   const resHeaders = ["id", "responsibility", "screenName", "active"]; // Example header
   const roleHeaders = ["id", "role", "responsibility", "active"]; // Example header
+  const [orgId, setOrgId] = useState(localStorage.getItem("orgId"));
 
   const getScreenNames = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/auth/getAllScreenNames`);
+      const response = await axios.get(
+        `${API_URL}/api/commonmaster/allScreenNames`
+      );
 
       if (response.status === 200) {
         // Extract only the screenName values and set them in screenData
@@ -151,7 +154,7 @@ export const Screen = () => {
     console.log("Test", row);
     try {
       const response = await axios.get(
-        `${API_URL}/api/auth/screenNamesById?id=${row.id}`
+        `${API_URL}/api/commonmaster/screenNamesById?id=${row.id}`
       );
 
       if (response.status === 200) {
@@ -195,7 +198,7 @@ export const Screen = () => {
 
     try {
       const response = await axios.put(
-        `${API_URL}/api/auth/createUpdateScreenNames`,
+        `${API_URL}/api/commonmaster/createUpdateScreenNames`,
         payload
       );
 
@@ -228,7 +231,9 @@ export const Screen = () => {
 
   const getResponsibility = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/auth/allResponsibility`);
+      const response = await axios.get(
+        `${API_URL}/api/auth/allResponsibilityByOrgId?orgId=${orgId}`
+      );
 
       if (response.status === 200) {
         const responsibilityData =
@@ -311,7 +316,9 @@ export const Screen = () => {
 
   const getRole = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/auth/allRoles`);
+      const response = await axios.get(
+        `${API_URL}/api/auth/allRolesByOrgId?orgId=${orgId}`
+      );
 
       if (response.status === 200) {
         // Extract only the screenName values and set them in screenData

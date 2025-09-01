@@ -69,6 +69,10 @@ const Item = () => {
   const [loginWarehouse, setLoginWarehouse] = useState(
     localStorage.getItem("warehouse")
   );
+
+  const [userId, setUserId] = useState(localStorage.getItem("usersId"));
+  const [userName, setUserName] = useState(localStorage.getItem("userName"));
+
   const [unitList, setUnitList] = useState([]);
   const [groupList, setGroupList] = useState([]);
   const [viewMode, setViewMode] = useState("form");
@@ -138,12 +142,11 @@ const Item = () => {
       const response = await axios.get(
         `${API_URL}/api/warehousemastercontroller/material?cbranch=${loginBranchCode}&client=${loginClient}&orgid=${orgId}`
       );
+
       if (response.data.status === true) {
-        // Sort items by ID in descending order (highest ID first)
         const sortedItems = response.data.paramObjectsMap.materialVO.sort(
           (a, b) => b.id - a.id
         );
-
         setItemList(sortedItems);
         setFilteredItemList(sortedItems);
       }
@@ -182,43 +185,66 @@ const Item = () => {
   };
 
   // Handle edit item
+  // Handle edit item
+  // Handle edit item
   const handleEditItem = (record) => {
     setEditId(record.id);
     setViewMode("form");
 
+    // Map the API response fields to form fields
     setFormData({
-      itemType: record.itemType,
-      partNo: record.partno,
-      partDesc: record.partDesc,
-      custPartNo: record.custPartno,
-      groupName: record.groupName,
-      styleCode: record.styleCode,
-      baseSku: record.baseSku,
-      purchaseUnit: record.purchaseUnit,
-      storageUnit: record.storageUnit,
-      fsn: record.fsn,
-      saleUnit: record.saleUnit,
-      type: record.type,
-      sku: record.sku,
-      skuQty: record.skuQty,
-      ssku: record.ssku,
-      sskuQty: record.sskuQty,
-      weightSkuUom: record.weightofSkuAndUom,
-      hsnCode: record.hsnCode,
-      controlBranch: record.cbranch,
-      criticalStockLevel: record.criticalStockLevel,
-      status: record.status,
-      parentChildKey: record.parentChildKey,
-      barcode: record.barcode,
-      skuCategory: record.skuCategory,
-      movingType: record.movingType,
-      active: record.active === "Active",
+      itemType: record.itemType || "",
+      partNo: record.partno || "", // API uses partno
+      partDesc: record.partDesc || "",
+      custPartNo: record.custPartno || "", // API uses custPartno
+      groupName: record.groupName || "",
+      styleCode: record.styleCode || "",
+      baseSku: record.baseSku || "",
+      purchaseUnit: record.purchaseUnit || "",
+      storageUnit: record.storageUnit || "",
+      fsn: record.fsn || "",
+      saleUnit: record.saleUnit || "",
+      type: record.type || "",
+      sku: record.sku || "",
+      skuQty: record.skuQty || "",
+      ssku: record.ssku || "",
+      sskuQty: record.sskuQty || "",
+      weightSkuUom: record.weightofSkuAndUom || "", // API uses weightofSkuAndUom
+      hsnCode: record.hsnCode || "",
+      controlBranch: record.cbranch || loginBranchCode, // API uses cbranch
+      criticalStockLevel: record.criticalStockLevel || "",
+      status: record.status || "R",
+      parentChildKey: record.parentChildKey || "CHILD",
+      barcode: record.barcode || "",
+      skuCategory: record.skuCategory || "",
+      movingType: record.movingType || "",
+      active: record.active === "Active" || record.active === true,
     });
-  };
 
+    // If the record has itemVo data, populate the itemTableData
+    if (record.itemVo && record.itemVo.length > 0) {
+      setItemTableData(
+        record.itemVo.map((item, index) => ({
+          id: index + 1,
+          mrp: item.mrp,
+          fDate: item.fromdate
+            ? dayjs(item.fromdate, "DD-MM-YYYY").toDate()
+            : null,
+          tDate: item.todate ? dayjs(item.todate, "DD-MM-YYYY").toDate() : null,
+        }))
+      );
+    } else {
+      setItemTableData([{ id: 1, mrp: "", fDate: null, tDate: null }]);
+    }
+  };
   // Handle form input changes
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, checked, type } = e.target;
+
+    if (type === "checkbox") {
+      setFormData({ ...formData, [name]: checked });
+      return;
+    }
 
     // Validation
     let errorMessage = "";
@@ -244,6 +270,7 @@ const Item = () => {
   };
 
   // Handle save item
+  // Handle save item
   const handleSaveItem = async () => {
     // Validate form
     const errors = {};
@@ -258,26 +285,52 @@ const Item = () => {
 
     setIsSubmitting(true);
 
-    const itemData = {
-      ...(editId && { id: editId }),
-      ...formData,
-      createdBy: loginUserName,
-      branch: loginBranch,
-      branchCode: loginBranchCode,
-      warehouse: loginWarehouse,
-      customer: loginCustomer,
-      client: loginClient,
-      orgId: orgId,
-      itemVo: itemTableData.map((row) => ({
-        mrp: row.mrp,
-        fromdate: dayjs(row.fDate).format("DD-MM-YYYY"),
-        todate: dayjs(row.tDate).format("DD-MM-YYYY"),
-      })),
-    };
-
     try {
-      const method = editId ? "put" : "post";
-      const response = await axios[method](
+      const itemData = {
+        ...(editId && { id: editId }),
+        // Map form field names to API expected field names
+        itemType: formData.itemType,
+        partno: formData.partNo, // Changed from partNo to partno
+        partDesc: formData.partDesc,
+        custPartno: formData.custPartNo, // Changed from custPartNo to custPartno
+        groupName: formData.groupName,
+        styleCode: formData.styleCode,
+        baseSku: formData.baseSku,
+        purchaseUnit: formData.purchaseUnit,
+        storageUnit: formData.storageUnit,
+        fsn: formData.fsn,
+        saleUnit: formData.saleUnit,
+        type: formData.type,
+        sku: formData.sku,
+        skuQty: formData.skuQty,
+        ssku: formData.ssku,
+        sskuQty: formData.sskuQty,
+        weightofSkuAndUom: formData.weightSkuUom, // Changed from weightSkuUom to weightofSkuAndUom
+        hsnCode: formData.hsnCode,
+        cbranch: formData.controlBranch, // Changed from controlBranch to cbranch
+        criticalStockLevel: formData.criticalStockLevel,
+        status: formData.status,
+        parentChildKey: formData.parentChildKey,
+        barcode: formData.barcode,
+        skuCategory: formData.skuCategory,
+        movingType: formData.movingType,
+        active: formData.active,
+
+        createdBy: loginUserName,
+        branch: loginBranch,
+        branchCode: loginBranchCode,
+        warehouse: loginWarehouse,
+        customer: loginCustomer,
+        client: loginClient,
+        orgId: orgId,
+        itemVo: itemTableData.map((row) => ({
+          mrp: row.mrp,
+          fromdate: row.fDate ? dayjs(row.fDate).format("DD-MM-YYYY") : "",
+          todate: row.tDate ? dayjs(row.tDate).format("DD-MM-YYYY") : "",
+        })),
+      };
+
+      const response = await axios.put(
         `${API_URL}/api/warehousemastercontroller/createUpdateMaterial`,
         itemData
       );
@@ -291,20 +344,40 @@ const Item = () => {
         handleClear();
         getAllItems();
       } else {
-        showToast(
-          "error",
-          "Error",
-          response.data.message || "Failed to save item"
-        );
+        // Handle specific error cases
+        if (
+          response.data.paramObjectsMap?.errorMessage?.includes("Already exist")
+        ) {
+          showToast(
+            "error",
+            "Duplicate Entry",
+            response.data.paramObjectsMap.errorMessage
+          );
+        } else {
+          showToast(
+            "error",
+            "Error",
+            response.data.message || "Failed to save item"
+          );
+        }
       }
     } catch (error) {
       console.error("Error saving item:", error);
-      showToast("error", "Error", "Failed to save item. Please try again.");
+
+      // Handle specific error cases from the API response
+      if (error.response?.data?.paramObjectsMap?.errorMessage) {
+        showToast(
+          "error",
+          "Error",
+          error.response.data.paramObjectsMap.errorMessage
+        );
+      } else {
+        showToast("error", "Error", "Failed to save item. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
-
   // Handle clear form
   const handleClear = () => {
     setFormData({
@@ -326,7 +399,7 @@ const Item = () => {
       sskuQty: "",
       weightSkuUom: "",
       hsnCode: "",
-      controlBranch: localStorage.getItem("branchcode"),
+      controlBranch: loginBranchCode,
       criticalStockLevel: "",
       status: "R",
       parentChildKey: "CHILD",
@@ -369,6 +442,9 @@ const Item = () => {
       getAllItems();
     }
     setViewMode(viewMode === "form" ? "list" : "form");
+    if (viewMode === "list") {
+      handleClear();
+    }
   };
 
   // Bulk upload handlers
@@ -380,42 +456,37 @@ const Item = () => {
     handleBulkUploadClose();
   };
 
+  // useEffect(() => {
+  //   setFilteredItemList(itemList);
+  // }, [itemList]);
+
+  // Filter buyers based on search term
+  // Replace your current useEffect with this:
   useEffect(() => {
-    setFilteredItemList(itemList);
-  }, [itemList]);
-
-  // Handle search
-  const handleSearch = (term) => {
-    setSearchTerm(term);
-    applyFilters(term, statusFilter);
-  };
-
-  // Handle status filter
-  const handleStatusFilter = (status) => {
-    setStatusFilter(status);
-    applyFilters(searchTerm, status);
-  };
-
-  // Apply all filters
-  const applyFilters = (term, status) => {
-    let filtered = itemList;
-
-    if (term) {
-      const lowerTerm = term.toLowerCase();
-      filtered = filtered.filter(
+    if (itemList) {
+      const filtered = itemList.filter(
         (item) =>
-          item.partno.toLowerCase().includes(lowerTerm) ||
-          item.partDesc.toLowerCase().includes(lowerTerm) ||
-          item.sku.toLowerCase().includes(lowerTerm)
+          (item.partno &&
+            item.partno.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (item.partDesc &&
+            item.partDesc.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (item.sku &&
+            item.sku.toLowerCase().includes(searchTerm.toLowerCase()) &&
+            (statusFilter === null || item.status === statusFilter)) // Add status filter
       );
+      setFilteredItemList(filtered);
+      setCurrentPage(1); // Reset to first page when filters change
     }
+  }, [searchTerm, statusFilter, itemList]);
+  // Apply filters
 
-    if (status) {
-      filtered = filtered.filter((item) => item.status === status);
-    }
-
-    setFilteredItemList(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
+  // Handle search input change
+  const handleSearch = (value) => {
+    setSearchTerm(value);
+  };
+  // Handle status filter change
+  const handleStatusFilter = (value) => {
+    setStatusFilter(value);
   };
 
   const handleExcelDownload = () => {
@@ -425,7 +496,7 @@ const Item = () => {
       "Part Description": item.partDesc,
       SKU: item.sku,
       Status: item.status,
-      Active: item.active,
+      Active: item.active === "Active" ? "Yes" : "No",
     }));
 
     // Create worksheet
@@ -458,7 +529,6 @@ const Item = () => {
     color: "white",
     border: "1px solid rgba(255, 255, 255, 0.3)",
   };
-
   return (
     <ConfigProvider
       theme={{
@@ -1244,218 +1314,6 @@ const Item = () => {
                         </Form>
                       </div>
                     </TabPane>
-
-                    {/* <TabPane
-                      tab="Pricing Details"
-                      key="3"
-                      style={{ color: "#fff" }}
-                    >
-                      <div
-                        style={{
-                          backdropFilter: "blur(10px)",
-                          background: "rgba(255, 255, 255, 0.1)",
-                          borderRadius: "20px",
-                          padding: "20px",
-                          boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.2)",
-                          border: "1px solid rgba(255, 255, 255, 0.2)",
-                          color: "#fff",
-                        }}
-                      >
-                        <div style={{ marginBottom: "16px" }}>
-                          <Button
-                            icon={<PlusOutlined />}
-                            onClick={handleAddRow}
-                            style={{
-                              background: "rgba(108, 99, 255, 0.3)",
-                              color: "#fff",
-                              border: "none",
-                              marginRight: "8px",
-                            }}
-                          >
-                            Add Row
-                          </Button>
-                          <Button
-                            icon={<ClearOutlined />}
-                            onClick={() =>
-                              setItemTableData([
-                                { id: 1, mrp: "", fDate: null, tDate: null },
-                              ])
-                            }
-                            style={{
-                              background: "rgba(108, 99, 255, 0.3)",
-                              color: "#fff",
-                              border: "none",
-                            }}
-                          >
-                            Clear
-                          </Button>
-                        </div>
-
-                        <div style={{ overflowX: "auto" }}>
-                          <table
-                            style={{
-                              width: "100%",
-                              borderCollapse: "collapse",
-                            }}
-                          >
-                            <thead>
-                              <tr
-                                style={{
-                                  backgroundColor: "rgba(255, 255, 255, 0.1)",
-                                }}
-                              >
-                                <th
-                                  style={{
-                                    padding: "12px",
-                                    textAlign: "left",
-                                    color: "white",
-                                  }}
-                                >
-                                  Action
-                                </th>
-                                <th
-                                  style={{
-                                    padding: "12px",
-                                    textAlign: "left",
-                                    color: "white",
-                                  }}
-                                >
-                                  S.No
-                                </th>
-                                <th
-                                  style={{
-                                    padding: "12px",
-                                    textAlign: "left",
-                                    color: "white",
-                                  }}
-                                >
-                                  MRP
-                                </th>
-                                <th
-                                  style={{
-                                    padding: "12px",
-                                    textAlign: "left",
-                                    color: "white",
-                                  }}
-                                >
-                                  From Date
-                                </th>
-                                <th
-                                  style={{
-                                    padding: "12px",
-                                    textAlign: "left",
-                                    color: "white",
-                                  }}
-                                >
-                                  To Date
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {itemTableData.map((row, index) => (
-                                <tr
-                                  key={row.id}
-                                  style={{
-                                    borderBottom:
-                                      "1px solid rgba(255, 255, 255, 0.1)",
-                                  }}
-                                >
-                                  <td style={{ padding: "12px" }}>
-                                    <Button
-                                      icon={<DeleteOutlined />}
-                                      onClick={() => handleDeleteRow(row.id)}
-                                      style={{
-                                        background: "transparent",
-                                        color: "#ff4d4f",
-                                        border: "none",
-                                      }}
-                                    />
-                                  </td>
-                                  <td
-                                    style={{ padding: "12px", color: "white" }}
-                                  >
-                                    {index + 1}
-                                  </td>
-                                  <td style={{ padding: "12px" }}>
-                                    <InputNumber
-                                      value={row.mrp}
-                                      onChange={(value) => {
-                                        setItemTableData(
-                                          itemTableData.map((r) =>
-                                            r.id === row.id
-                                              ? { ...r, mrp: value }
-                                              : r
-                                          )
-                                        );
-                                      }}
-                                      style={{ ...inputStyle, width: "100%" }}
-                                    />
-                                  </td>
-                                  <td style={{ padding: "12px" }}>
-                                    <DatePicker
-                                      value={
-                                        row.fDate ? dayjs(row.fDate) : null
-                                      }
-                                      onChange={(date) => {
-                                        setItemTableData(
-                                          itemTableData.map((r) =>
-                                            r.id === row.id
-                                              ? {
-                                                  ...r,
-                                                  fDate: date
-                                                    ? date.toDate()
-                                                    : null,
-                                                  tDate:
-                                                    date &&
-                                                    r.tDate &&
-                                                    date.isAfter(dayjs(r.tDate))
-                                                      ? null
-                                                      : r.tDate,
-                                                }
-                                              : r
-                                          )
-                                        );
-                                      }}
-                                      style={{ ...inputStyle, width: "100%" }}
-                                    />
-                                  </td>
-                                  <td style={{ padding: "12px" }}>
-                                    <DatePicker
-                                      value={
-                                        row.tDate ? dayjs(row.tDate) : null
-                                      }
-                                      onChange={(date) => {
-                                        setItemTableData(
-                                          itemTableData.map((r) =>
-                                            r.id === row.id
-                                              ? {
-                                                  ...r,
-                                                  tDate: date
-                                                    ? date.toDate()
-                                                    : null,
-                                                }
-                                              : r
-                                          )
-                                        );
-                                      }}
-                                      disabled={!row.fDate}
-                                      disabledDate={(current) => {
-                                        return (
-                                          row.fDate &&
-                                          current &&
-                                          current.isBefore(dayjs(row.fDate))
-                                        );
-                                      }}
-                                      style={{ ...inputStyle, width: "100%" }}
-                                    />
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </TabPane> */}
                   </Tabs>
                 </div>
               </div>
@@ -1540,7 +1398,7 @@ const Item = () => {
                   <Input
                     placeholder="Search by Part No, Description, or SKU"
                     allowClear
-                    onChange={(e) => handleSearch(e.target.value)}
+                    onChange={(e) => handleSearch(e.target.value)} // This is correct
                     style={{
                       width: "300px",
                       background: "rgba(255, 255, 255, 0.1)",
@@ -1552,20 +1410,7 @@ const Item = () => {
                         style={{ color: "rgba(255, 255, 255, 0.5)" }}
                       />
                     }
-                  />{" "}
-                  {/* <Button
-                    icon={<SyncOutlined />}
-                    onClick={getAllItems}
-                    style={{
-                      backgroundColor: "transparent",
-                      color: "white",
-                      marginRight: "10px",
-                      border: "none",
-                    }}
-                  >
-                    Refresh
-                  </Button> */}
-                  {/* Excel Download Button */}
+                  />
                   <Button
                     type="primary"
                     icon={<DownloadOutlined />}
@@ -1736,11 +1581,6 @@ const Item = () => {
                                 onClick={() => handleEditItem(item)}
                                 style={{ color: "white" }}
                               />
-                              {/* <Button
-                                type="link"
-                                icon={<DeleteOutlined />}
-                                danger
-                              /> */}
                             </Space>
                           </td>
                         </tr>

@@ -17,6 +17,8 @@ import {
   Checkbox,
   Divider,
   Tabs,
+  Space,
+  message,
 } from "antd";
 import {
   SearchOutlined,
@@ -27,6 +29,10 @@ import {
   DeleteOutlined,
   PlusOutlined,
   UnorderedListOutlined,
+  BarcodeOutlined,
+  QrcodeOutlined,
+  PrinterOutlined,
+  RightCircleOutlined,
 } from "@ant-design/icons";
 
 import dayjs from "dayjs";
@@ -42,16 +48,32 @@ const DeliveryChallan = () => {
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [orgId, setOrgId] = useState(localStorage.getItem("orgId"));
+
   const [editId, setEditId] = useState("");
+  const [orgId, setOrgId] = useState(localStorage.getItem("orgId"));
+  const [loginFinYear, setLoginFinYear] = useState(
+    localStorage.getItem("finYear")
+  );
   const [loginUserName, setLoginUserName] = useState(
     localStorage.getItem("userName")
+  );
+  const [loginUserId, setLoginUserId] = useState(
+    localStorage.getItem("userId")
   );
   const [loginBranchCode, setLoginBranchCode] = useState(
     localStorage.getItem("branchcode")
   );
+  const [loginBranch, setLoginBranch] = useState(
+    localStorage.getItem("branch")
+  );
+  const [loginCustomer, setLoginCustomer] = useState(
+    localStorage.getItem("customer")
+  );
   const [loginClient, setLoginClient] = useState(
     localStorage.getItem("client")
+  );
+  const [loginWarehouse, setLoginWarehouse] = useState(
+    localStorage.getItem("warehouse")
   );
   const [listViewData, setListViewData] = useState([]);
   const [buyerOrderList, setBuyerOrderList] = useState([]);
@@ -63,10 +85,42 @@ const DeliveryChallan = () => {
 
   const [showScanner, setShowScanner] = useState(false);
 
-  const handleScan = (result) => {
-    // Process the scanned result
-    console.log("Scanned:", result);
-    setShowScanner(false);
+  // Helper function to safely convert to Day.js
+  // Helper function to safely convert to Day.js with proper format
+  const safeDayjs = (dateValue, format = "YYYY-MM-DD") => {
+    if (!dateValue) return null;
+    if (dayjs.isDayjs(dateValue)) return dateValue;
+
+    // Try to parse with different formats
+    const date = dayjs(dateValue, format);
+    return date.isValid() ? date : null;
+  };
+
+  // Helper function to format dates for display
+  const formatDateForDisplay = (dateValue) => {
+    if (!dateValue) return "";
+    const date = safeDayjs(dateValue);
+    return date ? date.format("DD-MM-YYYY") : "";
+  };
+
+  // Helper function to format dates for API (YYYY-MM-DD)
+  const formatDateForAPI = (dateValue) => {
+    if (!dateValue) return null;
+    const date = safeDayjs(dateValue);
+    return date && date.isValid() ? date.format("YYYY-MM-DD") : null;
+  };
+
+  // Special function to handle boDate formatting
+  const formatBoDateForAPI = (dateValue) => {
+    if (!dateValue) return null;
+
+    // If it's an ISO string with timezone, extract just the date part
+    if (typeof dateValue === "string" && dateValue.includes("T")) {
+      return dateValue.split("T")[0];
+    }
+
+    const date = safeDayjs(dateValue);
+    return date && date.isValid() ? date.format("YYYY-MM-DD") : null;
   };
 
   // Form state
@@ -108,8 +162,10 @@ const DeliveryChallan = () => {
   });
 
   // Delivery Challan items table
+  // Delivery Challan items table
   const [deliveryItems, setDeliveryItems] = useState([
     {
+      key: 0, // Add key for React
       qrbarcode: "",
       pickRequestNo: "",
       prDate: null,
@@ -132,74 +188,151 @@ const DeliveryChallan = () => {
     },
   ]);
 
+  // Get buyer order table data
+  // Get buyer order table data
+  // Get buyer order table data - Updated approach
+  const getBuyerOrderTableData = async (buyerOrderNo) => {
+    try {
+      // First, try to get the specific pick request data
+      const response = await axios.get(
+        `${API_URL}/api/deliverychallan/getAllPickRequestFromDeliveryChallan?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}`
+      );
+
+      console.log("All pick requests response:", response.data); // Debug log
+
+      // Find the specific pick request by buyerOrderNo
+      const pickRequests = response.data.paramObjectsMap.pickRequestVO || [];
+      const selectedPickRequest = pickRequests.find(
+        (pr) => pr.buyerOrderNo === buyerOrderNo
+      );
+
+      if (selectedPickRequest && selectedPickRequest.pickRequestDetailsVO) {
+        const tableData = selectedPickRequest.pickRequestDetailsVO.map(
+          (item, index) => ({
+            key: index,
+            qrbarcode: "",
+            pickRequestNo: selectedPickRequest.docId || "",
+            prDate: safeDayjs(selectedPickRequest.docDate),
+            partNo: item.partNo || "",
+            partDescription: item.partDesc || "",
+            outBoundBin: item.bin || "",
+            shippedQty:
+              item.pickQty?.toString() || item.orderQty?.toString() || "0",
+            unitRate: "0",
+            skuValue: "0",
+            discount: "0",
+            tax: "0",
+            gstTax: "0",
+            amount: "0",
+            sgst: "0",
+            cgst: "0",
+            igst: "0",
+            totalGst: "0",
+            billAmount: "0",
+            remarks: item.remarks || "",
+          })
+        );
+        setDeliveryItems(tableData);
+      } else {
+        // If no details found, create empty row with just the pick request info
+        const tableData = [
+          {
+            key: 0,
+            qrbarcode: "",
+            pickRequestNo: selectedPickRequest?.docId || "",
+            prDate: safeDayjs(selectedPickRequest?.docDate),
+            partNo: "",
+            partDescription: "",
+            outBoundBin: "",
+            shippedQty: "0",
+            unitRate: "0",
+            skuValue: "0",
+            discount: "0",
+            tax: "0",
+            gstTax: "0",
+            amount: "0",
+            sgst: "0",
+            cgst: "0",
+            igst: "0",
+            totalGst: "0",
+            billAmount: "0",
+            remarks: "",
+          },
+        ];
+        setDeliveryItems(tableData);
+      }
+    } catch (error) {
+      console.error("Error fetching buyer order table data:", error);
+      setDeliveryItems([]);
+    }
+  };
+
   // Get delivery challan doc id
   const getDeliveryChallanDocId = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/deliverychallan/getDeliveryChallanDocId?branch=${loginBranchCode}&client=${loginClient}`
+        `${API_URL}/api/deliverychallan/getDeliveryChallanDocId?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&finYear=${loginFinYear}`
       );
-      setDeliveryChallanDocId(response.data.DeliveryChallanDocId);
+      setDeliveryChallanDocId(
+        response.data.paramObjectsMap.DeliveryChallanDocId
+      );
     } catch (error) {
       console.error("Error fetching delivery challan doc id:", error);
     }
   };
 
   // Get all buyer orders
+  // Get all buyer orders
   const getAllBuyerOrders = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/deliverychallan/getAllPickRequestFromDeliveryChallan?branch=${loginBranchCode}&client=${loginClient}`
+        `${API_URL}/api/deliverychallan/getAllPickRequestFromDeliveryChallan?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
-      setBuyerOrderList(response.data.pickRequestVO);
+
+      // Check if we have pickRequestVO array in the response
+      const pickRequests = response.data.paramObjectsMap.pickRequestVO || [];
+      setBuyerOrderList(pickRequests);
     } catch (error) {
       console.error("Error fetching buyer orders:", error);
+      setBuyerOrderList([]);
     }
   };
 
   // Get buyer order data
+  // Get buyer order data
   const getBuyerOrderData = async (buyerOrderNo) => {
     try {
       const response = await axios.get(
-        `${API_URL}/deliverychallan/getBuyerShipToBillToFromBuyerOrderForDeliveryChallan?buyerOrderNo=${buyerOrderNo}`
+        `${API_URL}/api/deliverychallan/getBuyerShipToBillToFromBuyerOrderForDeliveryChallan?buyerOrderNo=${buyerOrderNo}`
       );
-      const { buyer, billTo, shipTo } = response.data.vasPutawayVO[0];
-      setFormData((prev) => ({
-        ...prev,
-        buyer: buyer || "",
-        billTo: billTo || "",
-        shipTo: shipTo || "",
-      }));
+
+      // Check the response structure - it might be vasPutawayVO or pickRequestVO
+      const buyerData =
+        response.data.paramObjectsMap.vasPutawayVO?.[0] ||
+        response.data.paramObjectsMap.pickRequestVO?.[0];
+
+      if (buyerData) {
+        setFormData((prev) => ({
+          ...prev,
+          buyer: buyerData.customerName || buyerData.buyer || "",
+          billTo: buyerData.customerAddress || buyerData.billTo || "",
+          shipTo: buyerData.customerAddress || buyerData.shipTo || "",
+        }));
+      }
     } catch (error) {
       console.error("Error fetching buyer order data:", error);
     }
   };
 
   // Get buyer order table data
-  const getBuyerOrderTableData = async (buyerOrderNo) => {
-    try {
-      const response = await axios.get(
-        `${API_URL}/deliverychallan/getDocidDocdatePartnoPartDescFromPickRequestForDeliveryChallan?buyerOrderNo=${buyerOrderNo}`
-      );
-      const tableData = response.data.deliveryChallanVO.map((item) => ({
-        pickRequestNo: item.docId || "",
-        prDate: item.docDate || "",
-        partNo: item.partno || "",
-        partDescription: item.partDesc || "",
-        shippedQty: item.shippedQty || "",
-      }));
-      setDeliveryItems(tableData);
-    } catch (error) {
-      console.error("Error fetching buyer order table data:", error);
-    }
-  };
 
   // Get all delivery challans
   const getAllDeliveryChallans = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/deliverychallan/getAllDeliveryChallan?branch=${loginBranchCode}&client=${loginClient}`
+        `${API_URL}/api/deliverychallan/getAllDeliveryChallan?branch=${loginBranch}&branchCode=${loginBranchCode}&finYear=${loginFinYear}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
-      setListViewData(response.data.DeliveryChallanVO);
+      setListViewData(response.data.paramObjectsMap.DeliveryChallanVO);
     } catch (error) {
       console.error("Error fetching delivery challans:", error);
     }
@@ -209,30 +342,32 @@ const DeliveryChallan = () => {
   const getDeliveryChallanById = async (id) => {
     try {
       const response = await axios.get(
-        `${API_URL}/deliverychallan/getDeliveryChallanById?id=${id}`
+        `${API_URL}/api/deliverychallan/getDeliveryChallanById?id=${id}`
       );
-      const challan = response.data.deliveryChallanVO;
+      const challan = response.data.paramObjectsMap.deliveryChallanVO;
       setDeliveryChallanDocId(challan.docId);
       setEditBuyerOrderNo(challan.buyerOrderNo);
+
+      // Convert all date strings to Day.js objects
       setFormData({
-        docDate: challan.docDate,
+        docDate: safeDayjs(challan.docDate),
         buyerOrderNo: challan.buyerOrderNo,
-        pickReqDate: challan.pickReqDate,
+        pickReqDate: safeDayjs(challan.pickReqDate),
         invoiceNo: challan.invoiceNo,
         containerNO: challan.containerNO,
         vechileNo: challan.vechileNo,
         exciseInvoiceNo: challan.exciseInvoiceNo,
         commercialInvoiceNo: challan.commercialInvoiceNo,
-        boDate: challan.boDate,
+        boDate: safeDayjs(challan.boDate),
         buyer: challan.buyer,
         deliveryTerms: challan.deliveryTerms,
         payTerms: challan.payTerms,
         grWaiverNo: challan.grWaiverNo,
-        grWaiverDate: challan.grWaiverDate,
+        grWaiverDate: safeDayjs(challan.grWaiverDate),
         bankName: challan.bankName,
-        grWaiverClosureDate: challan.grWaiverClosureDate,
+        grWaiverClosureDate: safeDayjs(challan.grWaiverClosureDate),
         gatePassNo: challan.gatePassNo,
-        gatePassDate: challan.gatePassDate,
+        gatePassDate: safeDayjs(challan.gatePassDate),
         insuranceNo: challan.insuranceNo,
         billTo: challan.billTo,
         shipTo: challan.shipTo,
@@ -243,17 +378,18 @@ const DeliveryChallan = () => {
         grossWeight: challan.grossWeight,
         gwtUom: challan.gwtUom,
         transportName: challan.transportName,
-        transporterDate: challan.transporterDate,
+        transporterDate: safeDayjs(challan.transporterDate),
         packingSlipNo: challan.packingSlipNo,
         bin: challan.bin,
         taxType: challan.taxType,
         remarks: challan.remarks,
         freeze: challan.freeze,
       });
+
       setDeliveryItems(
         challan.deliveryChallanDetailsVO.map((detail) => ({
           pickRequestNo: detail.pickRequestNo,
-          prDate: detail.prDate,
+          prDate: safeDayjs(detail.prDate),
           partNo: detail.partNo,
           partDescription: detail.partDescription,
           outBoundBin: detail.outBoundBin,
@@ -297,17 +433,22 @@ const DeliveryChallan = () => {
     const selectedBuyerOrder = buyerOrderList.find(
       (buyer) => buyer.buyerOrderNo === value
     );
+
     if (selectedBuyerOrder) {
-      setFormData({
-        ...formData,
+      setFormData((prev) => ({
+        ...prev,
         buyerOrderNo: selectedBuyerOrder.buyerOrderNo,
-        invoiceNo: selectedBuyerOrder.invoiceNo,
-        pickReqDate: selectedBuyerOrder.docDate,
-        boDate: selectedBuyerOrder.buyerRefDate,
-        buyer: "",
-        billTo: "",
-        shipTo: "",
-      });
+        invoiceNo: selectedBuyerOrder.invoiceNo || "",
+        pickReqDate: safeDayjs(selectedBuyerOrder.docDate),
+        boDate: safeDayjs(
+          selectedBuyerOrder.buyerRefDate || selectedBuyerOrder.buyerOrderDate
+        ),
+        buyer: selectedBuyerOrder.customerName || "",
+        billTo: selectedBuyerOrder.customerAddress || "",
+        shipTo: selectedBuyerOrder.customerAddress || "",
+      }));
+
+      // Also fetch additional data from APIs
       await getBuyerOrderData(selectedBuyerOrder.buyerOrderNo);
       await getBuyerOrderTableData(selectedBuyerOrder.buyerOrderNo);
     }
@@ -315,6 +456,7 @@ const DeliveryChallan = () => {
 
   const handleAddItem = () => {
     const newItem = {
+      key: deliveryItems.length, // Use length as key
       qrbarcode: "",
       pickRequestNo: "",
       prDate: null,
@@ -355,32 +497,36 @@ const DeliveryChallan = () => {
 
     const challanData = {
       ...formData,
-      docDate: dayjs(formData.docDate).format("YYYY-MM-DD"),
-      pickReqDate: dayjs(formData.pickReqDate).format("YYYY-MM-DD"),
-      grWaiverDate: dayjs(formData.grWaiverDate).format("YYYY-MM-DD"),
-      grWaiverClosureDate: dayjs(formData.grWaiverClosureDate).format(
-        "YYYY-MM-DD"
-      ),
-      gatePassDate: dayjs(formData.gatePassDate).format("YYYY-MM-DD"),
-      transporterDate: dayjs(formData.transporterDate).format("YYYY-MM-DD"),
-      items: deliveryItems.map((item) => ({
+      ...(editId && { id: parseInt(editId) }), // Add id only if editId exists
+      boDate: formatBoDateForAPI(formData.boDate),
+      gatePassDate: formatDateForAPI(formData.gatePassDate),
+      grWaiverDate: formatDateForAPI(formData.grWaiverDate),
+      grWaiverClosureDate: formatDateForAPI(formData.grWaiverClosureDate),
+      pickReqDate: formatDateForAPI(formData.pickReqDate),
+      transporterDate: formatDateForAPI(formData.transporterDate),
+      branch: loginBranch,
+      client: loginClient,
+      finYear: loginFinYear,
+      warehouse: loginWarehouse,
+      deliveryChallanDetailsDTO: deliveryItems.map((item) => ({
+        ...(item.id && { id: item.id }), // Add item id only if it exists
         pickRequestNo: item.pickRequestNo,
-        prDate: dayjs(item.prDate).format("YYYY-MM-DD"),
+        prDate: formatDateForAPI(item.prDate),
         partNo: item.partNo,
         partDescription: item.partDescription,
         outBoundBin: item.outBoundBin,
-        shippedQty: parseInt(item.shippedQty),
-        unitRate: parseInt(item.unitRate),
-        skuValue: parseInt(item.skuValue),
-        discount: parseInt(item.discount),
-        tax: parseInt(item.tax),
-        gstTax: parseInt(item.gstTax),
-        amount: parseInt(item.amount),
-        sgst: parseInt(item.sgst),
-        cgst: parseInt(item.cgst),
-        igst: parseInt(item.igst),
-        totalGst: parseInt(item.totalGst),
-        billAmount: parseInt(item.billAmount),
+        shippedQty: parseFloat(item.shippedQty) || 0,
+        unitRate: parseFloat(item.unitRate) || 0,
+        skuValue: parseFloat(item.skuValue) || 0,
+        discount: parseFloat(item.discount) || 0,
+        tax: parseFloat(item.tax) || 0,
+        gstTax: parseFloat(item.gstTax) || 0,
+        amount: parseFloat(item.amount) || 0,
+        sgst: parseFloat(item.sgst) || 0,
+        cgst: parseFloat(item.cgst) || 0,
+        igst: parseFloat(item.igst) || 0,
+        totalGst: parseFloat(item.totalGst) || 0,
+        billAmount: parseFloat(item.billAmount) || 0,
         remarks: item.remarks,
       })),
       createdBy: loginUserName,
@@ -389,21 +535,24 @@ const DeliveryChallan = () => {
       orgId: orgId,
     };
 
+    // Remove any fields that don't exist in the target JSON structure
+    const { docDate, items, ...filteredChallanData } = challanData;
+
+    console.log("Sending data:", filteredChallanData); // Debug log
+
     try {
-      const url = editId
-        ? `${API_URL}/deliverychallan/update/${editId}`
-        : `${API_URL}/deliverychallan/create`;
+      const response = await axios.put(
+        `${API_URL}/api/deliverychallan/createUpdatedDeliveryChallan`,
+        filteredChallanData
+      );
 
-      const method = editId ? "put" : "post";
-
-      const response = await axios[method](url, challanData);
-
-      if (response.data.success) {
+      if (response.data.status) {
+        // Changed from response.data.success to response.data.status
         notification.success({
           message: editId ? "Challan Updated" : "Challan Created",
-          description: `Delivery challan ${
-            editId ? "updated" : "created"
-          } successfully.`,
+          description:
+            response.data.paramObjectsMap?.message ||
+            `Delivery challan ${editId ? "updated" : "created"} successfully.`,
         });
         handleClear();
         getAllDeliveryChallans();
@@ -489,7 +638,12 @@ const DeliveryChallan = () => {
   };
 
   const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllDeliveryChallans();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   const handleEditChallan = (challan) => {
@@ -523,6 +677,16 @@ const DeliveryChallan = () => {
     background: "rgba(255, 255, 255, 0.1)",
     color: "white",
     border: "1px solid rgba(255, 255, 255, 0.3)",
+  };
+
+  const handlePrintBarcode = () => {
+    message.info("Printing barcode...");
+    // Add barcode printing logic here
+  };
+
+  const handlePrintQRCode = () => {
+    message.info("Printing QR code...");
+    // Add QR code printing logic here
   };
 
   return (
@@ -676,6 +840,45 @@ const DeliveryChallan = () => {
                 >
                   Download
                 </Button>
+
+                <Button
+                  icon={<BarcodeOutlined />}
+                  onClick={handlePrintBarcode}
+                  style={{
+                    background: "rgba(108, 99, 255, 0.3)",
+                    color: "white",
+                    border: "none",
+                  }}
+                >
+                  Print Barcode
+                </Button>
+
+                <Button
+                  icon={<QrcodeOutlined />}
+                  onClick={handlePrintQRCode}
+                  style={{
+                    background: "rgba(108, 99, 255, 0.3)",
+                    color: "white",
+                    border: "none",
+                  }}
+                >
+                  Print QR Code
+                </Button>
+
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => {
+                    handlePrintBarcode();
+                    handlePrintQRCode();
+                  }}
+                  style={{
+                    background: "rgba(108, 99, 255, 0.3)",
+                    color: "white",
+                    border: "none",
+                  }}
+                >
+                  Print Both
+                </Button>
               </div>
 
               {/* Main Form */}
@@ -743,11 +946,13 @@ const DeliveryChallan = () => {
                                 }
                               >
                                 <DatePicker
+                                  className="white-datepicker"
                                   style={datePickerStyle}
-                                  value={formData.docDate}
+                                  value={safeDayjs(formData.docDate)}
                                   onChange={(date) =>
                                     handleDateChange("docDate", date)
                                   }
+                                  format="DD-MM-YYYY"
                                   disabled
                                 />
                               </Form.Item>
@@ -811,9 +1016,11 @@ const DeliveryChallan = () => {
                                 }
                               >
                                 <DatePicker
+                                  className="white-datepicker"
                                   style={datePickerStyle}
-                                  value={formData.pickReqDate}
+                                  value={safeDayjs(formData.pickReqDate)}
                                   disabled
+                                  format="DD-MM-YYYY"
                                 />
                               </Form.Item>
                             </Col>
@@ -912,7 +1119,7 @@ const DeliveryChallan = () => {
                               >
                                 <DatePicker
                                   style={datePickerStyle}
-                                  value={formData.boDate}
+                                  value={safeDayjs(formData.boDate)}
                                   disabled
                                 />
                               </Form.Item>
@@ -994,12 +1201,14 @@ const DeliveryChallan = () => {
                                 }
                               >
                                 <DatePicker
+                                  className="white-datepicker"
                                   style={datePickerStyle}
-                                  value={formData.grWaiverDate}
+                                  value={safeDayjs(formData.grWaiverDate)}
                                   onChange={(date) =>
                                     handleDateChange("grWaiverDate", date)
                                   }
-                                  disabled={formData.freeze}
+                                  format="DD-MM-YYYY"
+                                  disabled
                                 />
                               </Form.Item>
                             </Col>
@@ -1047,19 +1256,23 @@ const DeliveryChallan = () => {
                               <Form.Item
                                 label={
                                   <span style={{ color: "#fff" }}>
-                                    GR Waiver Closure Date *
+                                    GR Waiver Cl Date *
                                   </span>
                                 }
                               >
                                 <DatePicker
+                                  className="white-datepicker"
                                   style={datePickerStyle}
-                                  value={formData.grWaiverClosureDate}
+                                  value={safeDayjs(
+                                    formData.grWaiverClosureDate
+                                  )}
                                   onChange={(date) =>
                                     handleDateChange(
                                       "grWaiverClosureDate",
                                       date
                                     )
                                   }
+                                  format="DD-MM-YYYY"
                                   disabled={formData.freeze}
                                 />
                               </Form.Item>
@@ -1090,11 +1303,13 @@ const DeliveryChallan = () => {
                                 }
                               >
                                 <DatePicker
+                                  className="white-datepicker"
                                   style={datePickerStyle}
-                                  value={formData.gatePassDate}
+                                  value={safeDayjs(formData.gatePassDate)}
                                   onChange={(date) =>
                                     handleDateChange("gatePassDate", date)
                                   }
+                                  format="DD-MM-YYYY"
                                   disabled={formData.freeze}
                                 />
                               </Form.Item>
@@ -1273,11 +1488,13 @@ const DeliveryChallan = () => {
                                 }
                               >
                                 <DatePicker
+                                  className="white-datepicker"
                                   style={datePickerStyle}
-                                  value={formData.transporterDate}
+                                  value={safeDayjs(formData.transporterDate)}
                                   onChange={(date) =>
                                     handleDateChange("transporterDate", date)
                                   }
+                                  format="DD-MM-YYYY"
                                   disabled={formData.freeze}
                                 />
                               </Form.Item>
@@ -1693,7 +1910,7 @@ const DeliveryChallan = () => {
                       <tbody>
                         {deliveryItems.map((item, index) => (
                           <tr
-                            key={index}
+                            key={item.key}
                             style={{
                               borderBottom: "1px dashed white",
                               color: "white",
@@ -1706,7 +1923,7 @@ const DeliveryChallan = () => {
                                 onClick={() => handleDeleteItem(index)}
                                 danger
                                 type="text"
-                                style={{ color: "#ff4d4f" }}
+                                style={{ color: "white" }}
                                 disabled={formData.freeze}
                               />
                             </td>
@@ -1746,9 +1963,11 @@ const DeliveryChallan = () => {
                             {/* PR Date */}
                             <td style={{ padding: "8px" }}>
                               <DatePicker
+                                className="white-datepicker"
                                 style={datePickerStyle}
-                                value={item.prDate}
+                                value={safeDayjs(item.prDate)}
                                 disabled
+                                format="DD-MM-YYYY"
                               />
                             </td>
 
@@ -2062,6 +2281,15 @@ const DeliveryChallan = () => {
                           color: "white",
                         }}
                       >
+                        Action
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
                         Doc ID
                       </th>
                       <th
@@ -2109,15 +2337,6 @@ const DeliveryChallan = () => {
                       >
                         Transport Name
                       </th>
-                      <th
-                        style={{
-                          padding: "12px",
-                          textAlign: "left",
-                          color: "white",
-                        }}
-                      >
-                        Action
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2136,6 +2355,21 @@ const DeliveryChallan = () => {
                           },
                         }}
                       >
+                        <td
+                          style={{
+                            padding: "12px",
+                            textAlign: "left",
+                            color: "white",
+                            fontSize: "11px",
+                          }}
+                        >
+                          <Button
+                            type="link"
+                            icon={<RightCircleOutlined />}
+                            onClick={() => handleEditChallan(challan)}
+                            style={{ color: "white" }}
+                          />
+                        </td>
                         <td
                           style={{
                             padding: "12px",
@@ -2195,21 +2429,6 @@ const DeliveryChallan = () => {
                           }}
                         >
                           {challan.transportName}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          <Button
-                            type="link"
-                            onClick={() => handleEditChallan(challan)}
-                          >
-                            Edit
-                          </Button>
                         </td>
                       </tr>
                     ))}

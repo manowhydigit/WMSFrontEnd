@@ -60,6 +60,8 @@ const GlobalSection = () => {
   const [globalParameter, setGlobalParameter] = useState([]);
   const [branchName, setBranchName] = useState("");
 
+  const [client, setClient] = useState("");
+  const [branch, setBranch] = useState("");
   /**
    * anchorRef is used on different componets and specifying one type leads to other components throwing an error
    * */
@@ -191,6 +193,15 @@ const GlobalSection = () => {
         setWarehouseValue(globalParameterVO.warehouse || "");
         setBranchValue(globalParameterVO.branchcode || "");
         setBranchName(globalParameterVO.branch || "");
+        setBranch(globalParameterVO.branchcode || "");
+        setClient(globalParameterVO.client || "");
+
+        localStorage.setItem("customer", globalParameterVO.customer);
+        localStorage.setItem("client", globalParameterVO.client);
+        localStorage.setItem("finYear", globalParameterVO.finYear);
+        localStorage.setItem("warehouse", globalParameterVO.warehouse);
+        localStorage.setItem("branchcode", globalParameterVO.branchcode);
+        localStorage.setItem("branch", globalParameterVO.branch);
 
         // Then fetch dependent data
         getCustomer(globalParameterVO.branchcode);

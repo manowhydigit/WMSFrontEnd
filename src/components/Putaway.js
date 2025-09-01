@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pagination } from "antd";
+import { Pagination, message } from "antd";
 import {
   Button,
   Card,
@@ -41,16 +41,19 @@ import {
   CheckCircleOutlined,
 } from "@ant-design/icons";
 
+import sampleFile from "../assets/sample-files/sample_Putaway.xls";
+import * as XLSX from "xlsx";
+import CommonBulkUpload from "../utils/CommonBulkUpload";
+import { Modal } from "antd";
+
 import {
-  // ... your existing imports
   FormControl,
-  FormLabel, // Add this import
+  FormLabel,
   FormHelperText,
   MenuItem,
   InputLabel,
   TextField,
   Tab,
-  // ... rest of your imports
 } from "@mui/material";
 import GridOnIcon from "@mui/icons-material/GridOn";
 import FormControlLabel from "@mui/material/FormControlLabel";
@@ -66,10 +69,11 @@ import samplePutawayExcelFile from "../assets/sample-files/sample_Putaway.xls";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { initCaps } from "../utils/CommonFunctions";
+import GeneratePdfTemp from "./PutawayPdf";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
-
+const { RangePicker } = DatePicker;
 const PutawayTable = ({
   putawayTableData,
   setPutawayTableData,
@@ -79,6 +83,7 @@ const PutawayTable = ({
   handleTableChange,
   handlePartNoChange,
   handleBinChange,
+  freeze,
 }) => {
   const columns = [
     {
@@ -89,12 +94,11 @@ const PutawayTable = ({
       render: (_, record) => (
         <Button
           icon={<DeleteOutlined />}
-          onClick={() =>
-            handleDeleteRow(record.id, putawayTableData, setPutawayTableData)
-          }
+          onClick={() => handleDeleteRow(record.id)}
           danger
           type="text"
-          style={{ color: "#ff4d4f" }}
+          style={{ color: "white" }}
+          disabled={freeze}
         />
       ),
     },
@@ -116,6 +120,7 @@ const PutawayTable = ({
             handleTableChange(record.id, "qrCode", e.target.value)
           }
           style={inputStyle}
+          disabled={freeze}
         />
       ),
     },
@@ -131,6 +136,7 @@ const PutawayTable = ({
             handleTableChange(record.id, "grnNo", e.target.value)
           }
           style={inputStyle}
+          disabled={freeze}
         />
       ),
     },
@@ -152,6 +158,7 @@ const PutawayTable = ({
           filterOption={(input, option) =>
             option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
           }
+          disabled={freeze}
         >
           {partNoList.map((part) => (
             <Option key={part.id} value={part.partno}>
@@ -191,7 +198,36 @@ const PutawayTable = ({
             handleTableChange(record.id, "batchNo", e.target.value)
           }
           style={inputStyle}
+          disabled={freeze}
         />
+      ),
+    },
+    {
+      title: "Bin Location *",
+      dataIndex: "bin",
+      key: "bin",
+      width: 150,
+      render: (text, record, index) => (
+        <Select
+          showSearch
+          style={selectStyle}
+          placeholder="Select Bin"
+          optionFilterProp="children"
+          value={text}
+          onChange={(value) =>
+            handleBinChange(record, index, { target: { value } })
+          }
+          filterOption={(input, option) =>
+            option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+          }
+          disabled={freeze}
+        >
+          {binList.map((bin) => (
+            <Option key={bin.id} value={bin.binCode}>
+              {bin.binCode}
+            </Option>
+          ))}
+        </Select>
       ),
     },
     {
@@ -202,14 +238,16 @@ const PutawayTable = ({
       render: (text, record) => (
         <DatePicker
           style={datePickerStyle}
-          value={text ? dayjs(text) : null}
+          value={text ? dayjs(text, "DD-MM-YYYY") : null}
           onChange={(date) =>
             handleTableChange(
               record.id,
               "batchDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
+          format="DD-MM-YYYY"
+          disabled={freeze}
         />
       ),
     },
@@ -221,14 +259,16 @@ const PutawayTable = ({
       render: (text, record) => (
         <DatePicker
           style={datePickerStyle}
-          value={text ? dayjs(text) : null}
+          value={text ? dayjs(text, "DD-MM-YYYY") : null}
           onChange={(date) =>
             handleTableChange(
               record.id,
               "expDate",
-              date ? date.format("YYYY-MM-DD") : null
+              date ? date.format("DD-MM-YYYY") : null
             )
           }
+          format="DD-MM-YYYY"
+          disabled={freeze}
         />
       ),
     },
@@ -244,6 +284,7 @@ const PutawayTable = ({
             handleTableChange(record.id, "availableQty", e.target.value)
           }
           style={inputStyle}
+          disabled={freeze}
         />
       ),
     },
@@ -259,6 +300,7 @@ const PutawayTable = ({
             handleTableChange(record.id, "putawayQty", e.target.value)
           }
           style={inputStyle}
+          disabled={freeze}
         />
       ),
     },
@@ -280,6 +322,7 @@ const PutawayTable = ({
           filterOption={(input, option) =>
             option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
           }
+          disabled={freeze}
         >
           {binList.map((bin) => (
             <Option key={bin.id} value={bin.binCode}>
@@ -301,6 +344,7 @@ const PutawayTable = ({
             handleTableChange(record.id, "remarks", e.target.value)
           }
           style={inputStyle}
+          disabled={freeze}
         />
       ),
     },
@@ -322,7 +366,6 @@ const { TextArea } = Input;
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
 
 const Putaway = () => {
-  // State from your example
   const [value, setValue] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -333,6 +376,7 @@ const Putaway = () => {
   const [listView, setListView] = useState(false);
   const [listViewData, setListViewData] = useState([]);
   const [locationList, setLocationList] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [orgId, setOrgId] = useState(localStorage.getItem("orgId"));
   const [loginFinYear, setLoginFinYear] = useState(
     localStorage.getItem("finYear")
@@ -363,22 +407,44 @@ const Putaway = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [performanceGoalsData, setPerformanceGoalsData] = useState([]);
-  const paginatedData = performanceGoalsData.slice(
+  const paginatedData = listViewData.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
+
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState([]);
   const [viewMode, setViewMode] = useState("form");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
 
+  const [gridDetailsTableData, setGridDetailsTableData] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+
   const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllPutAway();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   const themeConfig = {
     token: {
       colorPrimary: theme === "dark" ? "#6C63FF" : "#1890ff",
+    },
+    components: {
+      Modal: {
+        contentBg: "rgba(255, 255, 255, 0.1)",
+        headerBg: "transparent",
+        titleColor: "white",
+        colorText: "white",
+        boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.2)",
+        borderRadius: 12,
+        border: "1px solid rgba(255, 255, 255, 0.2)",
+      },
     },
   };
   const [downloadPdf, setDownloadPdf] = useState(false);
@@ -400,7 +466,7 @@ const Putaway = () => {
     createdBy: loginUserName,
     customer: loginCustomer,
     docId: "",
-    docDate: dayjs(),
+    docDate: dayjs().format("DD-MM-YYYY"),
     enteredPerson: "",
     driverName: "",
     entryNo: "",
@@ -420,6 +486,7 @@ const Putaway = () => {
     vehicleNo: "",
     warehouse: loginWarehouse,
     freeze: false,
+    createdOn: dayjs().format("DD-MM-YYYY"),
   });
 
   const [putAwayDetailsTableData, setPutAwayDetailsTableData] = useState([
@@ -444,55 +511,6 @@ const Putaway = () => {
     },
   ]);
 
-  // const lrNoDetailsRefs = useRef(
-  //   putAwayDetailsTableData.map(() => ({
-  //     sku: React.createRef(),
-  //     bin: React.createRef()
-  //   }))
-  // );
-  // useEffect(() => {
-  //   // If the length of the table changes, update the refs
-  //   if (lrNoDetailsRefs.current.length !== putAwayDetailsTableData.length) {
-  //     lrNoDetailsRefs.current = putAwayDetailsTableData.map(
-  //       (_, index) =>
-  //         lrNoDetailsRefs.current[index] || {
-  //           sku: React.createRef(),
-  //           bin: React.createRef()
-  //         }
-  //     );
-  //   }
-  // }, [putAwayDetailsTableData.length]);
-
-  const lrNoDetailsRefs = useRef([]);
-
-  useEffect(() => {
-    lrNoDetailsRefs.current = putAwayDetailsTableData.map((_, index) => ({
-      sku: lrNoDetailsRefs.current[index]?.sku || React.createRef(),
-      bin: lrNoDetailsRefs.current[index]?.bin || React.createRef(),
-    }));
-  }, [putAwayDetailsTableData]);
-
-  const [gridDetailsTableData, setGridDetailsTableData] = useState([
-    // {
-    //   batchNo: '',
-    //   recQty: '',
-    //   binType: '',
-    //   cellType: 'ACTIVE',
-    //   noOfBins: '',
-    //   bin: '',
-    //   batchDate: '',
-    //   expDate: '',
-    //   partDesc: '',
-    //   shortQty: '',
-    //   grnQty: '',
-    //   damageQty: '',
-    //   pQty: '',
-    //   invQty: '',
-    //   sku: '',
-    //   ssku: '',
-    //   partNo: ''
-    // }
-  ]);
   const [putAwayTableErrors, setPutAwayTableErrors] = useState([
     {
       batch: "",
@@ -538,6 +556,7 @@ const Putaway = () => {
     warehouse: loginWarehouse,
     docDate: new Date(),
   });
+
   const listViewColumns = [
     { accessorKey: "status", header: "Status", size: 140 },
     { accessorKey: "docId", header: "Document No", size: 140 },
@@ -548,11 +567,6 @@ const Putaway = () => {
     { accessorKey: "entryDate", header: "Entry Date", size: 140 },
     { accessorKey: "totalGrnQty", header: "Total Grn Qty", size: 140 },
     { accessorKey: "totalPutawayQty", header: "Total Putaway Qty", size: 140 },
-    // { accessorKey: 'customer', header: 'Customer', size: 140 },
-    // { accessorKey: 'refNo', header: 'Ref No', size: 140 },
-    // { accessorKey: 'refDate', header: 'Ref Date', size: 140 },
-    // { accessorKey: 'refDate', header: 'Ship To', size: 140 },
-    // { accessorKey: 'reMarks', header: 'Remarks', size: 140 }
   ];
 
   useEffect(() => {
@@ -562,20 +576,147 @@ const Putaway = () => {
     getAllLocationTypes();
   }, []);
 
+  const formatPutAwayDataForExcel = (putAwayData) => {
+    const excelData = [];
+
+    putAwayData.forEach((mainRecord) => {
+      if (
+        mainRecord.putAwayDetailsVO &&
+        mainRecord.putAwayDetailsVO.length > 0
+      ) {
+        // Create a row for each detail record
+        mainRecord.putAwayDetailsVO.forEach((detail) => {
+          excelData.push({
+            "Putaway No": mainRecord.docId,
+            "Putaway Date": formatDateForDisplay(mainRecord.docDate),
+            "GRN No": mainRecord.grnNo,
+            "GRN Date": formatDateForDisplay(mainRecord.grnDate),
+            "Entry No": mainRecord.entryNo,
+            "Entry Date": formatDateForDisplay(mainRecord.entryDate),
+            Supplier: mainRecord.supplier,
+            "Supplier Short Name": mainRecord.supplierShortName,
+            "Mode of Shipment": mainRecord.modeOfShipment,
+            Carrier: mainRecord.carrier,
+            "Vehicle Type": mainRecord.vehicleType,
+            "Vehicle No": mainRecord.vehicleNo,
+            "Driver Name": mainRecord.driverName,
+            "Security Name": mainRecord.securityName,
+            "Bin Type": mainRecord.binType,
+            "Bin Class": mainRecord.binClass,
+            "Bin Pick": mainRecord.binPick,
+            Core: mainRecord.core,
+            "Total GRN Qty": mainRecord.totalGrnQty,
+            "Total Putaway Qty": mainRecord.totalPutawayQty,
+            Status: mainRecord.status,
+            Warehouse: mainRecord.warehouse,
+            Branch: mainRecord.branch,
+            "Created By": mainRecord.createdBy,
+            "Created On": formatDateForDisplay(mainRecord.createdOn),
+            "Part No": detail.partNo,
+            "Part Description": detail.partDesc,
+            SKU: detail.sku,
+            "Batch No": detail.batch,
+            "Batch Date": formatDateForDisplay(detail.batchDt),
+            "Expiry Date": formatDateForDisplay(detail.expdate),
+            "GRN Qty": detail.grnQty,
+            "Putaway Qty": detail.putAwayQty,
+            "Bin Location": detail.bin,
+            "Bin Type (Detail)": detail.binType,
+            "Cell Type": detail.cellType,
+            Remarks: detail.remarks,
+          });
+        });
+      } else {
+        // Create a row even if there are no details
+        excelData.push({
+          "Putaway No": mainRecord.docId,
+          "Putaway Date": formatDateForDisplay(mainRecord.docDate),
+          "GRN No": mainRecord.grnNo,
+          "GRN Date": formatDateForDisplay(mainRecord.grnDate),
+          "Entry No": mainRecord.entryNo,
+          "Entry Date": formatDateForDisplay(mainRecord.entryDate),
+          Supplier: mainRecord.supplier,
+          "Supplier Short Name": mainRecord.supplierShortName,
+          "Mode of Shipment": mainRecord.modeOfShipment,
+          Carrier: mainRecord.carrier,
+          "Vehicle Type": mainRecord.vehicleType,
+          "Vehicle No": mainRecord.vehicleNo,
+          "Driver Name": mainRecord.driverName,
+          "Security Name": mainRecord.securityName,
+          "Bin Type": mainRecord.binType,
+          "Bin Class": mainRecord.binClass,
+          "Bin Pick": mainRecord.binPick,
+          Core: mainRecord.core,
+          "Total GRN Qty": mainRecord.totalGrnQty,
+          "Total Putaway Qty": mainRecord.totalPutawayQty,
+          Status: mainRecord.status,
+          Warehouse: mainRecord.warehouse,
+          Branch: mainRecord.branch,
+          "Created By": mainRecord.createdBy,
+          "Created On": formatDateForDisplay(mainRecord.createdOn),
+          "Part No": "",
+          "Part Description": "",
+          SKU: "",
+          "Batch No": "",
+          "Batch Date": "",
+          "Expiry Date": "",
+          "GRN Qty": "",
+          "Putaway Qty": "",
+          "Bin Location": "",
+          "Bin Type (Detail)": "",
+          "Cell Type": "",
+          Remarks: "",
+        });
+      }
+    });
+
+    return excelData;
+  };
+
+  const downloadPutAwayExcel = () => {
+    try {
+      // Create a new workbook
+      const wb = XLSX.utils.book_new();
+
+      // Prepare data for Excel
+      const excelData = formatPutAwayDataForExcel(listViewData);
+
+      // Convert data to worksheet
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "PutAway Data");
+
+      // Generate Excel file and trigger download
+      XLSX.writeFile(wb, "PutAway_Data.xlsx");
+
+      // Show notification
+      notification.success({
+        message: "Excel Downloaded",
+        description: "PutAway data has been exported to Excel successfully!",
+        placement: "topRight",
+      });
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+      notification.error({
+        message: "Export Failed",
+        description: "Error exporting to Excel. Please try again.",
+        placement: "topRight",
+      });
+    }
+  };
+
   useEffect(() => {
-    // const totalGrnQty = putAwayDetailsTableData.reduce((sum, row) => sum + (parseInt(row.grnQty, 10) || 0), 0);
-    const totalPutawayQty = putAwayDetailsTableData.reduce(
-      (sum, row) => sum + (parseInt(row.pQty, 10) || 0),
+    const totalPutawayQty = putawayItems.reduce(
+      (sum, row) => sum + (parseFloat(row.putawayQty) || 0),
       0
     );
 
     setFormData((prevFormData) => ({
       ...prevFormData,
-      // totalGrnQty: totalGrnQty,
       totalPutawayQty: totalPutawayQty,
     }));
-    // console.log('oq', formData.totalPutawayQty);
-  }, [putAwayDetailsTableData]);
+  }, [putawayItems]);
 
   useEffect(() => {
     const initialCheckedState = {};
@@ -610,29 +751,28 @@ const Putaway = () => {
   const handlePutawayGrid = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/warehousemastercontroller/getAllBinDetails?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}`
+        `${API_URL}/api/warehousemastercontroller/getAllBinDetails?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
 
-      if (response.statusFlag === "Ok" && response.status) {
-        const bins = response.paramObjectsMap.Bins;
+      const bins = response.data.paramObjectsMap.Bins;
 
-        const selectedRows = gridDetailsTableData.filter(
-          (row) => checkedState[row.id]
-        );
+      const selectedRows = gridDetailsTableData.filter(
+        (row) => checkedState[row.id]
+      );
 
-        const updatedRows = selectedRows.map((row) => ({
-          ...row,
-          binOptions: bins.map((bin) => bin.bin),
-        }));
-        console.log("updatedRows", updatedRows);
+      const updatedPutawayItems = selectedRows.map((row) => ({
+        id: Date.now() + Math.random(),
+        partNo: row.partNo || "",
+        partDesc: row.partDesc || "",
+        batchNo: row.batchNo || "",
+        batchDate: row.batchDate || null,
+        expDate: row.expDate || null,
+        grnQty: row.grnQty || "",
+        putawayQty: row.pQty || "",
+        location: row.bin || "",
+      }));
 
-        setPutAwayDetailsTableData(updatedRows);
-      } else {
-        console.error(
-          "Failed to fetch bin details:",
-          response.paramObjectsMap.message
-        );
-      }
+      setPutawayItems(updatedPutawayItems);
     } catch (error) {
       console.error("Error fetching bin details:", error);
     }
@@ -643,14 +783,14 @@ const Putaway = () => {
   const getPutAwayDocId = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/putaway/getPutAwayDocId?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
+        `${API_URL}/api/putaway/getPutAwayDocId?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}`
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
+      if (response.data && response.data.paramObjectsMap) {
         setFormData((prevData) => ({
           ...prevData,
-          docId: response.paramObjectsMap.PutAwayDocId,
+          docId: response.data.paramObjectsMap.PutAwayDocId || "",
         }));
       } else {
         console.error("API Error:", response);
@@ -663,34 +803,15 @@ const Putaway = () => {
   const getGrnForPutaway = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/putaway/getGrnForPutaway?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
+        `${API_URL}/api/putaway/getGrnForPutaway?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
-      setGrnList(response.paramObjectsMap.grnVO);
-      console.log("grnVo", response.paramObjectsMap.grnVO);
+      setGrnList(response.data.paramObjectsMap.grnVO);
+      console.log("grnVo", response.data.paramObjectsMap.grnVO);
     } catch (error) {
       console.error("Error fetching gate passes:", error);
     }
   };
 
-  const handleAddRow = () => {
-    const newRow = {
-      id: Date.now(),
-      partNo: "",
-      partDesc: "",
-      batchNo: "",
-      batchDate: null,
-      expDate: null,
-      grnQty: "",
-      putawayQty: "",
-      location: "",
-    };
-
-    setPutawayItems([...putawayItems, newRow]);
-  };
-
-  // const handleFullGrid = () => {
-  //   getPutawayGridDetails();
-  // };
   const handleCloseModal = () => {
     setModalOpen(false);
     setCheckAll(false);
@@ -699,17 +820,14 @@ const Putaway = () => {
   const getAllLocationTypes = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/warehousemastercontroller/locationtype/warehouse?orgid=${orgId}&warehouse=${loginWarehouse}`
+        `${API_URL}/api/warehousemastercontroller/locationtype/warehouse?orgid=${orgId}&warehouse=${loginWarehouse}`
       );
-      if (response.status === true) {
-        setLocationTypeList(response.paramObjectsMap.Locationtype);
-        console.log(
-          "THE LOCATIONTYPE IS:",
-          response.paramObjectsMap.Locationtype
-        );
-      } else {
-        console.error("API Error:", response);
-      }
+
+      setLocationTypeList(response.data.paramObjectsMap.Locationtype);
+      console.log(
+        "THE LOCATIONTYPE IS:",
+        response.paramObjectsMap.Locationtype
+      );
     } catch (error) {
       console.error("Error fetching locationType data:", error);
     }
@@ -727,38 +845,49 @@ const Putaway = () => {
       setModalOpen(true);
       try {
         const response = await axios.get(
-          `${API_URL}/putaway/getPutawayGridDetails?binClass=${formData.binClass}&binPick=${formData.binPick}&binType=${formData.binType}&branchCode=${loginBranchCode}&client=${loginClient}&grnNo=${formData.grnNo}&orgId=${orgId}&warehouse=${loginWarehouse}`
+          `${API_URL}/api/putaway/getPutawayGridDetails?binClass=${formData.binClass}&binPick=${formData.binPick}&binType=${formData.binType}&branchCode=${loginBranchCode}&client=${loginClient}&grnNo=${formData.grnNo}&orgId=${orgId}&warehouse=${loginWarehouse}`
         );
-        console.log("THE GRN IDS GRID DETAILS IS:", response);
-        if (response.status === true) {
-          const gridDetails = response.paramObjectsMap.gridDetails;
-          console.log("THE BIN DETAILS ARE:", gridDetails);
 
-          setGridDetailsTableData(
-            gridDetails.map((row) => ({
-              id: row.id,
-              batchNo: row.batchNo,
-              recQty: row.recQty,
-              invoiceNo: row.invoiceNo,
-              batchNo: row.batchNo,
-              binType: row.binType,
-              noOfBins: row.noOfBins,
-              bin: row.bin,
-              remarks: row.remarks,
-              batchDate: row.batchDate,
-              expDate: row.expDate,
-              partDesc: row.partDesc,
-              shortQty: row.shortQty,
-              grnQty: row.grnQty,
-              damageQty: row.damageQty,
-              pQty: row.pQty,
-              invQty: row.invQty,
-              sku: row.sku,
-              ssku: row.ssku,
-              partNo: row.partNo,
-            }))
-          );
-        }
+        const gridDetails = response.data.paramObjectsMap.gridDetails;
+
+        setGridDetailsTableData(
+          gridDetails.map((row) => ({
+            id: row.id,
+            batchNo: row.batchNo,
+            recQty: row.recQty,
+            invoiceNo: row.invoiceNo,
+            binType: row.binType,
+            noOfBins: row.noOfBins,
+            bin: row.bin,
+            remarks: row.remarks,
+            batchDate: row.batchDate,
+            expDate: row.expDate,
+            partDesc: row.partDesc,
+            shortQty: row.shortQty,
+            grnQty: row.grnQty,
+            damageQty: row.damageQty,
+            pQty: row.pQty,
+            invQty: row.invQty,
+            sku: row.sku, // Ensure SKU is included
+            ssku: row.ssku,
+            partNo: row.partNo,
+          }))
+        );
+
+        setPutawayItems(
+          gridDetails.map((row) => ({
+            id: Date.now() + Math.random(),
+            partNo: row.partNo || "",
+            partDesc: row.partDesc || "",
+            batchNo: row.batchNo || "",
+            batchDate: row.batchDate || null,
+            expDate: row.expDate || null,
+            grnQty: row.grnQty || "",
+            putawayQty: row.pQty || "",
+            location: row.bin || "",
+            sku: row.sku || "", // Add SKU here too
+          }))
+        );
       } catch (error) {
         console.error("Error fetching employee data:", error);
       }
@@ -774,43 +903,112 @@ const Putaway = () => {
   const getAllPutAway = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/putaway/getAllPutAway?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
+        `${API_URL}/api/putaway/getAllPutAway?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        setListViewData(response.paramObjectsMap.PutAwayVO);
-      } else {
-        console.error("API Error:", response);
-      }
+      // Using optional chaining for safer access
+      const putAwayData = response.data?.paramObjectsMap?.PutAwayVO || [];
+      setListViewData(putAwayData);
     } catch (error) {
       console.error("Error fetching data:", error);
+      setListViewData([]);
+    }
+  };
+
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return null;
+
+    try {
+      // Handle various date formats
+      let date;
+
+      if (typeof dateString === "string") {
+        // Try different date formats
+        if (dateString.includes("-")) {
+          const parts = dateString.split("-");
+          if (parts[0].length === 4) {
+            // YYYY-MM-DD format
+            date = dayjs(dateString, "YYYY-MM-DD");
+          } else if (parts[0].length === 2) {
+            // DD-MM-YYYY format
+            date = dayjs(dateString, "DD-MM-YYYY");
+          }
+        } else {
+          // Try parsing as ISO string
+          date = dayjs(dateString);
+        }
+      } else if (dateString instanceof Date) {
+        date = dayjs(dateString);
+      } else if (dayjs.isDayjs(dateString)) {
+        date = dateString;
+      }
+
+      return date && date.isValid() ? date.format("DD-MM-YYYY") : null;
+    } catch (error) {
+      console.warn("Date conversion error:", error, dateString);
+      return null;
+    }
+  };
+
+  const formatDateForAPI = (dateString) => {
+    if (!dateString) return null;
+
+    try {
+      // If it's already in YYYY-MM-DD format, return as-is
+      if (
+        typeof dateString === "string" &&
+        dateString.includes("-") &&
+        dateString.split("-")[0].length === 4
+      ) {
+        return dateString;
+      }
+
+      // Convert from DD-MM-YYYY to YYYY-MM-DD
+      if (
+        typeof dateString === "string" &&
+        dateString.includes("-") &&
+        dateString.split("-")[0].length === 2
+      ) {
+        const date = dayjs(dateString, "DD-MM-YYYY");
+        return date.isValid() ? date.format("YYYY-MM-DD") : null;
+      }
+
+      // Handle dayjs objects
+      if (dayjs.isDayjs(dateString)) {
+        return dateString.format("YYYY-MM-DD");
+      }
+
+      return null;
+    } catch (error) {
+      console.warn("Date API conversion error:", error, dateString);
+      return null;
     }
   };
 
   const getPutAwayById = async (row) => {
     console.log("THE SELECTED PUTAWAY ID IS:", row);
-    setEditId(row.original.id);
+    setEditId(row.id);
 
     try {
       const response = await axios.get(
-        `${API_URL}/putaway/getPutAwayById?id=${row.original.id}`
+        `${API_URL}/api/putaway/getPutAwayById?id=${row.id}`
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
+      if (response.data.status === true) {
+        setViewMode("form");
         setListView(false);
-        const particularPutaway = response.paramObjectsMap.putAwayVO;
+        const particularPutaway = response.data.paramObjectsMap.putAwayVO;
         console.log("THE PARTICULAR PUTAWAY IS:", particularPutaway);
 
-        // Set the form data
         setFormData({
-          docDate: particularPutaway.docDate,
+          docDate: formatDateForDisplay(particularPutaway.docDate),
           grnNo: particularPutaway.grnNo,
           docId: particularPutaway.docId,
-          grnDate: particularPutaway.grnDate,
+          grnDate: formatDateForDisplay(particularPutaway.grnDate),
           entryNo: particularPutaway.entryNo,
-          entryDate: particularPutaway.entryDate,
+          entryDate: formatDateForDisplay(particularPutaway.entryDate),
           core: particularPutaway.core,
           supplierShortName: particularPutaway.supplierShortName,
           supplier: particularPutaway.supplier,
@@ -819,7 +1017,6 @@ const Putaway = () => {
           binType: particularPutaway.binType,
           contact: particularPutaway.contact,
           status: particularPutaway.status,
-          // status: particularPutaway.status === 'Edit' ? 'EDIT' : 'CONFIRM' || 'Confirm' ? 'CONFIRM' : 'EDIT',
           lotNo: particularPutaway.lotNo,
           enteredPerson: particularPutaway.enteredPerson,
           binClass: particularPutaway.binClass,
@@ -841,17 +1038,18 @@ const Putaway = () => {
           freeze: particularPutaway.freeze,
         });
 
-        // Fetch bin details
         const binResponse = await axios.get(
-          `${API_URL}/warehousemastercontroller/getAllBinDetails?branchCode=${particularPutaway.branchCode}&client=${particularPutaway.client}&orgId=${particularPutaway.orgId}&warehouse=${particularPutaway.warehouse}`
+          `${API_URL}/api/warehousemastercontroller/getAllBinDetails?branchCode=${particularPutaway.branchCode}&client=${particularPutaway.client}&orgId=${particularPutaway.orgId}&warehouse=${particularPutaway.warehouse}`
         );
 
-        if (binResponse.status === true) {
-          const bins = binResponse.paramObjectsMap.Bins.map((bin) => bin.bin);
+        if (binResponse.data.status === true) {
+          const bins = binResponse.data.paramObjectsMap.Bins.map(
+            (bin) => bin.bin
+          );
 
-          // Update putaway details with bin options
-          setPutAwayDetailsTableData(
+          setPutawayItems(
             particularPutaway.putAwayDetailsVO.map((pa) => ({
+              id: Date.now() + Math.random(),
               partNo: pa.partNo,
               batchNo: pa.batch,
               partDesc: pa.partDesc,
@@ -859,18 +1057,18 @@ const Putaway = () => {
               invoiceNo: pa.invoiceNo,
               invQty: pa.invQty,
               recQty: pa.recQty,
-              pQty: pa.putAwayQty,
-              bin: pa.bin,
-              binOptions: bins, // Set bin options here
+              putawayQty: pa.putAwayQty,
+              location: pa.bin,
+              binOptions: bins,
               remarks: pa.remarks,
               binType: pa.binType,
               shortQty: pa.shortQty,
               grnQty: pa.grnQty,
               binClass: pa.binClass,
               cellType: pa.cellType,
-              batchDate: pa.batchDate,
+              batchDate: formatDateForDisplay(pa.batchDate),
               status: pa.status,
-              expDate: pa.expDate,
+              expDate: formatDateForDisplay(pa.expDate),
               qcFlag: pa.qcFlag,
               ssku: pa.ssku,
               ssqty: pa.ssqty,
@@ -896,33 +1094,28 @@ const Putaway = () => {
     if (errorMessage) {
       setFieldErrors({ ...fieldErrors, [name]: errorMessage });
     } else {
-      // Handle specific cases
       if (name === "grnNo") {
-        const selectedId = grnList.find((id) => id.docId === value);
-        if (selectedId) {
+        const selectedGrn = grnList.find((grn) => grn.docId === value);
+        if (selectedGrn) {
           setFormData((prevData) => ({
             ...prevData,
-            grnNo: selectedId.docId,
-            grnDate: dayjs(selectedId.docDate).format("YYYY-MM-DD"),
-            entryNo: selectedId.entryNo,
-            entryDate: dayjs(selectedId.entryDate).format("YYYY-MM-DD"),
-            gatePassDate: dayjs(selectedId.docDate).format("YYYY-MM-DD"),
-            supplierShortName: selectedId.supplierShortName,
-            supplier: selectedId.supplier,
-            carrier: selectedId.carrier,
-            modeOfShipment: selectedId.modeOfShipment.toUpperCase(),
-            vehicleType: selectedId.vehicleType.toUpperCase(),
-            contact: selectedId.contact,
-            driverName: selectedId.driverName.toUpperCase(),
-            securityName: selectedId.securityName.toUpperCase(),
-            lrDate: dayjs(selectedId.lrDate).format("YYYY-MM-DD"),
-            briefDesc: selectedId.goodsDescripition.toUpperCase(),
-            vehicleNo: selectedId.vehicleNo,
-            lotNo: selectedId.lotNo,
-            totalGrnQty: selectedId.totalGrnQty,
+            grnNo: selectedGrn.docId,
+            grnDate: formatDateForDisplay(selectedGrn.grnDate),
+            entryNo: selectedGrn.entryNo,
+            entryDate: formatDateForDisplay(selectedGrn.entryDate),
+            supplierShortName: selectedGrn.supplierShortName,
+            supplier: selectedGrn.supplier,
+            carrier: selectedGrn.carrier,
+            modeOfShipment: selectedGrn.modeOfShipment?.toUpperCase() || "",
+            vehicleType: selectedGrn.vehicleType?.toUpperCase() || "",
+            contact: selectedGrn.contact,
+            driverName: selectedGrn.driverName?.toUpperCase() || "",
+            securityName: selectedGrn.securityName?.toUpperCase() || "",
+            briefDesc: selectedGrn.goodsDescripition?.toUpperCase() || "",
+            vehicleNo: selectedGrn.vehicleNo,
+            lotNo: selectedGrn.lotNo,
+            totalGrnQty: selectedGrn.totalGrnQty,
           }));
-          // Optionally call other functions
-          // getPutawayGridDetails(selectedPutawayId);
         }
       } else if (name === "binClass" || name === "binPick") {
         setFormData((prevData) => ({
@@ -940,7 +1133,6 @@ const Putaway = () => {
 
       setFieldErrors({ ...fieldErrors, [name]: "" });
 
-      // Restore cursor position after state update, only for inputs that support text selection
       setTimeout(() => {
         const inputElement = document.querySelector(`[name=${name}]`);
         if (
@@ -959,53 +1151,35 @@ const Putaway = () => {
     }
   };
 
+  const handleDateChange = (field, date) => {
+    const formattedDate = date ? date.format("DD-MM-YYYY") : null;
+    setFormData((prev) => ({ ...prev, [field]: formattedDate }));
+  };
+
   const handleDeleteRow = (id) => {
-    setPutAwayDetailsTableData(
-      putAwayDetailsTableData.filter((row) => row.id !== id)
+    setPutawayItems(putawayItems.filter((row) => row.id !== id));
+  };
+
+  const handleTableChange = (id, field, value) => {
+    setPutawayItems((prevData) =>
+      prevData.map((row) => (row.id === id ? { ...row, [field]: value } : row))
     );
   };
 
-  const isLastRowEmpty = (table) => {
-    const lastRow = table[table.length - 1];
-    if (!lastRow) return false;
-
-    if (table === putAwayDetailsTableData) {
-      return (
-        !lastRow.partNo || !lastRow.partDesc || !lastRow.batchNo || !lastRow.qty
-      );
-    }
-    return false;
-  };
-
-  const displayRowError = (table) => {
-    if (table === putAwayDetailsTableData) {
-      setPutAwayTableErrors((prevErrors) => {
-        const newErrors = [...prevErrors];
-        newErrors[table.length - 1] = {
-          ...newErrors[table.length - 1],
-          partNo: !table[table.length - 1].partNo ? "Part No is required" : "",
-          partDesc: !table[table.length - 1].partDesc
-            ? "Part Desc is required"
-            : "",
-          // batchNo: !table[table.length - 1].batchNo ? 'Batch No is required' : '',
-          qty: !table[table.length - 1].qty ? "Qty is required" : "",
-        };
-        return newErrors;
-      });
-    }
-  };
-  const handleKeyDown = (e, row) => {
-    if (
-      e.key === "Tab" &&
-      row.id === putAwayDetailsTableData[putAwayDetailsTableData.length - 1].id
-    ) {
-      handleAddRow();
-    }
-  };
-
-  const handleDateChange = (field, date) => {
-    const formattedDate = dayjs(date).format("DD-MM-YYYY");
-    setFormData((prevData) => ({ ...prevData, [field]: formattedDate }));
+  const handleAddRow = () => {
+    const newRow = {
+      id: Date.now() + Math.random(),
+      partNo: "",
+      partDesc: "",
+      batchNo: "",
+      batchDate: null,
+      expDate: null,
+      grnQty: "",
+      putawayQty: "",
+      location: "",
+      sku: "",
+    };
+    setPutawayItems([...putawayItems, newRow]);
   };
 
   const handleClear = () => {
@@ -1022,12 +1196,12 @@ const Putaway = () => {
       core: "Multi",
       createdBy: loginUserName,
       customer: loginCustomer,
-      docDate: dayjs(),
+      docDate: dayjs().format("DD-MM-YYYY"),
       enteredPerson: "",
       driverName: "",
       entryNo: "",
       entryDate: null,
-      finYear: "2024",
+      finYear: loginFinYear,
       grnDate: null,
       grnNo: "",
       lotNo: "",
@@ -1041,27 +1215,10 @@ const Putaway = () => {
       vehicleType: "",
       vehicleNo: "",
       warehouse: loginWarehouse,
+      freeze: false,
+      createdOn: dayjs().format("DD-MM-YYYY"),
     });
-    setPutAwayDetailsTableData([
-      {
-        id: 1,
-        batch: "",
-        bin: "",
-        binType: "",
-        cellType: "",
-        grnQty: "",
-        invNo: "",
-        invQty: "",
-        partDesc: "",
-        partNo: "",
-        batchNo: "",
-        pQty: "",
-        recQty: "",
-        remarks: "",
-        sku: "",
-        ssku: "",
-      },
-    ]);
+    setPutawayItems([]);
     setPutAwayTableErrors("");
     setFieldErrors({
       binClass: "",
@@ -1088,13 +1245,15 @@ const Putaway = () => {
       supplierShortName: "",
       warehouse: loginWarehouse,
     });
+    setEditId("");
     getPutAwayDocId();
-    // setEditId('');
   };
 
   const handleSave = async () => {
+    if (loading) return;
     const errors = {};
-    let firstInvalidFieldRef = null;
+
+    // Form validation
     if (!formData.grnNo) {
       errors.grnNo = "Grn No is required";
     }
@@ -1104,173 +1263,181 @@ const Putaway = () => {
     if (!formData.status) {
       errors.status = "Status is required";
     }
-    // if (!formData.binClass) {
-    //   errors.binClass = 'Bin Class is required';
-    // }
-    // if (!formData.binPick) {
-    //   errors.binPick = 'Bin Pick is required';
-    // }
 
-    let putAwayDetailsTableDataValid = true;
-    const newTableErrors = putAwayDetailsTableData.map((row, index) => {
+    // Table validation - Check if putawayItems has data
+    let tableDataValid = true;
+    const newTableErrors = putawayItems.map((row) => {
       const rowErrors = {};
-      // if (!row.batchNo) {
-      //   rowErrors.batchNo = 'Batch No is required';
-      //   putAwayDetailsTableDataValid = false;
-      // }
-      if (!row.sku) {
-        rowErrors.sku = "Sku is required";
-        if (!firstInvalidFieldRef)
-          firstInvalidFieldRef = lrNoDetailsRefs.current[index].sku;
-        putAwayDetailsTableDataValid = false;
+      if (!row.partNo) {
+        rowErrors.partNo = "Part No is required";
+        tableDataValid = false;
       }
-      // if (!row.putAwayQty) {
-      //   rowErrors.putAwayQty = 'PutAwayQty is required';
-      //   putAwayDetailsTableDataValid = false;
-      // }
-      if (!row.bin) {
+      if (!row.location) {
         rowErrors.bin = "Bin is required";
-        if (!firstInvalidFieldRef)
-          firstInvalidFieldRef = lrNoDetailsRefs.current[index].bin;
-        putAwayDetailsTableDataValid = false;
+        tableDataValid = false;
       }
-
+      if (!row.putawayQty || parseFloat(row.putawayQty) <= 0) {
+        rowErrors.putawayQty = "Valid Putaway Qty is required";
+        tableDataValid = false;
+      }
+      if (!row.batchNo) {
+        rowErrors.batchNo = "Batch No is required";
+        tableDataValid = false;
+      }
       return rowErrors;
     });
 
-    if (!putAwayDetailsTableDataValid || Object.keys(errors).length > 0) {
-      // Focus on the first invalid field
-      if (firstInvalidFieldRef && firstInvalidFieldRef.current) {
-        firstInvalidFieldRef.current.focus();
+    // if (!tableDataValid || Object.keys(errors).length > 0) {
+    //   // Show validation errors
+    //   setFieldErrors(errors);
+    //   setPutAwayTableErrors(newTableErrors);
+    //   notification.error({
+    //     message: "Validation Error",
+    //     description: "Please fix the validation errors before saving.",
+    //     placement: "topRight",
+    //   });
+    //   setIsLoading(false);
+    //   return;
+    // }
+
+    setIsLoading(true);
+
+    // Format dates to YYYY-MM-DD before sending (as expected in payload)
+    const putAwayDetailsDTO = putawayItems.map((row) => ({
+      batch: row.batchNo,
+      batchDt: row.batchDate ? formatDateForAPI(row.batchDate) : null,
+      bin: row.location,
+      binType: formData.binType,
+      cellType: "ACTIVE",
+      expdate: row.expDate ? formatDateForAPI(row.expDate) : null,
+      grnQty: parseFloat(row.grnQty) || 0,
+      invoiceNo: row.invoiceNo || "",
+      invQty: parseFloat(row.invQty) || 0,
+      partDesc: row.partDesc || "",
+      partNo: row.partNo,
+      putAwayPiecesQty: 0,
+      putAwayQty: parseFloat(row.putawayQty) || 0,
+      recQty: parseFloat(row.recQty) || 0,
+      remarks: row.remarks || "",
+      sku: row.sku || "",
+      ssku: row.ssku || "",
+    }));
+
+    const saveFormData = {
+      ...(editId && { id: parseInt(editId) }),
+      binClass: formData.binClass,
+      binPick: formData.binPick,
+      binType: formData.binType,
+      branch: formData.branch,
+      branchCode: formData.branchCode,
+      carrier: formData.carrier,
+      client: formData.client,
+      contact: formData.contact,
+      core: formData.core,
+      createdBy: formData.createdBy,
+      customer: formData.customer,
+      driverName: formData.driverName,
+      enteredPerson: formData.enteredPerson,
+      entryDate: formData.entryDate
+        ? formatDateForAPI(formData.entryDate)
+        : null,
+      entryNo: formData.entryNo,
+      finYear: formData.finYear,
+      grnDate: formData.grnDate ? formatDateForAPI(formData.grnDate) : null,
+      grnNo: formData.grnNo,
+      // id: editId ? parseInt(editId) : 0,
+      lotNo: formData.lotNo,
+      modeOfShipment: formData.modeOfShipment,
+      orgId: parseInt(formData.orgId),
+      putAwayDetailsDTO: putAwayDetailsDTO,
+      status: formData.status,
+      supplier: formData.supplier,
+      supplierShortName: formData.supplierShortName,
+      vehicleNo: formData.vehicleNo,
+      vehicleType: formData.vehicleType,
+      warehouse: formData.warehouse,
+      docDate: formData.docDate ? formatDateForAPI(formData.docDate) : null,
+    };
+
+    try {
+      const response = await axios.put(
+        `${API_URL}/api/putaway/createUpdatePutAway`,
+        saveFormData
+      );
+
+      console.log("Save response:", response.data);
+
+      if (response.data.status === true) {
+        notification.success({
+          message: "Success",
+          description: "Putaway saved successfully!",
+          placement: "topRight",
+        });
+        handleClear();
+        getAllPutAway();
+        setListView(true);
+      } else {
+        notification.error({
+          message: "Error",
+          description: response.data.message || "Failed to save putaway",
+          placement: "topRight",
+        });
       }
-    } else {
-      // Proceed with form submission
-    }
-
-    setPutAwayTableErrors(newTableErrors);
-
-    if (Object.keys(errors).length === 0 && putAwayDetailsTableDataValid) {
-      setIsLoading(true);
-      const putAwayDetailsDTO = putAwayDetailsTableData.map((row) => ({
-        batch: row.batchNo,
-        batchDate: row.batchDate,
-        bin: row.bin,
-        binType: row.binType,
-        cellType: row.cellType,
-        expdate: row.expDate,
-        grnQty: row.grnQty,
-        invoiceNo: row.invoiceNo,
-        invQty: row.invQty,
-        partDesc: row.partDesc,
-        partNo: row.partNo,
-        putAwayQty: row.pQty,
-        recQty: row.recQty,
-        remarks: row.remarks,
-        sku: row.sku,
-        ssku: row.ssku,
-      }));
-
-      const saveFormData = {
-        ...(editId && { id: editId }),
-        binClass: formData.binClass,
-        binPick: formData.binPick,
-        binType: formData.binType,
-        branch: loginBranch,
-        branchCode: loginBranchCode,
-        carrier: formData.carrier,
-        contact: formData.contact,
-        client: loginClient,
-        core: formData.core,
-        createdBy: loginUserName,
-        customer: loginCustomer,
-        // docDate: dayjs(),
-        driverName: formData.driverName,
-        enteredPerson: formData.enteredPerson,
-        entryDate: formData.entryDate,
-        entryNo: formData.entryNo,
-        finYear: loginFinYear,
-        grnDate: formData.grnDate,
-        grnNo: formData.grnNo,
-        lotNo: formData.lotNo,
-        modeOfShipment: formData.modeOfShipment,
-        orgId: orgId,
-        putAwayDetailsDTO,
-        status: formData.status,
-        supplier: formData.supplier,
-        supplierShortName: formData.supplierShortName,
-        vehicleType: formData.vehicleType,
-        vehicleNo: formData.vehicleNo,
-        warehouse: loginWarehouse,
-      };
-
-      console.log("DATA TO SAVE IS:", saveFormData);
-      try {
-        const response = await axios.put(
-          `${API_URL}/putaway/createUpdatePutAway`,
-          saveFormData
-        );
-        if (response.status === true) {
-          console.log("Response:", response);
-          handleClear();
-          showToast(
-            "success",
-            editId
-              ? " Put Away Updated Successfully"
-              : "Put Away created successfully"
-          );
-          setIsLoading(false);
-          getAllPutAway();
-          getGrnForPutaway();
-        } else {
-          showToast(
-            "error",
-            response.paramObjectsMap.errorMessage || "Put Away creation failed"
-          );
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error("Error:", error);
-        showToast("error", "Put Away creation failed");
-        setIsLoading(false);
-      }
-    } else {
-      setFieldErrors(errors);
+    } catch (error) {
+      console.error("Error saving putaway:", error);
+      notification.error({
+        message: "Error",
+        description: "Error saving putaway. Please try again.",
+        placement: "topRight",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleTableChange = () => {};
+  useEffect(() => {
+    const fetchLocationList = async () => {
+      try {
+        const response = await axios.get(
+          `${API_URL}/api/warehousemastercontroller/getAllBinDetails?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}`
+        );
+
+        // Add proper null checks and transform the data
+        if (
+          response.data &&
+          response.data.paramObjectsMap &&
+          response.data.paramObjectsMap.Bins
+        ) {
+          // Transform the data to match what your Select component expects
+          const transformedLocations = response.data.paramObjectsMap.Bins.map(
+            (bin, index) => ({
+              id: index + 1, // Create an ID since it doesn't exist in the response
+              name: bin.bin || `Location ${index + 1}`, // Use the bin property as name
+              bin: bin.bin,
+              binType: bin.binType,
+              core: bin.core,
+              cellType: bin.cellType,
+              binClass: bin.binClass,
+            })
+          );
+
+          setLocationList(transformedLocations);
+        } else {
+          setLocationList([]); // Set empty array if no data
+          console.warn("No location data found in response");
+        }
+      } catch (error) {
+        console.error("Error fetching location list:", error);
+        setLocationList([]); // Set empty array on error
+      }
+    };
+
+    fetchLocationList();
+  }, [loginBranchCode, loginClient, orgId, loginWarehouse]);
 
   const handleView = () => {
     setListView(!listView);
     setDownloadPdf(false);
-  };
-
-  const handleClose = () => {
-    setFormData({
-      binClass: "",
-      binPick: "",
-      binType: "",
-      branch: loginBranch,
-      branchCode: loginBranchCode,
-      carrier: "",
-      client: loginClient,
-      core: "",
-      createdBy: loginUserName,
-      customer: loginCustomer,
-      enteredPerson: "",
-      entryNo: "",
-      entryDate: null,
-      finYear: "",
-      grnDate: null,
-      grnNo: "",
-      lotNo: "",
-      modeOfShipment: "",
-      orgId: orgId,
-      status: "",
-      supplier: "",
-      supplierShortName: "",
-      warehouse: loginWarehouse,
-    });
   };
 
   const GeneratePdf = (row) => {
@@ -1278,12 +1445,13 @@ const Putaway = () => {
     setPdfData(row.original);
     setDownloadPdf(true);
   };
+
   const handleBulkUploadOpen = () => {
-    setUploadOpen(true); // Open dialog
+    setUploadOpen(true);
   };
 
   const handleBulkUploadClose = () => {
-    setUploadOpen(false); // Close dialog
+    setUploadOpen(false);
   };
 
   const handleFileUpload = (event) => {
@@ -1295,6 +1463,28 @@ const Putaway = () => {
     handleBulkUploadClose();
   };
 
+  // Styles
+  const inputStyle = {
+    background: "rgba(255, 255, 255, 0.1)",
+    border: "1px solid rgba(255, 255, 255, 0.2)",
+    color: "white",
+  };
+
+  const readOnlyInputStyle = {
+    ...inputStyle,
+    color: "rgba(255, 255, 255, 0.7)",
+  };
+
+  const selectStyle = {
+    ...inputStyle,
+    width: "100%",
+  };
+
+  const datePickerStyle = {
+    ...inputStyle,
+    width: "100%",
+  };
+
   return (
     <ConfigProvider theme={themeConfig}>
       <div
@@ -1302,7 +1492,7 @@ const Putaway = () => {
           theme === "dark" ? "dark-mode" : ""
         }`}
       >
-        {isSubmitting && (
+        {isLoading && (
           <div
             style={{
               position: "fixed",
@@ -1418,23 +1608,32 @@ const Putaway = () => {
                 >
                   Clear
                 </Button>
-                {!formData.freeze && (
-                  <Button
-                    icon={<SaveOutlined />}
-                    onClick={handleSave}
-                    loading={isLoading}
-                    style={{
-                      background: "rgba(108, 99, 255, 0.7)",
-                      color: "#fff",
-                      border: "none",
-                    }}
-                  >
-                    Save
-                  </Button>
-                )}
+
                 <Button
-                  // icon={<PrinterOutlined />}
-                  // onClick={handlePrint}
+                  icon={<SaveOutlined />}
+                  onClick={handleSave}
+                  loading={isLoading}
+                  style={{
+                    background: "rgba(108, 99, 255, 0.3)",
+                    color: "#fff",
+                    border: "none",
+                  }}
+                >
+                  Save
+                </Button>
+                <Button
+                  icon={<CloudUploadOutlined />}
+                  onClick={handleBulkUploadOpen}
+                  style={{
+                    background: "rgba(108, 99, 255, 0.3)",
+                    color: "#fff",
+                    border: "none",
+                  }}
+                >
+                  Upload
+                </Button>
+
+                <Button
                   style={{
                     background: "rgba(108, 99, 255, 0.3)",
                     color: "#fff",
@@ -1492,7 +1691,7 @@ const Putaway = () => {
                               >
                                 <Input
                                   name="putawayNo"
-                                  value={formData.putawayNo}
+                                  value={formData.docId}
                                   onChange={handleInputChange}
                                   disabled
                                   style={{
@@ -1521,13 +1720,14 @@ const Putaway = () => {
                                     color: "white",
                                   }}
                                   className="white-datepicker"
+                                  format="DD-MM-YYYY"
                                   value={
-                                    formData.putawayDate
-                                      ? dayjs(formData.putawayDate)
+                                    formData.docDate
+                                      ? dayjs(formData.docDate, "DD-MM-YYYY")
                                       : null
                                   }
                                   onChange={(date) =>
-                                    handleDateChange("putawayDate", date)
+                                    handleDateChange("docDate", date)
                                   }
                                   disabled={formData.freeze}
                                 />
@@ -1545,15 +1745,8 @@ const Putaway = () => {
                                   showSearch
                                   value={formData.grnNo}
                                   onChange={(value) => {
-                                    const selectedGrn = grnList.find(
-                                      (grn) => grn.docId === value
-                                    );
-                                    setFormData({
-                                      ...formData,
-                                      grnNo: value,
-                                      grnDate: selectedGrn?.docDate || null,
-                                      supplier: selectedGrn?.supplier || "",
-                                      totalGrnQty: selectedGrn?.totalQty || "",
+                                    handleInputChange({
+                                      target: { name: "grnNo", value },
                                     });
                                   }}
                                   disabled={formData.freeze}
@@ -1585,21 +1778,28 @@ const Putaway = () => {
                                     GRN Date
                                   </span>
                                 }
+                                validateStatus={
+                                  fieldErrors.grnDate ? "error" : ""
+                                }
+                                help={fieldErrors.grnDate}
                               >
                                 <DatePicker
                                   style={{
-                                    width: "100%",
                                     background: "rgba(255, 255, 255, 0.1)",
                                     border:
                                       "1px solid rgba(255, 255, 255, 0.3)",
+                                    color: "white",
                                   }}
-                                  className="white-datepicker"
+                                  format="DD-MM-YYYY"
                                   value={
                                     formData.grnDate
-                                      ? dayjs(formData.grnDate)
+                                      ? dayjs(formData.grnDate, "DD-MM-YYYY")
                                       : null
                                   }
-                                  disabled
+                                  onChange={(date) =>
+                                    handleDateChange("grnDate", date)
+                                  }
+                                  readOnly
                                 />
                               </Form.Item>
                             </Col>
@@ -1634,17 +1834,28 @@ const Putaway = () => {
                                   <span style={{ color: "#fff" }}>Status</span>
                                 }
                               >
-                                <Input
+                                <select
                                   name="status"
                                   value={formData.status}
-                                  disabled
+                                  onChange={(e) =>
+                                    setFormData({
+                                      ...formData,
+                                      status: e.target.value,
+                                    })
+                                  }
                                   style={{
                                     background: "rgba(255, 255, 255, 0.1)",
                                     border:
                                       "1px solid rgba(255, 255, 255, 0.3)",
                                     color: "white",
+                                    padding: "8px",
+                                    borderRadius: "4px",
+                                    width: "100%",
                                   }}
-                                />
+                                >
+                                  <option value="Edit">Edit</option>
+                                  <option value="Confirm">Confirm</option>
+                                </select>
                               </Form.Item>
                             </Col>
                             <Col span={4}>
@@ -1684,11 +1895,12 @@ const Putaway = () => {
                                       "1px solid rgba(255, 255, 255, 0.3)",
                                   }}
                                   className="white-datepicker"
+                                  format="DD-MM-YYYY"
                                   value={
                                     formData.createdOn
-                                      ? dayjs(formData.createdOn)
-                                      : null
-                                  }
+                                      ? dayjs(formData.createdOn, "DD-MM-YYYY")
+                                      : dayjs()
+                                  } // Show today's date by default
                                   disabled
                                 />
                               </Form.Item>
@@ -1761,7 +1973,7 @@ const Putaway = () => {
                                   }}
                                 >
                                   <Option value="Fixed">Fixed</Option>
-                                  <Option value="Floating">Floating</Option>
+                                  <Option value="Open">Open</Option>
                                 </Select>
                               </Form.Item>
                             </Col>
@@ -1788,6 +2000,7 @@ const Putaway = () => {
                                 >
                                   <Option value="Empty">Empty</Option>
                                   <Option value="Occupied">Occupied</Option>
+                                  <Option value="Both">Both</Option>
                                 </Select>
                               </Form.Item>
                             </Col>
@@ -1799,18 +2012,32 @@ const Putaway = () => {
                                   </span>
                                 }
                               >
-                                <Input
+                                <Select
+                                  labelId="binType-label"
+                                  id="binType"
                                   name="binType"
-                                  value={formData.binType}
-                                  onChange={handleInputChange}
+                                  label="Bin Type"
                                   disabled={formData.freeze}
+                                  value={formData.binType}
+                                  onChange={(value) =>
+                                    setFormData({ ...formData, binType: value })
+                                  }
                                   style={{
                                     background: "rgba(255, 255, 255, 0.1)",
                                     border:
                                       "1px solid rgba(255, 255, 255, 0.3)",
                                     color: "white",
                                   }}
-                                />
+                                >
+                                  {locationTypeList?.map((row) => (
+                                    <MenuItem
+                                      key={row.id}
+                                      value={row.ltype.toUpperCase()}
+                                    >
+                                      {row.ltype.toUpperCase()}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
                               </Form.Item>
                             </Col>
                             <Col span={4}>
@@ -2008,6 +2235,19 @@ const Putaway = () => {
                         Add Row
                       </Button>
                     )}
+
+                    <Button
+                      icon={<DownloadOutlined />}
+                      onClick={getPutawayGridDetails}
+                      style={{
+                        marginRight: "8px",
+                        background: "rgba(108, 99, 255, 0.3)",
+                        color: "#fff",
+                        border: "none",
+                      }}
+                    >
+                      Fill from GRN
+                    </Button>
                     <Button
                       icon={<ClearOutlined />}
                       style={{
@@ -2018,17 +2258,6 @@ const Putaway = () => {
                       }}
                     >
                       Clear
-                    </Button>
-                    <Button
-                      icon={<DownloadOutlined />}
-                      style={{
-                        marginRight: "8px",
-                        background: "rgba(108, 99, 255, 0.3)",
-                        color: "#fff",
-                        border: "none",
-                      }}
-                    >
-                      Fill from GRN
                     </Button>
                   </div>
                 </div>
@@ -2075,6 +2304,7 @@ const Putaway = () => {
                       <col style={{ width: "60px" }} /> {/* S.No */}
                       <col style={{ width: "150px" }} /> {/* Part No */}
                       <col style={{ width: "200px" }} /> {/* Part Desc */}
+                      <col style={{ width: "80px" }} /> {/* S.No */}
                       <col style={{ width: "120px" }} /> {/* Batch No */}
                       <col style={{ width: "120px" }} /> {/* Batch Date */}
                       <col style={{ width: "120px" }} /> {/* Exp Date */}
@@ -2135,26 +2365,9 @@ const Putaway = () => {
                             color: "white",
                           }}
                         >
-                          Batch No *
+                          Sku
                         </th>
-                        <th
-                          style={{
-                            padding: "8px",
-                            textAlign: "left",
-                            color: "white",
-                          }}
-                        >
-                          Batch Date
-                        </th>
-                        <th
-                          style={{
-                            padding: "8px",
-                            textAlign: "left",
-                            color: "white",
-                          }}
-                        >
-                          Exp Date
-                        </th>
+
                         <th
                           style={{
                             padding: "8px",
@@ -2182,6 +2395,33 @@ const Putaway = () => {
                         >
                           Location *
                         </th>
+                        <th
+                          style={{
+                            padding: "8px",
+                            textAlign: "left",
+                            color: "white",
+                          }}
+                        >
+                          Batch No *
+                        </th>
+                        <th
+                          style={{
+                            padding: "8px",
+                            textAlign: "left",
+                            color: "white",
+                          }}
+                        >
+                          Batch Date
+                        </th>
+                        <th
+                          style={{
+                            padding: "8px",
+                            textAlign: "left",
+                            color: "white",
+                          }}
+                        >
+                          Exp Date
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2206,7 +2446,7 @@ const Putaway = () => {
                               }
                               danger
                               type="text"
-                              style={{ color: "#ff4d4f" }}
+                              style={{ color: "white" }}
                               disabled={formData.freeze}
                             />
                           </td>
@@ -2248,55 +2488,18 @@ const Putaway = () => {
                             />
                           </td>
 
-                          {/* Batch No */}
                           <td style={{ padding: "8px" }}>
                             <Input
-                              value={row.batchNo}
+                              value={row.sku}
                               onChange={(e) =>
-                                handleTableChange(
-                                  row.id,
-                                  "batchNo",
-                                  e.target.value
-                                )
+                                handleTableChange(row.id, "sku", e.target.value)
                               }
                               style={inputStyle}
                               disabled={formData.freeze}
                             />
                           </td>
 
-                          {/* Batch Date */}
-                          <td style={{ padding: "8px" }}>
-                            <DatePicker
-                              style={datePickerStyle}
-                              value={
-                                row.batchDate ? dayjs(row.batchDate) : null
-                              }
-                              onChange={(date) =>
-                                handleTableChange(
-                                  row.id,
-                                  "batchDate",
-                                  date ? date.format("YYYY-MM-DD") : null
-                                )
-                              }
-                              disabled={formData.freeze}
-                            />
-                          </td>
-
-                          {/* Exp Date */}
-                          <td style={{ padding: "8px" }}>
-                            <DatePicker
-                              style={datePickerStyle}
-                              value={row.expDate ? dayjs(row.expDate) : null}
-                              onChange={(date) =>
-                                handleTableChange(
-                                  row.id,
-                                  "expDate",
-                                  date ? date.format("YYYY-MM-DD") : null
-                                )
-                              }
-                              disabled={formData.freeze}
-                            />
-                          </td>
+                          {/* Batch No */}
 
                           {/* GRN Qty */}
                           <td style={{ padding: "8px" }}>
@@ -2335,11 +2538,69 @@ const Putaway = () => {
                               }
                             >
                               {locationList.map((loc) => (
-                                <Option key={loc.id} value={loc.name}>
-                                  {loc.name}
+                                <Option key={loc.id} value={loc.bin}>
+                                  {" "}
+                                  {/* Use loc.bin as value */}
+                                  {loc.bin} {/* Display the bin name */}
                                 </Option>
                               ))}
                             </Select>
+                          </td>
+                          <td style={{ padding: "8px" }}>
+                            <Input
+                              value={row.batchNo}
+                              onChange={(e) =>
+                                handleTableChange(
+                                  row.id,
+                                  "batchNo",
+                                  e.target.value
+                                )
+                              }
+                              style={inputStyle}
+                              disabled={formData.freeze}
+                            />
+                          </td>
+
+                          {/* Batch Date */}
+                          <td style={{ padding: "8px" }}>
+                            <DatePicker
+                              style={datePickerStyle}
+                              value={
+                                row.batchDate
+                                  ? dayjs(row.batchDate, "DD-MM-YYYY")
+                                  : null
+                              }
+                              format="DD-MM-YYYY"
+                              onChange={(date) =>
+                                handleTableChange(
+                                  row.id,
+                                  "batchDate",
+                                  date ? date.format("DD-MM-YYYY") : null
+                                )
+                              }
+                              disabled={formData.freeze}
+                            />
+                          </td>
+
+                          {/* Exp Date */}
+                          <td style={{ padding: "8px" }}>
+                            <DatePicker
+                              format="DD-MM-YYYY"
+                              style={datePickerStyle}
+                              value={
+                                row.expDate
+                                  ? dayjs(row.expDate, "DD-MM-YYYY")
+                                  : null
+                              }
+                              onChange={(date) =>
+                                handleTableChange(
+                                  row.id,
+                                  "expDate",
+                                  date ? date.format("DD-MM-YYYY") : null
+                                )
+                              }
+                              disabled={formData.freeze}
+                            />
                           </td>
                         </tr>
                       ))}
@@ -2366,7 +2627,7 @@ const Putaway = () => {
             <div
               className="form-containerSG"
               style={{
-                minHeight: "70vh",
+                minHeight: "80vh",
                 background: "#159957",
                 background: "var(--bg-body-gradient)",
                 marginTop: "40px",
@@ -2381,20 +2642,28 @@ const Putaway = () => {
                   background: "var(--bg-body-gradient)",
                 }}
               >
-                <Button
-                  icon={<UnorderedListOutlined />}
-                  onClick={toggleViewMode}
-                  style={{
-                    backgroundColor: "transparent",
-                    color: "white",
-                    marginLeft: "870px",
-                    marginRight: "-20px",
-                    marginTop: "20px",
-                    border: "none",
-                  }}
-                >
-                  {viewMode === "form" ? "List" : "Form"}
-                </Button>
+                <div>
+                  <Typography.Title
+                    level={3}
+                    style={{
+                      color: "#fff",
+                      margin: 0,
+                      paddingLeft: "20px",
+                      paddingTop: "20px",
+                    }}
+                  >
+                    Putaway List
+                  </Typography.Title>
+                  <Typography.Text
+                    style={{
+                      color: "rgba(255, 255, 255, 0.8)",
+                      paddingLeft: "20px",
+                    }}
+                  >
+                    View and manage Putaway entries
+                  </Typography.Text>
+                </div>
+                <div></div>
               </div>
 
               <div
@@ -2404,7 +2673,7 @@ const Putaway = () => {
                   width: "80%",
                   overflowX: "auto",
                   fontSize: "11px",
-                  maxHeight: "200px",
+                  maxHeight: "300px",
                   overflowY: "auto",
                   marginTop: "40px",
                   marginLeft: "60px",
@@ -2412,6 +2681,62 @@ const Putaway = () => {
                   background: "var(--bg-body-gradient)",
                 }}
               >
+                <Input
+                  placeholder="Search by GRN No, Supplier, or Gate Pass ID"
+                  allowClear
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    width: "300px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                  }}
+                  prefix={
+                    <SearchOutlined
+                      style={{ color: "rgba(255, 255, 255, 0.5)" }}
+                    />
+                  }
+                />
+
+                <Space>
+                  <RangePicker
+                    className="white-datepicker"
+                    value={selectedDateRange}
+                    onChange={setSelectedDateRange}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                    placeholder={["From Date", "To Date"]}
+                    format="DD-MM-YYYY"
+                  />
+
+                  <Button
+                    icon={<DownloadOutlined />}
+                    loading={downloadLoading}
+                    onClick={downloadPutAwayExcel}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                  >
+                    Download Excel
+                  </Button>
+                  <Button
+                    icon={<PlusOutlined />}
+                    onClick={toggleViewMode}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                  >
+                    Add Entry
+                  </Button>
+                </Space>
                 <table
                   style={{
                     width: "100%",
@@ -2427,6 +2752,15 @@ const Putaway = () => {
                         backgroundColor: "rgba(255, 255, 255, 0.1)",
                       }}
                     >
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "center",
+                          color: "white",
+                        }}
+                      >
+                        Action
+                      </th>
                       <th
                         style={{
                           padding: "12px",
@@ -2482,108 +2816,135 @@ const Putaway = () => {
                       >
                         Total Qty
                       </th>
-                      <th
-                        style={{
-                          padding: "12px",
-                          textAlign: "center",
-                          color: "white",
-                        }}
-                      >
-                        Action
-                      </th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {paginatedData.map((row, index) => (
-                      <tr
-                        key={`row-${index}-${row.id}`}
-                        style={{
-                          borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                          color: "white",
-                          backgroundColor:
-                            index % 2 === 0
-                              ? "rgba(255, 255, 255, 0.02)"
-                              : "rgba(255, 255, 255, 0.05)",
-                          "&:hover": {
-                            backgroundColor: "rgba(255, 255, 255, 0.1)",
-                          },
-                        }}
-                      >
-                        <td
+                    {paginatedData
+                      .filter(
+                        (item) =>
+                          !searchTerm ||
+                          (item.docId &&
+                            item.docId
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase())) ||
+                          (item.supplier &&
+                            item.supplier
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase())) ||
+                          (item.gatePassId &&
+                            item.gatePassId
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase()))
+                      )
+                      .slice(
+                        (currentPage - 1) * pageSize,
+                        currentPage * pageSize
+                      )
+                      .map((row, index) => (
+                        <tr
+                          key={`row-${index}-${row.id}`}
                           style={{
-                            padding: "12px",
-                            textAlign: "left",
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
                             color: "white",
-                            fontSize: "11px",
+                            backgroundColor:
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)",
+                            "&:hover": {
+                              backgroundColor: "rgba(255, 255, 255, 0.1)",
+                            },
                           }}
                         >
-                          {dayjs(row.putawayDate).format("DD-MM-YYYY")}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          {row.putawayNo}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          {row.grnNo}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          {row.warehouse}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          {row.status}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "left",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          {row.totalQty}
-                        </td>
-                        <td
-                          style={{
-                            padding: "12px",
-                            textAlign: "center",
-                            color: "white",
-                            fontSize: "11px",
-                          }}
-                        >
-                          <Button type="link" style={{ color: "#1890ff" }}>
-                            View
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                          <td>
+                            {" "}
+                            <Button
+                              type="link"
+                              icon={<RightCircleOutlined />}
+                              onClick={() =>
+                                row && row.id
+                                  ? getPutAwayById(row)
+                                  : alert("Invalid row data")
+                              }
+                              style={{ color: "white" }}
+                            ></Button>
+                            <Button
+                              type="link"
+                              icon={<CloudDownloadOutlined />}
+                              onClick={() => {
+                                if (row) {
+                                  setPdfData(row); // store the order data for PDF
+                                  setDownloadPdf(true);
+                                } else {
+                                  message.warning("No order selected for PDF!");
+                                }
+                              }}
+                              style={{ color: "white" }}
+                            />
+                            {downloadPdf && <GeneratePdfTemp row={pdfData} />}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {dayjs(row.docDate).format("DD-MM-YYYY")}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {row.docId}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {row.grnNo}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {row.warehouse}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {row.status}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {row.totalQty}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
                 <div
@@ -2713,6 +3074,20 @@ const Putaway = () => {
           )}
         </div>
       </div>
+
+      <CommonBulkUpload
+        open={uploadOpen}
+        handleClose={() => setUploadOpen(false)}
+        title="Upload Gate Pass In Files"
+        uploadText="Upload file"
+        downloadText="Sample File"
+        onSubmit={handleSubmit}
+        sampleFileDownload={sampleFile}
+        handleFileUpload={handleFileUpload}
+        apiUrl={`${API_URL}/api/putaway/ExcelUploadForPutAway?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&createdBy=${loginUserName}&customer=${loginCustomer}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`}
+        screen="Putaway"
+      />
+      {/* </Modal> */}
     </ConfigProvider>
   );
 };

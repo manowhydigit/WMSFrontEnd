@@ -393,12 +393,12 @@ const Supplier = () => {
       };
 
       try {
-        const method = editId ? "put" : "post";
+        const method = "put";
         const response = await axios[method](
           `${API_URL}/api/warehousemastercontroller/createUpdateSupplier`,
           saveFormData
         );
-        if (response.status === true) {
+        if (response.data.status === true) {
           showToast(
             "success",
             editId ? "Supplier Updated" : "Supplier Created",
@@ -472,6 +472,7 @@ const Supplier = () => {
       getAllSuppliers();
     }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   const handleBulkUploadOpen = () => setUploadOpen(true);
@@ -1268,7 +1269,7 @@ const Supplier = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {supplierList
+                    {filteredData
                       .slice(
                         (currentPage - 1) * pageSize,
                         currentPage * pageSize
@@ -1396,8 +1397,8 @@ const Supplier = () => {
                 >
                   <span style={{ marginRight: "16px", fontSize: "12px" }}>
                     {(currentPage - 1) * pageSize + 1}-
-                    {Math.min(currentPage * pageSize, supplierList.length)} of{" "}
-                    {supplierList.length} items
+                    {Math.min(currentPage * pageSize, filteredData.length)} of{" "}
+                    {filteredData.length} items
                   </span>
 
                   <button
@@ -1420,7 +1421,7 @@ const Supplier = () => {
                   </button>
 
                   {Array.from(
-                    { length: Math.ceil(supplierList.length / pageSize) },
+                    { length: Math.ceil(filteredData.length / pageSize) },
                     (_, i) => (
                       <button
                         key={i}
@@ -1449,12 +1450,12 @@ const Supplier = () => {
                       setCurrentPage((prev) =>
                         Math.min(
                           prev + 1,
-                          Math.ceil(supplierList.length / pageSize)
+                          Math.ceil(filteredData.length / pageSize)
                         )
                       )
                     }
                     disabled={
-                      currentPage === Math.ceil(supplierList.length / pageSize)
+                      currentPage === Math.ceil(filteredData.length / pageSize)
                     }
                     style={{
                       backgroundColor: "transparent",
@@ -1465,12 +1466,12 @@ const Supplier = () => {
                       borderRadius: "4px",
                       cursor:
                         currentPage ===
-                        Math.ceil(supplierList.length / pageSize)
+                        Math.ceil(filteredData.length / pageSize)
                           ? "not-allowed"
                           : "pointer",
                       opacity:
                         currentPage ===
-                        Math.ceil(supplierList.length / pageSize)
+                        Math.ceil(filteredData.length / pageSize)
                           ? 0.5
                           : 1,
                     }}

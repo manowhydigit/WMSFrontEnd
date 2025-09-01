@@ -6,6 +6,7 @@ import {
   ClearOutlined,
   SaveOutlined,
   FormOutlined,
+  RightCircleOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -63,17 +64,31 @@ export const SalesReturn = () => {
   const [modeOfShipmentList, setModeOfShipmentList] = useState([]); // Correct
   const [carrierList, setCarrierList] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [loginFinYear, setLoginFinYear] = useState(
+    localStorage.getItem("finYear")
+  );
   const [loginUserName, setLoginUserName] = useState(
     localStorage.getItem("userName")
   );
-  const [branch, setBranch] = useState(localStorage.getItem("branch"));
-  const [branchCode, setBranchCode] = useState(
+  const [loginUserId, setLoginUserId] = useState(
+    localStorage.getItem("userId")
+  );
+  const [loginBranchCode, setLoginBranchCode] = useState(
     localStorage.getItem("branchcode")
   );
-  const [client, setClient] = useState(localStorage.getItem("client"));
-  const [customer, setCustomer] = useState(localStorage.getItem("customer"));
-  const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
-  const [finYear, setFinYear] = useState("2024");
+  const [loginBranch, setLoginBranch] = useState(
+    localStorage.getItem("branch")
+  );
+  const [loginCustomer, setLoginCustomer] = useState(
+    localStorage.getItem("customer")
+  );
+  const [loginClient, setLoginClient] = useState(
+    localStorage.getItem("client")
+  );
+  const [loginWarehouse, setLoginWarehouse] = useState(
+    localStorage.getItem("warehouse")
+  );
   const [form] = Form.useForm();
   const [viewMode, setViewMode] = useState("form");
   const [currentPage, setCurrentPage] = useState(1);
@@ -81,7 +96,7 @@ export const SalesReturn = () => {
   const [salesReturnList, setSalesReturnList] = useState([]);
   const [salesReturnItems, setSalesReturnItems] = useState([]);
   const [fillGridData, setFillGridData] = useState([]);
-  const [modalOpen, setModalOpen] = useState(false);
+
   const [selectedRows, setSelectedRows] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
 
@@ -144,7 +159,7 @@ export const SalesReturn = () => {
   const getDocId = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/salesReturn/getSalesReturnDocId?orgId=${orgId}&branchCode=${branchCode}&client=${client}&branch=${branch}&finYear=${finYear}`
+        `${API_URL}/api/salesReturn/getSalesReturnDocId?orgId=${orgId}&branchCode=${loginBranchCode}&client=${loginClient}&branch=${loginBranch}&finYear=${loginFinYear}`
       );
       if (response.data.status === true) {
         setFormData((prev) => ({
@@ -160,7 +175,7 @@ export const SalesReturn = () => {
   const getAllSalesReturns = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/salesReturn/getAllSalesReturnByOrgId?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&warehouse=${warehouse}&finYear=${finYear}`
+        `${API_URL}/api/salesReturn/getAllSalesReturnByOrgId?orgId=${orgId}&branchCode=${loginBranchCode}&branch=${loginBranch}&client=${loginClient}&warehouse=${loginWarehouse}&finYear=${loginFinYear}`
       );
       if (response.data.status === true) {
         setSalesReturnList(response.data.paramObjectsMap.salesReturnVO);
@@ -173,7 +188,7 @@ export const SalesReturn = () => {
   const getPrNo = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/pickrequest/getAllPickRequestByOrgId?branch=${branch}&branchCode=${branchCode}&client=${client}&finYear=${finYear}&orgId=${orgId}&warehouse=${warehouse}`
+        `${API_URL}/api/pickrequest/getAllPickRequestByOrgId?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
       if (
         response.data.status === true &&
@@ -190,46 +205,96 @@ export const SalesReturn = () => {
     }
   };
 
+  const datePickerStyle = {
+    width: "100%",
+    background: "rgba(255, 255, 255, 0.1)",
+    border: "1px solid rgba(255, 255, 255, 0.3)",
+  };
+
+  const safeDayjs = (dateValue, format = "YYYY-MM-DD") => {
+    if (!dateValue) return null;
+    if (dayjs.isDayjs(dateValue)) return dateValue;
+
+    // Try to parse with different formats
+    const date = dayjs(dateValue, format);
+    return date.isValid() ? date : null;
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleDateChange = (field, date) => {
+    setFormData((prev) => ({ ...prev, [field]: date }));
+  };
   const getAllSuppliers = async () => {
     try {
-      const supplierData = await getAllActiveSupplier(
-        branchCode,
-        client,
-        orgId
+      const response = await axios.get(
+        `${API_URL}/api/warehousemastercontroller/supplier?cbranch=${loginBranchCode}&client=${loginClient}&orgid=${orgId}`
       );
-      // Ensure supplierData is an array before setting state
-      if (Array.isArray(supplierData)) {
+      if (response.data.status === true) {
+        const supplierData = response.data.paramObjectsMap.supplierVO
+          .filter((row) => row.active === "Active")
+          .map(({ id, supplierShortName, supplier }) => ({
+            id,
+            supplierShortName,
+            supplier,
+          }));
+
         setSupplierList(supplierData);
+
+        return supplierData;
       } else {
-        console.error("Supplier data is not an array:", supplierData);
-        setSupplierList([]); // Set to empty array if data is invalid
+        console.error("API Error:", response);
+        return response;
       }
     } catch (error) {
-      console.error("Error fetching suppliers:", error);
-      setSupplierList([]); // Set to empty array on error
+      console.error("Error fetching data:", error);
+      return error;
     }
   };
 
   const getAllModesOfShipment = async () => {
     try {
-      const shipmentModeData = await getAllShipmentModes(orgId);
-      setModeOfShipmentList(shipmentModeData);
+      const response = await axios.get(
+        `${API_URL}/api/gatePassIn/getAllModeOfShipment?orgId=${orgId}`
+      );
+      if (response.status === true) {
+        const modeOfShipmentData = response.paramObjectsMap.modOfShipments;
+
+        return modeOfShipmentData;
+      } else {
+        console.error("API Error:", response);
+        return response;
+      }
     } catch (error) {
-      console.error("Error fetching modes of shipment:", error);
+      console.error("Error fetching data:", error);
+      return error;
     }
   };
 
-  const getAllCarriers = async (selectedModeOfShipment) => {
+  const getAllCarriers = async (shipmentMode) => {
     try {
-      const carrierData = await getAllActiveCarrier(
-        branchCode,
-        client,
-        orgId,
-        selectedModeOfShipment
+      const response = await axios.get(
+        `${API_URL}/api/warehousemastercontroller/getCarrierNameByCustomer?cbranch=${loginBranchCode}&client=${loginClient}&orgid=${orgId}&shipmentMode=${shipmentMode}`
       );
-      setCarrierList(carrierData);
+      if (response.status === true) {
+        const carrierData = response.paramObjectsMap.CarrierVO.filter(
+          (row) => row.active === "Active"
+        ).map(({ id, carrier }) => ({
+          id,
+          carrier,
+        }));
+
+        return carrierData;
+      } else {
+        console.error("API Error:", response);
+        return response;
+      }
     } catch (error) {
-      console.error("Error fetching carriers:", error);
+      console.error("Error fetching data:", error);
+      return error;
     }
   };
 
@@ -318,6 +383,7 @@ export const SalesReturn = () => {
     setIsSubmitting(true);
     try {
       const saveData = {
+        ...(editId && { id: parseInt(editId) }),
         ...formData,
         salesReturnDetailsDTO: salesReturnItems.map((item) => ({
           ...item,
@@ -327,17 +393,17 @@ export const SalesReturn = () => {
           noOfBin: parseFloat(item.noOfBin) || 0,
         })),
         orgId,
-        branch,
-        branchCode,
-        client,
-        customer,
-        warehouse,
-        finYear,
+        branch: loginBranch,
+        branchCode: loginBranchCode,
+        client: loginClient,
+        customer: loginCustomer,
+        warehouse: loginWarehouse,
+        finYear: loginFinYear,
         createdBy: loginUserName,
       };
 
       const response = await axios.put(
-        `${API_URL}/salesReturn/createUpdateSalesReturn`,
+        `${API_URL}/api/salesReturn/createUpdateSalesReturn`,
         saveData
       );
 
@@ -359,9 +425,13 @@ export const SalesReturn = () => {
       setIsSubmitting(false);
     }
   };
-
   const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllSalesReturns();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   const handleEditSalesReturn = (record) => {
@@ -423,15 +493,22 @@ export const SalesReturn = () => {
 
     try {
       const response = await axios.get(
-        `${API_URL}/salesReturn/getSalesReturnFillGridDetails?branchCode=${branchCode}&client=${client}&orgId=${orgId}&docId=${formData.prNo}`
+        `${API_URL}/api/salesReturn/getSalesReturnFillGridDetails?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&docId=${formData.prNo}`
       );
 
+      console.log("Fill Grid Response:", response.data); // Debug log
+
+      // Check the correct response structure
       if (response.data.status === true) {
-        setFillGridData(response.data.paramObjectsMap.salesReturnDetailsVO);
-        setModalOpen(true);
+        const fillGridData =
+          response.data.paramObjectsMap.salesReturnDetailsVO || [];
+        setSalesReturnItems(fillGridData);
+      } else {
+        message.error("Failed to fetch fill grid data");
       }
     } catch (error) {
       console.error("Error fetching fill grid data:", error);
+      message.error("Error fetching fill grid data");
     }
   };
 
@@ -440,7 +517,6 @@ export const SalesReturn = () => {
     setSalesReturnItems([...salesReturnItems, ...selectedData]);
     setSelectedRows([]);
     setSelectAll(false);
-    setModalOpen(false);
   };
 
   const handleSelectAll = () => {
@@ -614,8 +690,13 @@ export const SalesReturn = () => {
                               }
                             >
                               <DatePicker
-                                style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.docDate)}
+                                className="white-datepicker"
+                                style={datePickerStyle}
+                                value={safeDayjs(formData.docDate)}
+                                onChange={(date) =>
+                                  handleDateChange("docDate", date)
+                                }
+                                format="DD-MM-YYYY"
                                 disabled
                               />
                             </Form.Item>
@@ -660,8 +741,13 @@ export const SalesReturn = () => {
                               }
                             >
                               <DatePicker
-                                style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.prDate)}
+                                className="white-datepicker"
+                                style={datePickerStyle}
+                                value={safeDayjs(formData.prDate)}
+                                onChange={(date) =>
+                                  handleDateChange("prDate", date)
+                                }
+                                format="DD-MM-YYYY"
                                 disabled
                               />
                             </Form.Item>
@@ -689,8 +775,13 @@ export const SalesReturn = () => {
                               }
                             >
                               <DatePicker
-                                style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.boDate)}
+                                className="white-datepicker"
+                                style={datePickerStyle}
+                                value={safeDayjs(formData.boDate)}
+                                onChange={(date) =>
+                                  handleDateChange("boDate", date)
+                                }
+                                format="DD-MM-YYYY"
                                 disabled
                               />
                             </Form.Item>
@@ -722,11 +813,14 @@ export const SalesReturn = () => {
                               }
                             >
                               <DatePicker
-                                style={{ width: "100%", ...inputStyle }}
-                                value={dayjs(formData.entryDate)}
+                                className="white-datepicker"
+                                style={datePickerStyle}
+                                value={safeDayjs(formData.entryDate)}
                                 onChange={(date) =>
-                                  setFormData({ ...formData, entryDate: date })
+                                  handleDateChange("entruDate", date)
                                 }
+                                format="DD-MM-YYYY"
+                                disabled
                               />
                             </Form.Item>
                           </Col>
@@ -1086,7 +1180,7 @@ export const SalesReturn = () => {
                           style={{
                             marginRight: "8px",
                             background: "rgba(108, 99, 255, 0.3)",
-                            color: "#fff",
+                            color: "white",
                             border: "none",
                           }}
                         >
@@ -1317,7 +1411,7 @@ export const SalesReturn = () => {
                                   onClick={() => handleDeleteItem(item.id)}
                                   danger
                                   type="text"
-                                  style={{ color: "#ff4d4f" }}
+                                  style={{ color: "white" }}
                                 />
                               </td>
 
@@ -1455,17 +1549,24 @@ export const SalesReturn = () => {
 
                               {/* Batch Date */}
                               <td style={{ padding: "8px" }}>
-                                <DatePicker
-                                  style={{ width: "100%", ...inputStyle }}
-                                  value={
-                                    item.batchDate
-                                      ? dayjs(item.batchDate)
-                                      : null
-                                  }
-                                  onChange={(date) =>
-                                    handleItemChange(item.id, "batchDate", date)
-                                  }
-                                />
+                                <td style={{ padding: "8px" }}>
+                                  <DatePicker
+                                    style={{ width: "100%", ...inputStyle }}
+                                    value={
+                                      item.batchDate
+                                        ? dayjs(item.batchDate)
+                                        : null
+                                    }
+                                    onChange={(date) =>
+                                      handleItemChange(
+                                        item.id,
+                                        "batchDate",
+                                        date
+                                      )
+                                    }
+                                    format="DD-MM-YYYY"
+                                  />
+                                </td>
                               </td>
 
                               {/* Exp Date */}
@@ -1478,6 +1579,7 @@ export const SalesReturn = () => {
                                   onChange={(date) =>
                                     handleItemChange(item.id, "expDate", date)
                                   }
+                                  format="DD-MM-YYYY"
                                 />
                               </td>
 
@@ -1650,6 +1752,15 @@ export const SalesReturn = () => {
                           color: "white",
                         }}
                       >
+                        Action
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
                         Doc No
                       </th>
                       <th
@@ -1706,15 +1817,6 @@ export const SalesReturn = () => {
                       >
                         Status
                       </th>
-                      <th
-                        style={{
-                          padding: "12px",
-                          textAlign: "left",
-                          color: "white",
-                        }}
-                      >
-                        Action
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1746,6 +1848,21 @@ export const SalesReturn = () => {
                               fontSize: "11px",
                             }}
                           >
+                            <Button
+                              type="link"
+                              icon={<RightCircleOutlined />}
+                              onClick={() => handleEditSalesReturn(item)}
+                              style={{ color: "white" }}
+                            ></Button>
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
                             {item.docId}
                           </td>
                           <td
@@ -1758,6 +1875,7 @@ export const SalesReturn = () => {
                           >
                             {dayjs(item.docDate).format("DD-MM-YYYY")}
                           </td>
+
                           <td
                             style={{
                               padding: "12px",
@@ -1813,22 +1931,6 @@ export const SalesReturn = () => {
                             >
                               {item.freeze ? "Frozen" : "Draft"}
                             </span>
-                          </td>
-                          <td
-                            style={{
-                              padding: "12px",
-                              textAlign: "left",
-                              color: "white",
-                              fontSize: "11px",
-                            }}
-                          >
-                            <Button
-                              type="link"
-                              onClick={() => handleEditSalesReturn(item)}
-                              style={{ color: "#1890ff" }}
-                            >
-                              Edit
-                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -1962,102 +2064,6 @@ export const SalesReturn = () => {
             </div>
           )}
         </div>
-
-        {/* Fill Grid Modal */}
-        <Modal
-          title={
-            <div
-              style={{
-                width: "100%",
-                cursor: "move",
-              }}
-              id="draggable-dialog-title"
-            >
-              Fill Grid
-            </div>
-          }
-          open={modalOpen}
-          onOk={handleSaveSelectedRows}
-          onCancel={() => {
-            setModalOpen(false);
-            setSelectedRows([]);
-            setSelectAll(false);
-          }}
-          modalRender={(modal) => <PaperComponent>{modal}</PaperComponent>}
-          width={1200}
-          okText="Save Selected"
-          cancelText="Cancel"
-        >
-          <div style={{ marginBottom: 16 }}>
-            <Checkbox
-              checked={selectAll}
-              onChange={handleSelectAll}
-              style={{ marginRight: 8 }}
-            >
-              Select All
-            </Checkbox>
-            <span>{selectedRows.length} item(s) selected</span>
-          </div>
-          <Table
-            dataSource={fillGridData}
-            columns={[
-              {
-                title: "Select",
-                dataIndex: "id",
-                key: "select",
-                render: (_, record, index) => (
-                  <Checkbox
-                    checked={selectedRows.includes(index)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedRows([...selectedRows, index]);
-                      } else {
-                        setSelectedRows(
-                          selectedRows.filter((i) => i !== index)
-                        );
-                      }
-                    }}
-                  />
-                ),
-              },
-              {
-                title: "Part No",
-                dataIndex: "partNo",
-                key: "partNo",
-              },
-              {
-                title: "Part Description",
-                dataIndex: "partDesc",
-                key: "partDesc",
-              },
-              {
-                title: "Pick Qty",
-                dataIndex: "pickQty",
-                key: "pickQty",
-              },
-              {
-                title: "Batch No",
-                dataIndex: "batchNo",
-                key: "batchNo",
-              },
-              {
-                title: "Batch Date",
-                dataIndex: "batchDate",
-                key: "batchDate",
-                render: (text) => text && dayjs(text).format("DD-MM-YYYY"),
-              },
-              {
-                title: "Exp Date",
-                dataIndex: "expDate",
-                key: "expDate",
-                render: (text) => text && dayjs(text).format("DD-MM-YYYY"),
-              },
-            ]}
-            rowKey={(record, index) => index}
-            pagination={false}
-            scroll={{ y: 400 }}
-          />
-        </Modal>
       </div>
     </ConfigProvider>
   );

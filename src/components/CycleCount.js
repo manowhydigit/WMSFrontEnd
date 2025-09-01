@@ -253,10 +253,14 @@ export const CycleCount = () => {
     }
   };
 
-  const toggleViewMode = () => {
+const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllCycleCounts();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
-
   const handleEditCycleCount = (record) => {
     setEditId(record.id);
     setFormData({

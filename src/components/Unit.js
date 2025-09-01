@@ -247,6 +247,7 @@ const Unit = () => {
       getAllUnits();
     }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   // Bulk upload handlers
@@ -789,12 +790,7 @@ const Unit = () => {
                                 type="link"
                                 icon={<EditOutlined />}
                                 onClick={() => handleEditUnit(unit)}
-                                style={{ color: "#1890ff" }}
-                              />
-                              <Button
-                                type="link"
-                                icon={<DeleteOutlined />}
-                                danger
+                                style={{ color: "white" }}
                               />
                             </Space>
                           </td>

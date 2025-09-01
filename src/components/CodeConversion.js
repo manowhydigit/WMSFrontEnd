@@ -64,7 +64,7 @@ export const CodeConversion = () => {
   const [client, setClient] = useState(localStorage.getItem("client"));
   const [customer, setCustomer] = useState(localStorage.getItem("customer"));
   const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
-  const [finYear, setFinYear] = useState("2024");
+  const [finYear, setFinYear] = useState(localStorage.getItem("finYear"));
   const [form] = Form.useForm();
   const [viewMode, setViewMode] = useState("form");
   const [currentPage, setCurrentPage] = useState(1);
@@ -265,7 +265,7 @@ export const CodeConversion = () => {
       };
 
       const response = await axios.put(
-        `${API_URL}/codeconversion/createUpdateCodeConversion`,
+        `${API_URL}/api/codeconversion/createUpdateCodeConversion`,
         saveData
       );
 
@@ -289,9 +289,13 @@ export const CodeConversion = () => {
       setIsSubmitting(false);
     }
   };
-
   const toggleViewMode = () => {
+    if (viewMode === "form") {
+      // When switching to list view, refresh the data
+      getAllCodeConversions();
+    }
     setViewMode(viewMode === "form" ? "list" : "form");
+    handleClear();
   };
 
   const handleEditCodeConversion = (record) => {
@@ -329,7 +333,7 @@ export const CodeConversion = () => {
   const getAllFillGrid = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/codeconversion/getAllFillGridFromStockForCodeConversion?branchCode=${branchCode}&client=${client}&orgId=${orgId}&warehouse=${warehouse}`
+        `${API_URL}/api/codeconversion/getAllFillGridFromStockForCodeConversion?branchCode=${branchCode}&client=${client}&orgId=${orgId}&warehouse=${warehouse}`
       );
 
       if (response.data.status === true) {
