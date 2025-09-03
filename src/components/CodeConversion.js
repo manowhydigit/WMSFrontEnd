@@ -6,6 +6,7 @@ import {
   ClearOutlined,
   SaveOutlined,
   FormOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -24,17 +25,20 @@ import {
   Checkbox,
   Modal,
   message,
+  Space,
 } from "antd";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import Draggable from "react-draggable";
 import axios from "axios";
 import { getAllActiveCpartNo } from "../utils/CommonFunctions";
+import * as XLSX from "xlsx";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
 const { TextArea } = Input;
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
+const { RangePicker } = DatePicker;
 
 function PaperComponent(props) {
   return (
@@ -76,6 +80,11 @@ export const CodeConversion = () => {
   const [selectedRows, setSelectedRows] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
 
+  // Search and download states
+  const [searchText, setSearchText] = useState("");
+  const [filteredData, setFilteredData] = useState([]);
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState([]);
   // Data lists
   const [partNoList, setPartNoList] = useState([]);
   const [cPartNoList, setCPartNoList] = useState([]);
@@ -411,6 +420,188 @@ export const CodeConversion = () => {
       }
     } catch (error) {
       console.error("Error fetching GRN numbers:", error);
+    }
+  };
+
+  // Search functionality
+  useEffect(() => {
+    if (searchText) {
+      const filtered = codeConversionList.filter((item) =>
+        Object.values(item).some(
+          (value) =>
+            value &&
+            value.toString().toLowerCase().includes(searchText.toLowerCase())
+        )
+      );
+      setFilteredData(filtered);
+    } else {
+      setFilteredData(codeConversionList);
+    }
+  }, [searchText, codeConversionList]);
+
+  // Excel download function
+  const downloadExcel = async () => {
+    if (!selectedDateRange || selectedDateRange.length !== 2) {
+      message.error("Please select both from and to dates");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      const fromDate = selectedDateRange[0];
+      const toDate = selectedDateRange[1];
+
+      // Fetch Code Conversion data
+      const response = await axios.get(
+        `${API_URL}/api/codeconversion/getAllCodeConversion?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&warehouse=${warehouse}&finYear=${finYear}`
+      );
+
+      if (
+        response.data.status &&
+        response.data.paramObjectsMap.codeConversionVO
+      ) {
+        const allCodeConversionData =
+          response.data.paramObjectsMap.codeConversionVO;
+
+        // Filter data based on the selected date range
+        const filteredCodeConversionData = allCodeConversionData.filter(
+          (item) => {
+            if (!item.docDate) return false;
+
+            let itemDate;
+            if (item.docDate.includes("-")) {
+              const parts = item.docDate.split("-");
+              if (parts[0].length === 4) {
+                itemDate = item.docDate;
+              } else if (parts[0].length === 2) {
+                itemDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+              }
+            } else {
+              itemDate = dayjs(item.docDate).format("YYYY-MM-DD");
+            }
+
+            const fromDateFormatted = dayjs(fromDate, "DD-MM-YYYY").format(
+              "YYYY-MM-DD"
+            );
+            const toDateFormatted = dayjs(toDate, "DD-MM-YYYY").format(
+              "YYYY-MM-DD"
+            );
+
+            return (
+              itemDate &&
+              itemDate >= fromDateFormatted &&
+              itemDate <= toDateFormatted
+            );
+          }
+        );
+
+        if (filteredCodeConversionData.length > 0) {
+          const excelData = formatCodeConversionDataForExcel(
+            filteredCodeConversionData
+          );
+
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          XLSX.utils.book_append_sheet(wb, ws, "Code Conversion Data");
+
+          const fileName = `Code_Conversion_${fromDate}_to_${toDate}.xlsx`;
+          XLSX.writeFile(wb, fileName);
+
+          message.success("Excel file downloaded successfully");
+        } else {
+          message.error("No data found for the selected date range");
+        }
+      } else {
+        message.error("No data available");
+      }
+    } catch (error) {
+      console.error("Error downloading Excel:", error);
+      message.error("Failed to download Excel file");
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  // Format data for Excel
+  const formatCodeConversionDataForExcel = (codeConversionData) => {
+    const excelData = [];
+
+    codeConversionData.forEach((mainRecord) => {
+      if (
+        mainRecord.codeConversionDetailsVO &&
+        mainRecord.codeConversionDetailsVO.length > 0
+      ) {
+        mainRecord.codeConversionDetailsVO.forEach((detail) => {
+          excelData.push({
+            "Doc ID": mainRecord.docId || "",
+            "Doc Date": formatDateForDisplay(mainRecord.docDate),
+            "Part No": detail.partNo || "",
+            "Part Description": detail.partDesc || "",
+            "GRN No": detail.grnNo || "",
+            "Bin Type": detail.binType || "",
+            "Batch No": detail.batchNo || "",
+            Bin: detail.bin || "",
+            Quantity: detail.qty || "",
+            "Actual Qty": detail.actualQty || "",
+            "Convert Qty": detail.convertQty || "",
+            "C Part No": detail.cpartNo || "",
+            "C Part Desc": detail.cpartDesc || "",
+            "C SKU": detail.csku || "",
+            "C Bin": detail.cbin || "",
+            Remarks: detail.remarks || "",
+            Status: mainRecord.freeze ? "Frozen" : "Active",
+            "Created By": mainRecord.createdBy || "",
+          });
+        });
+      } else {
+        excelData.push({
+          "Doc ID": mainRecord.docId || "",
+          "Doc Date": formatDateForDisplay(mainRecord.docDate),
+          "Part No": "",
+          "Part Description": "",
+          "GRN No": "",
+          "Bin Type": "",
+          "Batch No": "",
+          Bin: "",
+          Quantity: "",
+          "Actual Qty": "",
+          "Convert Qty": "",
+          "C Part No": "",
+          "C Part Desc": "",
+          "C SKU": "",
+          "C Bin": "",
+          Remarks: mainRecord.remarks || "",
+          Status: mainRecord.freeze ? "Frozen" : "Active",
+          "Created By": mainRecord.createdBy || "",
+        });
+      }
+    });
+
+    return excelData;
+  };
+
+  // Helper function to format dates for display
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return "";
+
+    try {
+      let date;
+      if (dateString.includes("-")) {
+        const parts = dateString.split("-");
+        if (parts[0].length === 4) {
+          date = dayjs(dateString, "YYYY-MM-DD");
+        } else if (parts[0].length === 2) {
+          date = dayjs(dateString, "DD-MM-YYYY");
+        }
+      } else {
+        date = dayjs(dateString);
+      }
+
+      return date && date.isValid() ? date.format("DD-MM-YYYY") : "";
+    } catch (error) {
+      console.warn("Date conversion error:", error, dateString);
+      return "";
     }
   };
 
@@ -1450,6 +1641,80 @@ export const CodeConversion = () => {
                   background: "var(--bg-body-gradient)",
                 }}
               >
+                <Space>
+                  {/* Search Input */}
+                  <Input
+                    placeholder="Search Reverse Picks..."
+                    prefix={<SearchOutlined />}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    style={{
+                      width: 300,
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                  />
+
+                  <RangePicker
+                    className="white-datepicker"
+                    value={
+                      selectedDateRange.length > 0
+                        ? [
+                            dayjs(selectedDateRange[0], "DD-MM-YYYY"),
+                            dayjs(selectedDateRange[1], "DD-MM-YYYY"),
+                          ]
+                        : null
+                    }
+                    onChange={(dates) => {
+                      if (dates && dates.length === 2) {
+                        setSelectedDateRange([
+                          dates[0].format("DD-MM-YYYY"),
+                          dates[1].format("DD-MM-YYYY"),
+                        ]);
+                      } else {
+                        setSelectedDateRange([]);
+                      }
+                    }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                    placeholder={["From Date", "To Date"]}
+                    format="DD-MM-YYYY"
+                  />
+                  <Button
+                    icon={<DownloadOutlined />}
+                    loading={downloadLoading}
+                    onClick={downloadExcel}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                  >
+                    Download Excel
+                  </Button>
+
+                  <Button
+                    icon={
+                      viewMode === "form" ? (
+                        <UnorderedListOutlined />
+                      ) : (
+                        <FormOutlined />
+                      )
+                    }
+                    onClick={toggleViewMode}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "none",
+                    }}
+                  >
+                    Add New
+                  </Button>
+                </Space>
                 <table
                   style={{
                     width: "100%",

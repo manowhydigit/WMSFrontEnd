@@ -192,15 +192,144 @@ const BuyerOrder = () => {
   };
 
   // Add Excel export function
-  const formatDateForDisplay = (dateString) => {
-    if (!dateString) return "";
+
+  // Add these helper functions near the top of your component, after the state declarations
+
+  const filterDataByDateRange = (data, dateRange) => {
+    if (dateRange.length !== 2) return data;
+
     try {
-      return dayjs(dateString).format("DD-MM-YYYY");
+      const fromDate = dayjs(dateRange[0], "DD-MM-YYYY");
+      const toDate = dayjs(dateRange[1], "DD-MM-YYYY");
+
+      return data.filter((item) => {
+        if (!item.orderDate) return false;
+
+        let itemDate;
+        try {
+          // Try to parse the date in various formats
+          if (item.orderDate.includes("-")) {
+            const parts = item.orderDate.split("-");
+            if (parts[0].length === 4) {
+              // YYYY-MM-DD format
+              itemDate = dayjs(item.orderDate, "YYYY-MM-DD");
+            } else if (parts[0].length === 2) {
+              // DD-MM-YYYY format
+              itemDate = dayjs(item.orderDate, "DD-MM-YYYY");
+            }
+          } else {
+            // Try parsing as ISO string or other formats
+            itemDate = dayjs(item.orderDate);
+          }
+
+          // Check if date parsing was successful
+          if (!itemDate.isValid()) {
+            console.warn("Invalid date format:", item.orderDate);
+            return false;
+          }
+
+          // Check if item date is within the selected range (inclusive)
+          return (
+            itemDate.isSameOrAfter(fromDate, "day") &&
+            itemDate.isSameOrBefore(toDate, "day")
+          );
+        } catch (error) {
+          console.warn("Error parsing date:", item.orderDate, error);
+          return false;
+        }
+      });
     } catch (error) {
-      return dateString;
+      console.error("Error in date range filtering:", error);
+      return data;
+    }
+  };
+  const downloadExcel = async () => {
+    if (!selectedDateRange || selectedDateRange.length !== 2) {
+      message.error("Please select both from and to dates");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      const fromDate = selectedDateRange[0];
+      const toDate = selectedDateRange[1];
+
+      // Fetch Buyer Order data from the API endpoint (SERVER-SIDE)
+      const response = await axios.get(
+        `${API_URL}/api/buyerOrder/getAllBuyerOrderByOrgId?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
+      );
+
+      if (response.data.status && response.data.paramObjectsMap.buyerOrderVO) {
+        const allBuyerOrderData = response.data.paramObjectsMap.buyerOrderVO;
+
+        // Filter data based on the selected date range (CLIENT-SIDE)
+        const filteredBuyerOrderData = allBuyerOrderData.filter((item) => {
+          // Convert the date string to a format that can be compared
+          let itemDate;
+          if (item.orderDate) {
+            // Handle different date formats that might come from the API
+            if (item.orderDate.includes("-")) {
+              const parts = item.orderDate.split("-");
+              if (parts[0].length === 4) {
+                // YYYY-MM-DD format
+                itemDate = item.orderDate;
+              } else if (parts[0].length === 2) {
+                // DD-MM-YYYY format, convert to YYYY-MM-DD for comparison
+                itemDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+              }
+            } else {
+              // If it's a timestamp or other format, try to parse it
+              itemDate = dayjs(item.orderDate).format("YYYY-MM-DD");
+            }
+          }
+
+          // Convert selected dates to YYYY-MM-DD format for comparison
+          const fromDateFormatted = dayjs(fromDate, "DD-MM-YYYY").format(
+            "YYYY-MM-DD"
+          );
+          const toDateFormatted = dayjs(toDate, "DD-MM-YYYY").format(
+            "YYYY-MM-DD"
+          );
+
+          return (
+            itemDate &&
+            itemDate >= fromDateFormatted &&
+            itemDate <= toDateFormatted
+          );
+        });
+
+        if (filteredBuyerOrderData.length > 0) {
+          // Format filtered data for Excel
+          const excelData = formatBuyerOrderDataForExcel(
+            filteredBuyerOrderData
+          );
+
+          // Create workbook and worksheet
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          // Add worksheet to workbook
+          XLSX.utils.book_append_sheet(wb, ws, "Buyer Order Data");
+
+          // Generate Excel file and download
+          XLSX.writeFile(wb, `Buyer_Order_${fromDate}_to_${toDate}.xlsx`);
+
+          message.success("Excel file downloaded successfully");
+        } else {
+          message.error("No data found for the selected date range");
+        }
+      } else {
+        message.error("No data available");
+      }
+    } catch (error) {
+      console.error("Error downloading Excel:", error);
+      message.error("Failed to download Excel file");
+    } finally {
+      setDownloadLoading(false);
     }
   };
 
+  // Format the Buyer Order data for Excel export
   const formatBuyerOrderDataForExcel = (buyerOrderData) => {
     const excelData = [];
 
@@ -260,40 +389,40 @@ const BuyerOrder = () => {
     return excelData;
   };
 
-  const downloadExcel = () => {
+  // Helper function to format dates for display
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return "";
+
     try {
-      // Create a new workbook
-      const wb = XLSX.utils.book_new();
+      // Handle various date formats
+      let date;
 
-      // Prepare data for Excel
-      const excelData = formatBuyerOrderDataForExcel(listViewData);
+      if (typeof dateString === "string") {
+        if (dateString.includes("-")) {
+          const parts = dateString.split("-");
+          if (parts[0].length === 4) {
+            // YYYY-MM-DD format
+            date = dayjs(dateString, "YYYY-MM-DD");
+          } else if (parts[0].length === 2) {
+            // DD-MM-YYYY format
+            date = dayjs(dateString, "DD-MM-YYYY");
+          }
+        } else {
+          // Try parsing as ISO string
+          date = dayjs(dateString);
+        }
+      } else if (dateString instanceof Date) {
+        date = dayjs(dateString);
+      } else if (dayjs.isDayjs(dateString)) {
+        date = dateString;
+      }
 
-      // Convert data to worksheet
-      const ws = XLSX.utils.json_to_sheet(excelData);
-
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(wb, ws, "Buyer Order Data");
-
-      // Generate Excel file and trigger download
-      XLSX.writeFile(wb, "Buyer_Order_Data.xlsx");
-
-      // Show notification
-      notification.success({
-        message: "Excel Downloaded",
-        description:
-          "Buyer Order data has been exported to Excel successfully!",
-        placement: "topRight",
-      });
+      return date && date.isValid() ? date.format("DD-MM-YYYY") : "";
     } catch (error) {
-      console.error("Error exporting to Excel:", error);
-      notification.error({
-        message: "Export Failed",
-        description: "Error exporting to Excel. Please try again.",
-        placement: "topRight",
-      });
+      console.warn("Date conversion error:", error, dateString);
+      return "";
     }
   };
-
   // Form state
   const [formData, setFormData] = useState({
     docid: "",
@@ -2194,7 +2323,7 @@ const BuyerOrder = () => {
             <div
               className="form-containerSG"
               style={{
-                minHeight: "70vh",
+                minHeight: "80vh",
                 background: "#159957",
                 background: "var(--bg-body-gradient)",
                 marginTop: "40px",
@@ -2209,7 +2338,7 @@ const BuyerOrder = () => {
                   background: "var(--bg-body-gradient)",
                 }}
               >
-                <Button
+                {/* <Button
                   icon={<UnorderedListOutlined />}
                   onClick={toggleViewMode}
                   style={{
@@ -2222,7 +2351,7 @@ const BuyerOrder = () => {
                   }}
                 >
                   {viewMode === "form" ? "List" : "Form"}
-                </Button>
+                </Button> */}
               </div>
 
               <div
@@ -2232,7 +2361,7 @@ const BuyerOrder = () => {
                   width: "80%",
                   overflowX: "auto",
                   fontSize: "11px",
-                  maxHeight: "200px",
+                  maxHeight: "500px",
                   overflowY: "auto",
                   marginTop: "40px",
                   marginLeft: "60px",
@@ -2261,8 +2390,24 @@ const BuyerOrder = () => {
                 <Space>
                   <RangePicker
                     className="white-datepicker"
-                    value={selectedDateRange}
-                    onChange={setSelectedDateRange}
+                    value={
+                      selectedDateRange.length > 0
+                        ? [
+                            dayjs(selectedDateRange[0], "DD-MM-YYYY"),
+                            dayjs(selectedDateRange[1], "DD-MM-YYYY"),
+                          ]
+                        : null
+                    }
+                    onChange={(dates) => {
+                      if (dates && dates.length === 2) {
+                        setSelectedDateRange([
+                          dates[0].format("DD-MM-YYYY"),
+                          dates[1].format("DD-MM-YYYY"),
+                        ]);
+                      } else {
+                        setSelectedDateRange([]);
+                      }
+                    }}
                     style={{
                       background: "rgba(255, 255, 255, 0.1)",
                       border: "1px solid rgba(255, 255, 255, 0.3)",
@@ -2383,6 +2528,10 @@ const BuyerOrder = () => {
                           !searchTerm ||
                           (item.docId &&
                             item.docId
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase())) ||
+                          (item.orderNo &&
+                            item.orderNo
                               .toLowerCase()
                               .includes(searchTerm.toLowerCase())) ||
                           (item.buyer &&

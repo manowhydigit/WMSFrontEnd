@@ -31,6 +31,7 @@ import {
   Modal,
   message,
   Pagination,
+  Space,
 } from "antd";
 import dayjs from "dayjs";
 import Draggable from "react-draggable";
@@ -38,11 +39,12 @@ import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import sampleFile from "../assets/sample-files/sample_Location_movement.xls";
-
+import * as XLSX from "xlsx";
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
 const { Option } = Select;
 const { TabPane } = Tabs;
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
 
 function PaperComponent(props) {
   return (
@@ -83,6 +85,30 @@ export const LocationMovement = () => {
   const [selectedRows, setSelectedRows] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+
+  const [loginFinYear, setLoginFinYear] = useState(
+    localStorage.getItem("finYear")
+  );
+
+  const [loginBranchCode, setLoginBranchCode] = useState(
+    localStorage.getItem("branchcode")
+  );
+  const [loginBranch, setLoginBranch] = useState(
+    localStorage.getItem("branch")
+  );
+  const [loginClient, setLoginClient] = useState(
+    localStorage.getItem("client")
+  );
+  const [loginWarehouse, setLoginWarehouse] = useState(
+    localStorage.getItem("warehouse")
+  );
+  const [loginCustomer, setLoginCustomer] = useState(
+    localStorage.getItem("customer")
+  );
+
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Data lists
   const [fromBinList, setFromBinList] = useState([]);
@@ -468,6 +494,140 @@ export const LocationMovement = () => {
       if (fromBin) {
         getGrnNoList(id, fromBin, value);
       }
+    }
+  };
+
+  const downloadExcel = async () => {
+    if (!selectedDateRange || selectedDateRange.length !== 2) {
+      message.error("Please select both from and to dates");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      const fromDate = selectedDateRange[0];
+      const toDate = selectedDateRange[1];
+
+      // Convert dates to YYYY-MM-DD format for API
+      const fromDateFormatted = dayjs(fromDate, "DD-MM-YYYY").format(
+        "YYYY-MM-DD"
+      );
+      const toDateFormatted = dayjs(toDate, "DD-MM-YYYY").format("YYYY-MM-DD");
+
+      // Fetch Location Movement data with date range parameters
+      const response = await axios.get(
+        `${API_URL}/api/locationMovement/getAllLocationMovementByOrgId?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&customer=${customer}&warehouse=${warehouse}&finYear=${finYear}&fromDate=${fromDateFormatted}&toDate=${toDateFormatted}`
+      );
+
+      if (
+        response.data.status &&
+        response.data.paramObjectsMap.locationMovementVO
+      ) {
+        const locationMovementData =
+          response.data.paramObjectsMap.locationMovementVO;
+
+        if (locationMovementData.length > 0) {
+          // Format data for Excel
+          const excelData =
+            formatLocationMovementDataForExcel(locationMovementData);
+
+          // Create workbook and worksheet
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          // Add worksheet to workbook
+          XLSX.utils.book_append_sheet(wb, ws, "Location Movement Data");
+
+          // Generate Excel file and download
+          XLSX.writeFile(wb, `Location_Movement_${fromDate}_to_${toDate}.xlsx`);
+
+          message.success("Excel file downloaded successfully");
+        } else {
+          message.error("No data found for the selected date range");
+        }
+      } else {
+        message.error("No location movement data available");
+      }
+    } catch (error) {
+      console.error("Error downloading Excel:", error);
+      message.error("Failed to download Excel file");
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  // Format the Location Movement data for Excel export
+  const formatLocationMovementDataForExcel = (locationMovementData) => {
+    const excelData = [];
+
+    locationMovementData.forEach((mainRecord) => {
+      if (
+        mainRecord.locationMovementDetailsVO &&
+        mainRecord.locationMovementDetailsVO.length > 0
+      ) {
+        // Create a row for each detail record
+        mainRecord.locationMovementDetailsVO.forEach((detail) => {
+          excelData.push({
+            "Document No": mainRecord.docId,
+            "Document Date": formatDateForDisplay(mainRecord.docDate),
+            "Entry No": mainRecord.entryNo,
+            "Moved Qty": mainRecord.movedQty,
+            "From Bin": detail.fromBin || detail.bin,
+            "To Bin": detail.toBin,
+            "To Bin Type": detail.toBinType,
+            "Part No": detail.partNo,
+            "Part Description": detail.partDesc,
+            SKU: detail.sku,
+            "GRN No": detail.grnNo,
+            "Batch No": detail.batchNo,
+            "Available Qty": detail.avlQty,
+            "To Qty": detail.toQty,
+            "Remaining Qty": detail.remainQty,
+            Status: mainRecord.status,
+            "Created By": mainRecord.createdBy,
+            Branch: mainRecord.branch,
+            "Created Date": formatDateForDisplay(mainRecord.createdDate),
+          });
+        });
+      } else {
+        // Create a row even if there are no details
+        excelData.push({
+          "Document No": mainRecord.docId,
+          "Document Date": formatDateForDisplay(mainRecord.docDate),
+          "Entry No": mainRecord.entryNo,
+          "Moved Qty": mainRecord.movedQty,
+          "From Bin": "",
+          "To Bin": "",
+          "To Bin Type": "",
+          "Part No": "",
+          "Part Description": "",
+          SKU: "",
+          "GRN No": "",
+          "Batch No": "",
+          "Available Qty": "",
+          "To Qty": "",
+          "Remaining Qty": "",
+          Status: mainRecord.status,
+          "Created By": mainRecord.createdBy,
+          Branch: mainRecord.branch,
+          "Created Date": formatDateForDisplay(mainRecord.createdDate),
+        });
+      }
+    });
+
+    return excelData;
+  };
+
+  // Helper function to format dates for display
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return "";
+
+    try {
+      const date = dayjs(dateString);
+      return date.isValid() ? date.format("DD-MM-YYYY") : "";
+    } catch (error) {
+      console.warn("Date conversion error:", error, dateString);
+      return "";
     }
   };
 
@@ -1425,7 +1585,7 @@ export const LocationMovement = () => {
                 >
                   Location Movement List
                 </Typography.Title>
-                <Button
+                {/* <Button
                   icon={
                     viewMode === "form" ? (
                       <UnorderedListOutlined />
@@ -1442,7 +1602,7 @@ export const LocationMovement = () => {
                   }}
                 >
                   {viewMode === "form" ? "List View" : "New Location Movement"}
-                </Button>
+                </Button> */}
               </div>
               <div
                 className="table-container"
@@ -1471,6 +1631,78 @@ export const LocationMovement = () => {
                   scrollbarColor: "rgba(255, 255, 255, 0.3) rgba(0, 0, 0, 0.1)",
                 }}
               >
+                <Input
+                  placeholder="Search by GRN No, Supplier, or Gate Pass ID"
+                  allowClear
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    width: "300px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                  }}
+                  prefix={
+                    <SearchOutlined
+                      style={{ color: "rgba(255, 255, 255, 0.5)" }}
+                    />
+                  }
+                />
+
+                <Space>
+                  <RangePicker
+                    className="white-datepicker"
+                    value={
+                      selectedDateRange.length > 0
+                        ? [
+                            dayjs(selectedDateRange[0], "DD-MM-YYYY"),
+                            dayjs(selectedDateRange[1], "DD-MM-YYYY"),
+                          ]
+                        : null
+                    }
+                    onChange={(dates) => {
+                      if (dates && dates.length === 2) {
+                        setSelectedDateRange([
+                          dates[0].format("DD-MM-YYYY"),
+                          dates[1].format("DD-MM-YYYY"),
+                        ]);
+                      } else {
+                        setSelectedDateRange([]);
+                      }
+                    }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                    placeholder={["From Date", "To Date"]}
+                    format="DD-MM-YYYY"
+                  />
+
+                  <Button
+                    icon={<DownloadOutlined />}
+                    loading={downloadLoading}
+                    onClick={downloadExcel}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                  >
+                    Download Excel
+                  </Button>
+                  <Button
+                    icon={<PlusOutlined />}
+                    onClick={toggleViewMode}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                  >
+                    Add Entry
+                  </Button>
+                </Space>
                 <table
                   style={{
                     width: "100%",

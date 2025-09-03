@@ -8,6 +8,8 @@ import {
   FormOutlined,
   PlusOutlined,
   SaveOutlined,
+  EditOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 
 import {
@@ -28,6 +30,7 @@ import {
   Input,
   DatePicker,
   Select,
+  Space,
 } from "antd";
 
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
@@ -64,7 +67,7 @@ export const Kitting = () => {
   );
   const [client, setClient] = useState(localStorage.getItem("client"));
   const [customer, setCustomer] = useState(localStorage.getItem("customer"));
-  const [finYear, setFinYear] = useState("2024");
+  const [finYear, setFinYear] = useState(localStorage.getItem("finYear"));
   const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -230,39 +233,36 @@ export const Kitting = () => {
   };
 
   const getKittingById = async (row) => {
-    console.log("THE SELECTED EMPLOYEE ID IS:", row.original.id);
-    setEditId(row.original.id);
+    console.log("THE SELECTED KITTING ID IS:", row.id);
+    setEditId(row.id);
     try {
       const response = await axios.get(
-        `${API_URL}/api/kitting/getKittingById?id=${row.original.id}`
+        `${API_URL}/api/kitting/getKittingById?id=${row.id}`
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
+      if (response.data.status === true) {
         setListView(false);
-        const particularCustomer = response.paramObjectsMap.kittingVO;
-        console.log("THE PARTICULAR CUSTOMER IS:", particularCustomer);
+        const particularKitting = response.data.paramObjectsMap.kittingVO;
+        console.log("THE PARTICULAR KITTING IS:", particularKitting);
 
         // Update form data
         setFormData({
-          docId: particularCustomer.docId,
-          docDate: particularCustomer.docDate
-            ? dayjs(particularCustomer.docDate)
+          docId: particularKitting.docId || "",
+          docDate: particularKitting.docDate
+            ? dayjs(particularKitting.docDate)
             : dayjs(),
-          refNo: particularCustomer.refNo || "",
-          refDate: particularCustomer.refDate
-            ? dayjs(particularCustomer.refDate)
-            : "",
-          active: particularCustomer.active === true,
-          customer: particularCustomer.customer,
-          branch: particularCustomer.branch,
-          warehouse: particularCustomer.warehouse,
+          refNo: particularKitting.refNo || "",
+          refDate: particularKitting.refDate
+            ? dayjs(particularKitting.refDate)
+            : null,
+          active: particularKitting.active === true,
         });
 
         // Update childTableData with kittingDetails1VO data
-        const childTableDetails = particularCustomer.kittingDetails1VO.map(
-          (detail) => ({
-            id: detail.id,
+        const childTableDetails = particularKitting.kittingDetails1VO.map(
+          (detail, index) => ({
+            id: detail.id || Date.now() + index,
             bin: detail.bin || "",
             partNo: detail.partNo || "",
             partDescription: detail.partDescription || "",
@@ -276,75 +276,80 @@ export const Kitting = () => {
             unitRate: detail.unitRate || "",
             amount: detail.amount || "",
             rowGrnNoList: [], // Initialize with empty list
+            rowBatchNoList: [], // Initialize with empty list
+            rowBinList: [], // Initialize with empty list
           })
         );
 
         setChildTableData(childTableDetails);
 
-        // Call getAllChildGrnNo for each part number in childTableDetails
-        const grnPromises = childTableDetails.map((row) =>
-          getAllChildGrnNo(row.partNo, row)
-        );
-        const batchPromises = childTableDetails.map((row) =>
-          getAllChildBatchNo(row.grnNo, row)
-        );
-        const binPromises = childTableDetails.map((row) =>
-          getAllChildBin(row.partNo, row.grnNo, row.batchNo, row)
-        );
+        // Call APIs for each row to populate dropdown data
+        const apiPromises = childTableDetails.map(async (row) => {
+          try {
+            // Get GRN numbers
+            const grnResponse = await getAllChildGrnNo(row.partNo, row);
+            // Get batch numbers
+            const batchResponse = await getAllChildBatchNo(row.grnNo, row);
+            // Get bins
+            const binResponse = await getAllChildBin(
+              row.partNo,
+              row.grnNo,
+              row.batchNo,
+              row
+            );
+            return { grnResponse, batchResponse, binResponse };
+          } catch (error) {
+            console.error("Error fetching data for row:", error);
+            return null;
+          }
+        });
 
-        // Wait for all the getAllChildGrnNo API calls to complete
-        await Promise.all(grnPromises, batchPromises, binPromises);
+        // Wait for all API calls to complete
+        await Promise.all(apiPromises);
 
         // Update parentTableData with kittingDetails2VO data
-        setParentTableData(
-          particularCustomer.kittingDetails2VO.map((detail) => ({
-            id: detail.id,
-            partNo: detail.ppartNo || "",
-            partDescription: detail.ppartDesc || "",
-            batchNo: detail.pbatchNo || "",
-            batchDate: detail.pbatchDate || "",
-            lotNo: detail.plotNo || "",
-            sku: detail.psku || "",
-            qty: detail.pqty || "",
-            unitRate: detail.punitRate || "",
-            amount: detail.pamount || "",
-            grnNo: detail.pgrnNo || "",
-            grnDate: detail.pgrnDate || "",
-            expDate: detail.pexpDate || "",
-            bin: detail.pbin,
-            core: detail.pcore,
-            cellType: detail.pcellType,
-            binType: detail.pbinType,
-            binClass: detail.pbinClass,
-          }))
-        );
-
-        const alreadySelectedBranch = particularCustomer.clientBranchVO.map(
-          (br) => {
-            const foundBranch = branchList.find(
-              (branch) => branch.branchCode === br.branchCode
-            );
-            console.log(
-              `Searching for branch with code ${br.branchCode}:`,
-              foundBranch
-            );
-            return {
-              id: br.id,
-              branchCode: foundBranch ? foundBranch.branchCode : "Not Found",
-              branch: foundBranch ? foundBranch.branch : "Not Found",
-            };
-          }
-        );
-        setParentTableData(alreadySelectedBranch);
+        if (particularKitting.kittingDetails2VO) {
+          const parentTableDetails = particularKitting.kittingDetails2VO.map(
+            (detail, index) => ({
+              id: detail.id || Date.now() + index + 1000,
+              partNo: detail.ppartNo || "",
+              partDescription: detail.ppartDesc || "",
+              batchNo: detail.pbatchNo || "",
+              batchDate: detail.pbatchDate || "",
+              lotNo: detail.plotNo || "",
+              sku: detail.psku || "",
+              qty: detail.pqty || "",
+              unitRate: detail.punitRate || "",
+              amount: detail.pamount || "",
+              grnNo: detail.pgrnNo || "",
+              grnDate: detail.pgrnDate || "",
+              expDate: detail.pexpDate || "",
+              bin: detail.pbin || "",
+              core: detail.pcore || "",
+              cellType: detail.pcellType || "",
+              binType: detail.pbinType || "",
+              binClass: detail.pbinClass || "",
+            })
+          );
+          setParentTableData(parentTableDetails);
+        }
       } else {
-        console.error("API Error:", response);
+        console.error("API Error:", response.data);
+        message.error("Failed to fetch kitting details");
       }
     } catch (error) {
       console.error("Error fetching data:", error);
+      message.error("Error fetching kitting details");
     }
   };
-
   const handleSave = async () => {
+    const formattedDocDate = formData.docDate
+      ? dayjs(formData.docDate).format("YYYY-MM-DD")
+      : "";
+
+    const formattedGRNDate = formData.grnDate
+      ? dayjs(formData.grnDate).format("YYYY-MM-DD")
+      : "";
     const errors = {};
     let firstInvalidFieldRef = null;
 
@@ -497,7 +502,7 @@ export const Kitting = () => {
       // Data to save
       const saveFormData = {
         ...(editId && { id: editId }),
-        docDate: formData.docDate,
+        docDate: formattedDocDate,
         refNo: formData.refNo,
         refDate: formData.refDate,
         kittingDetails1DTO: childVO,
@@ -519,7 +524,7 @@ export const Kitting = () => {
           `${API_URL}/api/kitting/createUpdateKitting`,
           saveFormData
         );
-        if (response.status === true) {
+        if (response.data.status === true) {
           console.log("Response:", response);
           handleClear();
           showToast(
@@ -747,8 +752,8 @@ export const Kitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        setListViewData(response.paramObjectsMap.kittingVOs);
+      if (response.data.status === true) {
+        setListViewData(response.data.paramObjectsMap.kittingVOs);
       } else {
         console.error("API Error:", response);
       }
@@ -766,12 +771,14 @@ export const Kitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        const options1 = response.paramObjectsMap.kittingVO.map((item) => ({
-          value: item.partNo,
-          partDescription: item.partDesc, // Ensure these fields exist in the response
-          sku: item.Sku, // Ensure these fields exist in the response
-        }));
+      if (response.data.status === true) {
+        const options1 = response.data.paramObjectsMap.kittingVO.map(
+          (item) => ({
+            value: item.partNo,
+            partDescription: item.partDesc, // Ensure these fields exist in the response
+            sku: item.Sku, // Ensure these fields exist in the response
+          })
+        );
         setPartNoOptions1(options1);
 
         // Modify the document ID and set it in the parent table data
@@ -807,8 +814,8 @@ export const Kitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        setChildPartNoList(response.paramObjectsMap.kittingVO);
+      if (response.data.status === true) {
+        setChildPartNoList(response.data.paramObjectsMap.kittingVO);
       } else {
         console.error("Error: Unable to fetch part numbers:", response.message);
       }
@@ -828,6 +835,28 @@ export const Kitting = () => {
     return childPartNoList.filter(
       (partDetail) => !selectedPartNos.includes(partDetail.partNo)
     );
+  };
+
+  // Add this utility function at the top of your component
+  const formatDateFromAPI = (dateString) => {
+    if (!dateString) return "";
+
+    // Handle different date formats from API
+    let dateObj;
+    if (dateString.includes(" ")) {
+      // Format: "2025-09-01 00:00:00.0"
+      dateObj = new Date(dateString.split(" ")[0]);
+    } else {
+      // Format: "2025-09-01"
+      dateObj = new Date(dateString);
+    }
+
+    // Format as dd-mm-yyyy
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const year = dateObj.getFullYear();
+
+    return `${day}-${month}-${year}`;
   };
 
   const handleChildPartNoChange = (row, index, event) => {
@@ -869,27 +898,30 @@ export const Kitting = () => {
 
   const getAllChildGrnNo = async (selectedPartNo, row) => {
     try {
+      if (!selectedPartNo) return;
+
       const response = await axios.get(
         `${API_URL}/api/kitting/getGrnNOByChild?orgId=${orgId}&branchCode=${branchCode}&client=${client}&partNo=${selectedPartNo}&warehouse=${warehouse}`
       );
-      console.log("API Response:", response);
+      console.log("API Response for GRN:", response);
 
-      if (response.status === true) {
+      if (response.data.status === true) {
         setChildTableData((prev) =>
           prev.map((r) =>
             r.id === row.id
               ? {
                   ...r,
-                  rowGrnNoList: response.paramObjectsMap.kittingVO,
+                  rowGrnNoList: response.data.paramObjectsMap.kittingVO || [],
                 }
               : r
           )
         );
+        return response;
       } else {
         console.error("API Error:", response);
       }
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching GRN data:", error);
     }
   };
 
@@ -923,32 +955,37 @@ export const Kitting = () => {
     });
     getAllChildBatchNo(value, row);
   };
-
   const getAllChildBatchNo = async (selectedGrnNo, row) => {
     try {
+      if (!selectedGrnNo || !row.partNo) return;
+
       const response = await axios.get(
         `${API_URL}/api/kitting/getBatchByChild?orgId=${orgId}&branchCode=${branchCode}&client=${client}&partNo=${row.partNo}&warehouse=${warehouse}&grnNo=${selectedGrnNo}`
       );
-      console.log("API Response:", response);
+      console.log("API Response for Batch:", response);
 
-      if (response.status === true) {
-        const batchData = response.paramObjectsMap.kittingVO.map((item) => ({
-          batchNo: item.batchNo,
-          batchDate: item.batchDate,
-          expDate: item.expDate,
-        }));
+      if (response.data.status === true) {
+        const batchData = response.data.paramObjectsMap.kittingVO.map(
+          (item) => ({
+            batchNo: item.batchNo,
+            batchDate: item.batchDate,
+            expDate: item.expDate,
+          })
+        );
         setChildTableData((prev) =>
           prev.map((r) =>
             r.id === row.id ? { ...r, rowBatchNoList: batchData } : r
           )
         );
+        return response;
       } else {
         console.error("API Error:", response);
       }
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching batch data:", error);
     }
   };
+
   const handleChildBatchNoChange = (row, index, e) => {
     const value = e.target.value;
     console.log("Selected Batch No:", value);
@@ -980,8 +1017,17 @@ export const Kitting = () => {
       return newErrors;
     });
 
+    // Call getAllChildBin with the batch number (could be empty string)
     getAllChildBin(row.partNo, row.grnNo, value, row);
   };
+
+  useEffect(() => {
+    getAllKitting();
+    getDocId();
+    getAllBinDetails();
+    getAllChildPartNo();
+    getAllParentPart();
+  }, []);
 
   const getAllChildBin = async (
     selectedPartNo,
@@ -990,30 +1036,36 @@ export const Kitting = () => {
     row
   ) => {
     try {
-      const response = await axios.get(
-        `${API_URL}/api/kitting/getBinByChild?orgId=${orgId}&branchCode=${branchCode}&client=${client}&partNo=${selectedPartNo}&warehouse=${warehouse}&grnNo=${selectedGrnNo}&batch=${selectedBatchNo}`
-      );
-      console.log("API Response:", response);
+      if (!selectedPartNo || !selectedGrnNo) return;
 
-      if (response.status === true) {
+      let url = `${API_URL}/api/kitting/getBinByChild?orgId=${orgId}&branchCode=${branchCode}&client=${client}&partNo=${selectedPartNo}&warehouse=${warehouse}&grnNo=${selectedGrnNo}`;
+
+      if (selectedBatchNo) {
+        url += `&batch=${selectedBatchNo}`;
+      }
+
+      const response = await axios.get(url);
+      console.log("API Response for Bin:", response);
+
+      if (response.data.status === true || response.data.statusFlag === "Ok") {
         setChildTableData((prev) =>
           prev.map((r) =>
             r.id === row.id
               ? {
                   ...r,
-                  rowBinList: response.paramObjectsMap.kittingVO,
+                  rowBinList: response.data.paramObjectsMap.kittingVO || [],
                 }
               : r
           )
         );
+        return response;
       } else {
         console.error("API Error:", response);
       }
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching bin data:", error);
     }
   };
-
   const handleChildBinChange = (row, index, event) => {
     const value = event.target.value;
     const selectedToBin = row.rowBinList.find((row) => row.bin === value);
@@ -1048,8 +1100,8 @@ export const Kitting = () => {
         `${API_URL}/api/kitting/getSqtyByKitting?orgId=${orgId}&batch=${row.batchNo}&branchCode=${branchCode}&client=${client}&partNo=${row.partNo}&warehouse=${warehouse}&grnNo=${row.grnNo}&bin=${selectedBin}`
       );
 
-      if (response.status === true) {
-        const avlQty = response.paramObjectsMap.avlQty; // Update to match the response format
+      if (response.data.status === true) {
+        const avlQty = response.data.paramObjectsMap.avlQty; // Update to match the response format
         setChildTableData((prevData) =>
           prevData.map((r) =>
             r.partNo === row.partNo && r.grnNo === row.grnNo
@@ -1075,12 +1127,12 @@ export const Kitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
+      if (response.data.status === true || response.data.statusFlag === "Ok") {
         console.log(
-          "response.paramObjectsMap.Bins:",
-          response.paramObjectsMap.Bins
+          "response.data.paramObjectsMap.Bins:",
+          response.data.paramObjectsMap.Bins
         );
-        const optionsBin = response.paramObjectsMap.Bins.map((item) => ({
+        const optionsBin = response.data.paramObjectsMap.Bins.map((item) => ({
           binClass: item.binClass,
           binType: item.binType, // Ensure these fields exist in the response
           cellType: item.cellType, // Ensure these fields exist in the response
@@ -1103,8 +1155,8 @@ export const Kitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        const options = response.paramObjectsMap.kittingVO.map((item) => ({
+      if (response.data.status === true) {
+        const options = response.data.paramObjectsMap.kittingVO.map((item) => ({
           value: item.partNo,
           partDescription: item.partDesc, // Ensure these fields exist in the response
           sku: item.Sku, // Ensure these fields exist in the response
@@ -1126,14 +1178,14 @@ export const Kitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        setDocId(response.paramObjectsMap.KittingDocId);
+      if (response.data.status === true) {
+        setDocId(response.data.paramObjectsMap.KittingDocId);
         setFormData((prevFormData) => ({
           ...prevFormData,
-          docId: response.paramObjectsMap.KittingDocId,
+          docId: response.data.paramObjectsMap.KittingDocId,
         }));
         const modifiedDocId = appendGNToDocumentId(
-          response.paramObjectsMap.KittingDocId
+          response.data.paramObjectsMap.KittingDocId
         );
         console.log("Modified docId:", modifiedDocId); // Log the modified docId to verify it
 
@@ -1213,146 +1265,130 @@ export const Kitting = () => {
         >
           {listView ? (
             <div
+              className="form-containerSG"
               style={{
-                padding: "20px",
-                marginTop: "20px",
-                display: "revert",
-                placeContent: "center",
-                overflowY: "none",
-                minHeight: "20dvh",
+                minHeight: "80vh",
                 background: "var(--bg-body-gradient)",
+                marginTop: "40px",
               }}
             >
               {/* Header */}
               <div
-                className="form-containerSG"
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
                   background: "var(--bg-body-gradient)",
+                  padding: "0 20px",
                 }}
               >
-                <div>
-                  <Typography.Title
-                    level={3}
-                    style={{ color: "#fff", margin: 0 }}
-                  >
-                    Kitting List
-                  </Typography.Title>
-                  <Typography.Text
-                    style={{ color: "rgba(255, 255, 255, 0.8)" }}
-                  >
-                    View and manage kitting entries
-                  </Typography.Text>
-                </div>
-                <div>
-                  <Button
-                    icon={<FormOutlined />}
-                    onClick={() => setListView(false)}
-                    style={{
-                      backgroundColor: "transparent",
-                      color: "white",
-                      border: "none",
-                    }}
-                  >
-                    Form View
-                  </Button>
-                </div>
+                <Typography.Title
+                  level={3}
+                  style={{ color: "#fff", margin: 0 }}
+                >
+                  Kitting List
+                </Typography.Title>
+                <Button
+                  icon={<FormOutlined />}
+                  onClick={() => setListView(false)}
+                  style={{
+                    backgroundColor: "transparent",
+                    color: "white",
+                    border: "none",
+                  }}
+                >
+                  Form View
+                </Button>
               </div>
 
-              {/* Search Filters */}
+              {/* Search and Filter Controls */}
               <div
                 style={{
-                  marginTop: "20px",
-                  padding: "20px",
-                  borderRadius: "8px",
-                  background: "rgba(255, 255, 255, 0.1)",
-                  backdropFilter: "blur(10px)",
+                  margin: "20px",
+                  display: "flex",
+                  gap: "10px",
+                  flexWrap: "wrap",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
-                <Row gutter={16}>
-                  <Col span={6}>
-                    <Form.Item
-                      label={<span style={{ color: "#fff" }}>From Date</span>}
-                    >
-                      <DatePicker
-                        style={{ width: "100%" }}
-                        value={dayjs(searchParams.fromDate)}
-                        onChange={(date) =>
-                          setSearchParams({
-                            ...searchParams,
-                            fromDate: date,
-                          })
-                        }
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item
-                      label={<span style={{ color: "#fff" }}>To Date</span>}
-                    >
-                      <DatePicker
-                        style={{ width: "100%" }}
-                        value={dayjs(searchParams.toDate)}
-                        onChange={(date) =>
-                          setSearchParams({
-                            ...searchParams,
-                            toDate: date,
-                          })
-                        }
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item
-                      label={<span style={{ color: "#fff" }}>Document No</span>}
-                    >
-                      <Input
-                        value={searchParams.docId}
-                        onChange={(e) =>
-                          setSearchParams({
-                            ...searchParams,
-                            docId: e.target.value,
-                          })
-                        }
-                        placeholder="Enter document no"
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item
-                      label={<span style={{ color: "#fff" }}>Status</span>}
-                    >
-                      <Select
-                        value={searchParams.status}
-                        onChange={(value) =>
-                          setSearchParams({
-                            ...searchParams,
-                            status: value,
-                          })
-                        }
-                        style={{ width: "100%" }}
-                      >
-                        <Option value="ALL">All</Option>
-                        <Option value="PENDING">Pending</Option>
-                        <Option value="COMPLETED">Completed</Option>
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                </Row>
-                <div style={{ textAlign: "right", marginTop: "16px" }}>
+                <Input
+                  placeholder="Search kitting entries..."
+                  allowClear
+                  value={searchParams.docId}
+                  onChange={(e) =>
+                    setSearchParams({ ...searchParams, docId: e.target.value })
+                  }
+                  style={{
+                    width: "300px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                  }}
+                  prefix={
+                    <SearchOutlined
+                      style={{ color: "rgba(255, 255, 255, 0.5)" }}
+                    />
+                  }
+                />
+
+                <div
+                  style={{ display: "flex", gap: "10px", alignItems: "center" }}
+                >
+                  <DatePicker
+                    placeholder="From Date"
+                    value={dayjs(searchParams.fromDate)}
+                    onChange={(date) =>
+                      setSearchParams({ ...searchParams, fromDate: date })
+                    }
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                  />
+                  <DatePicker
+                    placeholder="To Date"
+                    value={dayjs(searchParams.toDate)}
+                    onChange={(date) =>
+                      setSearchParams({ ...searchParams, toDate: date })
+                    }
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                  />
+                  <Select
+                    value={searchParams.status}
+                    onChange={(value) =>
+                      setSearchParams({ ...searchParams, status: value })
+                    }
+                    style={{
+                      width: "150px",
+                      background: "rgba(255, 255, 255, 0.1)",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                  >
+                    <Option value="ALL">All Status</Option>
+                    <Option value="PENDING">Pending</Option>
+                    <Option value="COMPLETED">Completed</Option>
+                  </Select>
+
                   <Button
                     type="primary"
                     icon={<SearchOutlined />}
-                    onClick={() => {
-                      // Implement search functionality
-                      console.log("Search clicked", searchParams);
+                    onClick={() => console.log("Search clicked", searchParams)}
+                    style={{
+                      background: "rgba(108, 99, 255, 0.3)",
+                      color: "#fff",
+                      border: "none",
                     }}
-                    style={{ marginRight: "8px" }}
                   >
                     Search
                   </Button>
+
                   <Button
                     icon={<ClearOutlined />}
                     onClick={() => {
@@ -1363,43 +1399,358 @@ export const Kitting = () => {
                         status: "ALL",
                       });
                     }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      color: "#fff",
+                      border: "none",
+                    }}
                   >
                     Clear
+                  </Button>
+
+                  <Button
+                    type="primary"
+                    icon={<DownloadOutlined />}
+                    onClick={() => console.log("Export to Excel")}
+                    style={{
+                      background: "rgba(108, 99, 255, 0.3)",
+                      color: "#fff",
+                      border: "none",
+                    }}
+                  >
+                    Export to Excel
                   </Button>
                 </div>
               </div>
 
               {/* Data Table */}
               <div
+                className="table-container"
                 style={{
+                  position: "relative",
+                  width: "95%",
+                  margin: "0 auto",
+                  overflowX: "auto",
+                  fontSize: "11px",
+                  maxHeight: "500px",
+                  overflowY: "auto",
                   marginTop: "20px",
-                  borderRadius: "8px",
-                  overflow: "hidden",
+                  background: "var(--bg-body-gradient)",
                 }}
               >
-                <Table
-                  columns={listViewColumns.map((col) => ({
-                    title: col.title,
-                    dataIndex: col.dataIndex,
-                    key: col.key,
-                    width: col.width,
-                    render: col.render,
-                  }))}
-                  dataSource={listViewData}
-                  rowKey="id"
-                  pagination={{
-                    current: currentPage,
-                    pageSize: pageSize,
-                    total: listViewData.length,
-                    onChange: (page, size) => {
-                      setCurrentPage(page);
-                      setPageSize(size);
-                    },
-                    showSizeChanger: true,
-                    pageSizeOptions: ["10", "20", "50", "100"],
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    background: "var(--bg-body-gradient)",
                   }}
-                  scroll={{ x: true }}
-                />
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.3)",
+                        backgroundColor: "rgba(255, 255, 255, 0.1)",
+                      }}
+                    >
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Document No
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Document Date
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Ref Id
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Ref Date
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Status
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listViewData
+                      .slice(
+                        (currentPage - 1) * pageSize,
+                        currentPage * pageSize
+                      )
+                      .map((item, index) => (
+                        <tr
+                          key={item.id}
+                          style={{
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                            color: "white",
+                            backgroundColor:
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              "rgba(255, 255, 255, 0.1)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)";
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.docId}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.docDate
+                              ? formatDateFromAPI(item.docDate)
+                              : "-"}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.refNo || "-"}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.refDate
+                              ? formatDateFromAPI(item.refDate)
+                              : "-"}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: "12px",
+                                backgroundColor:
+                                  item.status === "COMPLETED"
+                                    ? "rgba(76, 175, 80, 0.3)"
+                                    : "rgba(255, 193, 7, 0.3)",
+                                color:
+                                  item.status === "COMPLETED"
+                                    ? "#4CAF50"
+                                    : "#FFC107",
+                              }}
+                            >
+                              {item.status || "PENDING"}
+                            </span>
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            <Space>
+                              <Button
+                                type="link"
+                                icon={<EditOutlined />}
+                                onClick={() => getKittingById(item)}
+                                style={{ color: "white" }}
+                              />
+                            </Space>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+
+                {/* Custom Pagination */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    marginTop: "16px",
+                    padding: "0 20px",
+                    color: "white",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ marginRight: "16px", fontSize: "12px" }}>
+                    {(currentPage - 1) * pageSize + 1}-
+                    {Math.min(currentPage * pageSize, listViewData.length)} of{" "}
+                    {listViewData.length} items
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
+                    disabled={currentPage === 1}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid white",
+                      margin: "0 4px",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                      opacity: currentPage === 1 ? 0.5 : 1,
+                    }}
+                  >
+                    Prev
+                  </button>
+
+                  {Array.from(
+                    { length: Math.ceil(listViewData.length / pageSize) },
+                    (_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i + 1)}
+                        style={{
+                          backgroundColor:
+                            currentPage === i + 1
+                              ? "rgba(255,255,255,0.2)"
+                              : "transparent",
+                          color: "white",
+                          border: "1px solid white",
+                          margin: "0 2px",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          minWidth: "28px",
+                        }}
+                      >
+                        {i + 1}
+                      </button>
+                    )
+                  )}
+
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) =>
+                        Math.min(
+                          prev + 1,
+                          Math.ceil(listViewData.length / pageSize)
+                        )
+                      )
+                    }
+                    disabled={
+                      currentPage === Math.ceil(listViewData.length / pageSize)
+                    }
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid white",
+                      margin: "0 4px",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      cursor:
+                        currentPage ===
+                        Math.ceil(listViewData.length / pageSize)
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        currentPage ===
+                        Math.ceil(listViewData.length / pageSize)
+                          ? 0.5
+                          : 1,
+                    }}
+                  >
+                    Next
+                  </button>
+
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      color: "white",
+                      border: "1px solid white",
+                      marginLeft: "8px",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    <option value="5" style={{ background: "#1A1A2E" }}>
+                      5 / page
+                    </option>
+                    <option value="10" style={{ background: "#1A1A2E" }}>
+                      10 / page
+                    </option>
+                    <option value="20" style={{ background: "#1A1A2E" }}>
+                      20 / page
+                    </option>
+                    <option value="50" style={{ background: "#1A1A2E" }}>
+                      50 / page
+                    </option>
+                  </select>
+                </div>
               </div>
             </div>
           ) : (
@@ -1517,9 +1868,11 @@ export const Kitting = () => {
                               }
                             >
                               <DatePicker
+                                className="white-datepicker"
                                 style={{ width: "100%", ...readOnlyInputStyle }}
                                 value={dayjs(formData.docDate)}
                                 disabled
+                                format="DD-MM-YYYY"
                               />
                             </Form.Item>
                           </Col>
@@ -1548,12 +1901,14 @@ export const Kitting = () => {
                               }
                             >
                               <DatePicker
-                                style={{ width: "100%" }}
+                                className="white-datepicker"
+                                style={{ width: "100%", ...readOnlyInputStyle }}
                                 value={
                                   formData.refDate
                                     ? dayjs(formData.refDate)
                                     : null
                                 }
+                                format="DD-MM-YYYY"
                                 onChange={(date) =>
                                   handleDateChange("refDate", date)
                                 }
@@ -1780,7 +2135,7 @@ export const Kitting = () => {
                                       icon={<DeleteOutlined />}
                                       onClick={() => handleDeleteRow(row.id)}
                                       style={{
-                                        color: "#ff4d4f",
+                                        color: "white",
                                         background: "transparent",
                                         border: "none",
                                       }}
@@ -1790,6 +2145,7 @@ export const Kitting = () => {
                                     style={{
                                       padding: "8px",
                                       textAlign: "center",
+                                      color: "white",
                                     }}
                                   >
                                     {index + 1}
@@ -1873,9 +2229,15 @@ export const Kitting = () => {
                                   </td>
                                   <td style={{ padding: "8px" }}>
                                     <Input
-                                      type="date"
-                                      value={row.grnDate}
+                                      type="text" // Changed from date to text since we're displaying formatted date
+                                      value={
+                                        row.grnDate
+                                          ? formatDateFromAPI(row.grnDate)
+                                          : ""
+                                      }
                                       onChange={(e) => {
+                                        // You might want to handle date input differently
+                                        // If you need to edit dates, consider using a date picker
                                         const value = e.target.value;
                                         setChildTableData((prev) =>
                                           prev.map((r) =>
@@ -2227,7 +2589,7 @@ export const Kitting = () => {
                                       icon={<DeleteOutlined />}
                                       onClick={() => handleDeleteRow1(row.id)}
                                       style={{
-                                        color: "#ff4d4f",
+                                        color: "white",
                                         background: "transparent",
                                         border: "none",
                                       }}
@@ -2237,6 +2599,7 @@ export const Kitting = () => {
                                     style={{
                                       padding: "8px",
                                       textAlign: "center",
+                                      color: "white",
                                     }}
                                   >
                                     {index + 1}

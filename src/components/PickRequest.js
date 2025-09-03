@@ -8,6 +8,7 @@ import {
   CloudUploadOutlined,
   CloudDownloadOutlined,
   RightCircleOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -35,11 +36,13 @@ import { getAllActiveGroups } from "../utils/CommonFunctions";
 import CommonListViewTable from "./CommonListViewTable";
 import GeneratePdfTempPick from "./PickRequestPdf";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
+import * as XLSX from "xlsx";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
 const { TextArea } = Input;
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
+const { RangePicker } = DatePicker;
 
 function PaperComponent(props) {
   return (
@@ -79,6 +82,9 @@ export const PickRequest = () => {
   const [pdfData, setPdfData] = useState([]);
   const [partNoList, setPartNoList] = useState([]);
   const [form] = Form.useForm();
+
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState([]);
 
   const [formData, setFormData] = useState({
     docId: "",
@@ -325,6 +331,209 @@ export const PickRequest = () => {
       }
     } catch (error) {
       console.error("Error fetching data:", error);
+    }
+  };
+
+  // Helper function to format dates for display
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return "";
+    try {
+      return dayjs(dateString).format("DD-MM-YYYY");
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  // Filter data by date range
+  const filterDataByDateRange = (data, dateRange) => {
+    if (dateRange.length !== 2) return data;
+
+    const fromDate = dayjs(dateRange[0], "DD-MM-YYYY");
+    const toDate = dayjs(dateRange[1], "DD-MM-YYYY");
+
+    return data.filter((item) => {
+      const itemDate = dayjs(item.docDate, "DD-MM-YYYY");
+      return (
+        itemDate.isAfter(fromDate.subtract(1, "day")) &&
+        itemDate.isBefore(toDate.add(1, "day"))
+      );
+    });
+  };
+
+  // Format Pick Request data for Excel export
+  const formatPickRequestDataForExcel = (pickRequestData) => {
+    const excelData = [];
+
+    pickRequestData.forEach((mainRecord) => {
+      if (
+        mainRecord.pickRequestDetailsVO &&
+        mainRecord.pickRequestDetailsVO.length > 0
+      ) {
+        // Create a row for each detail record
+        mainRecord.pickRequestDetailsVO.forEach((detail) => {
+          excelData.push({
+            "Document No": mainRecord.docId,
+            "Document Date": formatDateForDisplay(mainRecord.docDate),
+            "Buyer Order No": mainRecord.buyerOrderNo,
+            "Buyer Ref No": mainRecord.buyerRefNo,
+            "Buyer Ref Date": formatDateForDisplay(mainRecord.buyerRefDate),
+            "Client Name": mainRecord.clientName,
+            "Customer Name": mainRecord.customerName,
+            "Customer Short Name": mainRecord.customerShortName,
+            "Out Time": mainRecord.outTime,
+            "Client Address": mainRecord.clientAddress,
+            "Customer Address": mainRecord.customerAddress,
+            Status: mainRecord.status,
+            "Buyer's Reference": mainRecord.buyersReference,
+            "Invoice No": mainRecord.invoiceNo,
+            "Client Short Name": mainRecord.clientShortName,
+            "Pick Order": mainRecord.pickOrder,
+            "Part No": detail.partNo,
+            "Part Description": detail.partDesc,
+            Bin: detail.bin,
+            SKU: detail.sku,
+            "Batch No": detail.batchNo,
+            "Order Qty": detail.orderQty,
+            "Available Qty": detail.availQty,
+            "Pick Qty": detail.pickQty,
+            "Remaining Qty": detail.remainQty,
+            "GRN No": detail.grnNo,
+            "GRN Date": formatDateForDisplay(detail.grnDate),
+            "Expiry Date": formatDateForDisplay(detail.expDate),
+            "Stock Date": formatDateForDisplay(detail.stockDate),
+            "QC Flag": detail.qcFlag,
+            Remarks: detail.remarks,
+            "Created By": mainRecord.createdBy,
+            Branch: mainRecord.branch,
+          });
+        });
+      } else {
+        // Create a row even if there are no details
+        excelData.push({
+          "Document No": mainRecord.docId,
+          "Document Date": formatDateForDisplay(mainRecord.docDate),
+          "Buyer Order No": mainRecord.buyerOrderNo,
+          "Buyer Ref No": mainRecord.buyerRefNo,
+          "Buyer Ref Date": formatDateForDisplay(mainRecord.buyerRefDate),
+          "Client Name": mainRecord.clientName,
+          "Customer Name": mainRecord.customerName,
+          "Customer Short Name": mainRecord.customerShortName,
+          "Out Time": mainRecord.outTime,
+          "Client Address": mainRecord.clientAddress,
+          "Customer Address": mainRecord.customerAddress,
+          Status: mainRecord.status,
+          "Buyer's Reference": mainRecord.buyersReference,
+          "Invoice No": mainRecord.invoiceNo,
+          "Client Short Name": mainRecord.clientShortName,
+          "Pick Order": mainRecord.pickOrder,
+          "Part No": "",
+          "Part Description": "",
+          Bin: "",
+          SKU: "",
+          "Batch No": "",
+          "Order Qty": "",
+          "Available Qty": "",
+          "Pick Qty": "",
+          "Remaining Qty": "",
+          "GRN No": "",
+          "GRN Date": "",
+          "Expiry Date": "",
+          "Stock Date": "",
+          "QC Flag": "",
+          Remarks: "",
+          "Created By": mainRecord.createdBy,
+          Branch: mainRecord.branch,
+        });
+      }
+    });
+
+    return excelData;
+  };
+
+  // Download Excel function
+  const downloadExcel = async () => {
+    if (!selectedDateRange || selectedDateRange.length !== 2) {
+      message.error("Please select both from and to dates");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      const fromDate = selectedDateRange[0];
+      const toDate = selectedDateRange[1];
+
+      // Fetch Pick Request data from the API endpoint
+      const response = await axios.get(
+        `${API_URL}/api/pickrequest/getAllPickRequestByOrgId?orgId=${orgId}&branchCode=${loginBranchCode}&branch=${loginBranch}&client=${loginClient}&warehouse=${loginWarehouse}&finYear=${loginFinYear}`
+      );
+
+      if (response.data.status && response.data.paramObjectsMap.pickRequestVO) {
+        const allPickRequestData = response.data.paramObjectsMap.pickRequestVO;
+
+        // Filter data based on the selected date range
+        const filteredPickRequestData = allPickRequestData.filter((item) => {
+          // Convert the date string to a format that can be compared
+          let itemDate;
+          if (item.docDate) {
+            // Handle different date formats that might come from the API
+            if (item.docDate.includes("-")) {
+              const parts = item.docDate.split("-");
+              if (parts[0].length === 4) {
+                // YYYY-MM-DD format
+                itemDate = item.docDate;
+              } else if (parts[0].length === 2) {
+                // DD-MM-YYYY format, convert to YYYY-MM-DD for comparison
+                itemDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+              }
+            } else {
+              // If it's a timestamp or other format, try to parse it
+              itemDate = dayjs(item.docDate).format("YYYY-MM-DD");
+            }
+          }
+
+          // Convert selected dates to YYYY-MM-DD format for comparison
+          const fromDateFormatted = dayjs(fromDate, "DD-MM-YYYY").format(
+            "YYYY-MM-DD"
+          );
+          const toDateFormatted = dayjs(toDate, "DD-MM-YYYY").format(
+            "YYYY-MM-DD"
+          );
+
+          return (
+            itemDate &&
+            itemDate >= fromDateFormatted &&
+            itemDate <= toDateFormatted
+          );
+        });
+
+        if (filteredPickRequestData.length > 0) {
+          // Format filtered data for Excel
+          const excelData = formatPickRequestDataForExcel(
+            filteredPickRequestData
+          );
+
+          // Create workbook and worksheet
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          // Add worksheet to workbook
+          XLSX.utils.book_append_sheet(wb, ws, "Pick Request Data");
+
+          // Generate Excel file and download
+          XLSX.writeFile(wb, `Pick_Request_${fromDate}_to_${toDate}.xlsx`);
+
+          message.success("Excel file downloaded successfully");
+        } else {
+          message.error("No data found for the selected date range");
+        }
+      } else {
+        message.error("No data available");
+      }
+    } catch (error) {
+      console.error("Error downloading Excel:", error);
+      message.error("Failed to download Excel file");
+    } finally {
+      setDownloadLoading(false);
     }
   };
 
@@ -2021,9 +2230,9 @@ export const PickRequest = () => {
                   level={3}
                   style={{ color: "#fff", margin: "20px 0" }}
                 >
-                  Buyer Orders List
+                  Pick Request List
                 </Typography.Title>
-                <Button
+                {/* <Button
                   icon={<PlusOutlined />}
                   onClick={toggleViewMode}
                   style={{
@@ -2034,7 +2243,7 @@ export const PickRequest = () => {
                   }}
                 >
                   New Order
-                </Button>
+                </Button> */}
               </div>
 
               <div
@@ -2050,6 +2259,101 @@ export const PickRequest = () => {
                   background: "var(--bg-body-gradient)",
                 }}
               >
+                <div
+                  style={{
+                    marginBottom: "20px",
+                    display: "flex",
+                    gap: "10px",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Input
+                    placeholder="Search by Document No, Buyer Order No, or Status"
+                    allowClear
+                    onChange={(e) => {
+                      const searchTerm = e.target.value.toLowerCase();
+                      const filtered = listViewData.filter(
+                        (item) =>
+                          item.docId?.toLowerCase().includes(searchTerm) ||
+                          item.buyerOrderNo
+                            ?.toLowerCase()
+                            .includes(searchTerm) ||
+                          item.status?.toLowerCase().includes(searchTerm) ||
+                          item.buyerOrderNo
+                            ?.toLowerCase()
+                            .includes(searchTerm) ||
+                          item.status?.toLowerCase().includes(searchTerm)
+                      );
+                      setBuyerOrderList(filtered);
+                    }}
+                    style={{
+                      width: "300px",
+                      background: "rgba(255, 255, 255, 0.1)",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                    prefix={
+                      <SearchOutlined
+                        style={{ color: "rgba(255, 255, 255, 0.5)" }}
+                      />
+                    }
+                  />
+
+                  <RangePicker
+                    className="white-datepicker"
+                    value={
+                      selectedDateRange.length > 0
+                        ? [
+                            dayjs(selectedDateRange[0], "DD-MM-YYYY"),
+                            dayjs(selectedDateRange[1], "DD-MM-YYYY"),
+                          ]
+                        : null
+                    }
+                    onChange={(dates) => {
+                      if (dates && dates.length === 2) {
+                        setSelectedDateRange([
+                          dates[0].format("DD-MM-YYYY"),
+                          dates[1].format("DD-MM-YYYY"),
+                        ]);
+                      } else {
+                        setSelectedDateRange([]);
+                      }
+                    }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                    placeholder={["From Date", "To Date"]}
+                    format="DD-MM-YYYY"
+                  />
+
+                  <Button
+                    icon={<DownloadOutlined />}
+                    loading={downloadLoading}
+                    onClick={downloadExcel}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                  >
+                    Download Excel
+                  </Button>
+
+                  <Button
+                    icon={<PlusOutlined />}
+                    onClick={toggleViewMode}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                  >
+                    Add Entry
+                  </Button>
+                </div>
                 <table
                   style={{
                     width: "100%",
@@ -2159,7 +2463,6 @@ export const PickRequest = () => {
                     ))}
                   </tbody>
                 </table>
-
                 <div
                   style={{
                     display: "flex",

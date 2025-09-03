@@ -8,6 +8,7 @@ import {
   SaveOutlined,
   FormOutlined,
   TableOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -64,7 +65,7 @@ export const CycleCount = () => {
   const [client, setClient] = useState(localStorage.getItem("client"));
   const [customer, setCustomer] = useState(localStorage.getItem("customer"));
   const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
-  const [finYear, setFinYear] = useState("2024");
+  const [finYear, setFinYear] = useState(localStorage.getItem("finYear"));
   const [form] = Form.useForm();
   const [viewMode, setViewMode] = useState("form");
   const [currentPage, setCurrentPage] = useState(1);
@@ -81,6 +82,11 @@ export const CycleCount = () => {
   const [grnNoList, setGrnNoList] = useState([]);
   const [batchNoList, setBatchNoList] = useState([]);
   const [binList, setBinList] = useState([]);
+  const [selectedCycleCountRows, setSelectedCycleCountRows] = useState([]);
+
+  const [cycleCountModalOpen, setCycleCountModalOpen] = useState(false);
+
+  const [selectAllCycleCount, setSelectAllCycleCount] = useState([]);
 
   const [formData, setFormData] = useState({
     docId: "",
@@ -230,7 +236,7 @@ export const CycleCount = () => {
       };
 
       const response = await axios.put(
-        `${API_URL}/cycleCount/createUpdateCycleCount`,
+        `${API_URL}/api/cycleCount/createUpdateCycleCount`,
         saveData
       );
 
@@ -253,7 +259,7 @@ export const CycleCount = () => {
     }
   };
 
-const toggleViewMode = () => {
+  const toggleViewMode = () => {
     if (viewMode === "form") {
       // When switching to list view, refresh the data
       getAllCycleCounts();
@@ -293,7 +299,7 @@ const toggleViewMode = () => {
   const getAllFillGrid = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/cycleCount/getCycleCountGridDetails?branchCode=${branchCode}&client=${client}&orgId=${orgId}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
+        `${API_URL}/api/cycleCount/getCycleCountGridDetails?branchCode=${branchCode}&client=${client}&orgId=${orgId}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
       );
 
       if (response.data.status === true) {
@@ -373,7 +379,7 @@ const toggleViewMode = () => {
   const getGrnNoList = async (id, partNo) => {
     try {
       const response = await axios.get(
-        `${API_URL}/cycleCount/getGrnNoByCycleCount?branchCode=${branchCode}&client=${client}&orgId=${orgId}&partNo=${partNo}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
+        `${API_URL}/api/cycleCount/getGrnNoByCycleCount?branchCode=${branchCode}&client=${client}&orgId=${orgId}&partNo=${partNo}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
       );
       if (response.data.status === true) {
         setCycleCountItems((prev) =>
@@ -390,6 +396,66 @@ const toggleViewMode = () => {
     } catch (error) {
       console.error("Error fetching GRN numbers:", error);
     }
+  };
+
+  const GlassModal = ({
+    open,
+    onCancel,
+    title,
+    children,
+    width = 1200,
+    footer = null,
+  }) => {
+    return (
+      <Modal
+        open={open}
+        onCancel={onCancel}
+        footer={footer}
+        width={width}
+        closeIcon={<CloseOutlined style={{ color: "white" }} />}
+        maskClosable={false}
+        keyboard={false}
+        styles={{
+          body: {
+            padding: 0,
+            background: "rgba(255, 255, 255, 0.1)",
+            backdropFilter: "blur(12px)",
+            borderRadius: "16px",
+            boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            color: "white",
+          },
+          header: {
+            background: "rgba(255, 255, 255, 0.05)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.2)",
+            borderRadius: "16px 16px 0 0",
+            color: "white",
+            padding: "16px 24px",
+          },
+          content: {
+            backdropFilter: "blur(5px)",
+            background: "transparent",
+            color: "white",
+          },
+          mask: {
+            backdropFilter: "blur(5px)",
+            background: "rgba(0, 0, 0, 0.5)",
+          },
+        }}
+        title={title}
+        modalRender={(modal) => <PaperComponent>{modal}</PaperComponent>}
+      >
+        <div
+          style={{
+            padding: "24px",
+            background: "transparent",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
+      </Modal>
+    );
   };
 
   const handleGrnNoChange = (id, value) => {
@@ -425,7 +491,7 @@ const toggleViewMode = () => {
   const getBatchNoList = async (id, grnNo, partNo) => {
     try {
       const response = await axios.get(
-        `${API_URL}/cycleCount/getBatchByCycleCount?branchCode=${branchCode}&client=${client}&grnNO=${grnNo}&orgId=${orgId}&partNo=${partNo}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
+        `${API_URL}/api/cycleCount/getBatchByCycleCount?branchCode=${branchCode}&client=${client}&grnNO=${grnNo}&orgId=${orgId}&partNo=${partNo}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
       );
       if (response.data.status === true) {
         setCycleCountItems((prev) =>
@@ -442,6 +508,27 @@ const toggleViewMode = () => {
     } catch (error) {
       console.error("Error fetching batch numbers:", error);
     }
+  };
+
+  const handleSelectAllCycleCount = (e) => {
+    if (e.target.checked) {
+      setSelectedRows(fillGridData.map((_, index) => index));
+    } else {
+      setSelectedRows([]);
+    }
+  };
+
+  const handleCycleCountSearch = (value, field) => {
+    // Implement your search logic here
+    console.log(`Searching ${field} for:`, value);
+  };
+
+  const handleSaveCycleCountRows = () => {
+    const selectedData = selectedRows.map((index) => fillGridData[index]);
+    setCycleCountItems([...cycleCountItems, ...selectedData]);
+    setSelectedRows([]);
+    setSelectAll(false);
+    setModalOpen(false);
   };
 
   const handleBatchNoChange = (id, value) => {
@@ -475,7 +562,7 @@ const toggleViewMode = () => {
   const getBinList = async (id, batchNo, grnNo, partNo) => {
     try {
       const response = await axios.get(
-        `${API_URL}/cycleCount/getBinDetailsByCycleCount?batch=${batchNo}&branchCode=${branchCode}&client=${client}&grnNO=${grnNo}&orgId=${orgId}&partNo=${partNo}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
+        `${API_URL}/api/cycleCount/getBinDetailsByCycleCount?batch=${batchNo}&branchCode=${branchCode}&client=${client}&grnNO=${grnNo}&orgId=${orgId}&partNo=${partNo}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
       );
       if (response.data.status === true) {
         setCycleCountItems((prev) =>
@@ -522,7 +609,7 @@ const toggleViewMode = () => {
   const getAvlQty = async (id, bin, batchNo, grnNo, partNo) => {
     try {
       const response = await axios.get(
-        `${API_URL}/cycleCount/getAvlQtyByCycleCount?batch=${batchNo}&bin=${bin}&branchCode=${branchCode}&client=${client}&grnNO=${grnNo}&orgId=${orgId}&partNo=${partNo}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
+        `${API_URL}/api/cycleCount/getAvlQtyByCycleCount?batch=${batchNo}&bin=${bin}&branchCode=${branchCode}&client=${client}&grnNO=${grnNo}&orgId=${orgId}&partNo=${partNo}&status=${formData.stockStatusFlag}&warehouse=${warehouse}`
       );
       if (response.data.status === true) {
         setCycleCountItems((prev) =>
@@ -540,6 +627,10 @@ const toggleViewMode = () => {
     } catch (error) {
       console.error("Error fetching available quantity:", error);
     }
+  };
+
+  const handleOpenModal = () => {
+    getAllFillGrid();
   };
 
   return (
@@ -704,9 +795,11 @@ const toggleViewMode = () => {
                               }
                             >
                               <DatePicker
+                                className="white-datepicker"
                                 style={{ width: "100%", ...readOnlyInputStyle }}
                                 value={dayjs(formData.docDate)}
                                 disabled
+                                format="DD-MM-YYYY"
                               />
                             </Form.Item>
                           </Col>
@@ -789,7 +882,8 @@ const toggleViewMode = () => {
                         </Button>
                         <Button
                           icon={<TableOutlined />}
-                          onClick={getAllFillGrid}
+                          // onClick={getAllFillGrid}
+                          onClick={handleOpenModal}
                           style={{
                             marginRight: "8px",
                             background: "rgba(108, 99, 255, 0.3)",
@@ -1334,7 +1428,7 @@ const toggleViewMode = () => {
         </div>
 
         {/* Fill Grid Modal */}
-        <Modal
+        <GlassModal
           title={
             <div
               style={{
@@ -1344,7 +1438,7 @@ const toggleViewMode = () => {
               }}
               id="draggable-dialog-title"
             >
-              Fill Grid - Select Items
+              Cycle Count Details
             </div>
           }
           open={modalOpen}
@@ -1353,105 +1447,346 @@ const toggleViewMode = () => {
             setSelectedRows([]);
             setSelectAll(false);
           }}
+          modalRender={(modal) => <PaperComponent>{modal}</PaperComponent>}
+          width={1200}
+          bodyStyle={{
+            padding: "20px",
+            background: "rgba(255, 255, 255, 0.1)",
+            backdropFilter: "blur(10px)",
+            borderRadius: "8px",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+          }}
           footer={[
             <Button
               key="cancel"
               onClick={() => {
-                setModalOpen(false);
+             setModalOpen(false); // FIXED: Changed from setCycleCountModalOpen to setModalOpen
                 setSelectedRows([]);
                 setSelectAll(false);
+              }}
+              style={{
+                background: "transparent",
+                color: "white",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
               }}
             >
               Cancel
             </Button>,
-            <Button key="save" type="primary" onClick={handleSaveSelectedRows}>
-              Save Selected
+            <Button
+              key="ok"
+              type="primary"
+              onClick={handleSaveCycleCountRows} // 👈 here
+              disabled={selectedRows.length === 0}
+              style={{
+                background: "rgba(108, 99, 255, 0.3)",
+                color: "white",
+                border: "none",
+              }}
+            >
+              Process ({selectedRows.length} selected)
             </Button>,
           ]}
-          modalRender={(modal) => (
-            <PaperComponent style={{ color: "white" }}>{modal}</PaperComponent>
-          )}
-          width={1000}
         >
-          <div style={{ marginBottom: 16 }}>
-            <Checkbox
-              checked={selectAll}
-              onChange={handleSelectAll}
-              style={{ color: "white" }}
-            >
-              Select All
-            </Checkbox>
-          </div>
-          <Table
-            dataSource={fillGridData}
-            rowKey={(record, index) => index}
-            rowSelection={{
-              selectedRowKeys: selectedRows,
-              onChange: (selectedRowKeys) => {
-                setSelectedRows(selectedRowKeys);
-              },
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                label={<span style={{ color: "#fff" }}>Selection</span>}
+              >
+                <Checkbox
+                  indeterminate={
+                    selectedRows.length > 0 &&
+                    selectedRows.length < fillGridData.length
+                  }
+                  checked={
+                    fillGridData.length > 0 &&
+                    selectedRows.length === fillGridData.length
+                  }
+                  onChange={handleSelectAllCycleCount}
+                  style={{ color: "white" }}
+                >
+                  <span style={{ color: "#fff" }}>Select All</span> (
+                  <Text style={{ color: "white" }}>
+                    {selectedRows.length} selected
+                  </Text>
+                  )
+                </Checkbox>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                label={<span style={{ color: "#fff" }}>Part No Search</span>}
+              >
+                <Input
+                  placeholder="Search by part number..."
+                  prefix={<SearchOutlined />}
+                  allowClear
+                  onChange={(e) =>
+                    handleCycleCountSearch(e.target.value, "partNo")
+                  }
+                  style={{
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "white",
+                  }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                label={
+                  <span style={{ color: "#fff" }}>Bin Location Search</span>
+                }
+              >
+                <Input
+                  placeholder="Search by bin location..."
+                  prefix={<SearchOutlined />}
+                  allowClear
+                  onChange={(e) =>
+                    handleCycleCountSearch(e.target.value, "binLocation")
+                  }
+                  style={{
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "white",
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {/* Data Table */}
+          <div
+            style={{
+              backdropFilter: "blur(10px)",
+              background: "rgba(255, 255, 255, 0.1)",
+              borderRadius: "20px",
+              padding: "20px",
+              boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.2)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              marginBottom: "20px",
             }}
-            pagination={false}
-            scroll={{ y: 400 }}
-            style={{ color: "white" }}
-            columns={[
-              {
-                title: "Part No",
-                dataIndex: "partNo",
-                key: "partNo",
-                width: 150,
-                render: (text) => (
-                  <span style={{ color: "white" }}>{text}</span>
-                ),
-              },
-              {
-                title: "Part Description",
-                dataIndex: "partDesc",
-                key: "partDesc",
-                width: 200,
-                render: (text) => (
-                  <span style={{ color: "white" }}>{text}</span>
-                ),
-              },
-              {
-                title: "GRN No",
-                dataIndex: "grnNo",
-                key: "grnNo",
-                width: 120,
-                render: (text) => (
-                  <span style={{ color: "white" }}>{text}</span>
-                ),
-              },
-              {
-                title: "Batch No",
-                dataIndex: "batchNo",
-                key: "batchNo",
-                width: 120,
-                render: (text) => (
-                  <span style={{ color: "white" }}>{text}</span>
-                ),
-              },
-              {
-                title: "Bin",
-                dataIndex: "bin",
-                key: "bin",
-                width: 100,
-                render: (text) => (
-                  <span style={{ color: "white" }}>{text}</span>
-                ),
-              },
-              {
-                title: "Available Qty",
-                dataIndex: "avlQty",
-                key: "avlQty",
-                width: 120,
-                render: (text) => (
-                  <span style={{ color: "white" }}>{text}</span>
-                ),
-              },
-            ]}
-          />
-        </Modal>
+          >
+            <div
+              className="table-container"
+              style={{
+                position: "relative",
+                width: "100%",
+                overflowX: "auto",
+                fontSize: "11px",
+                backgroundColor: "transparent",
+                maxHeight: "500px",
+                overflowY: "auto",
+                marginTop: "10px",
+              }}
+            >
+              <table
+                style={{
+                  width: "max-content",
+                  minWidth: "100%",
+                  borderCollapse: "collapse",
+                  backgroundColor: "transparent",
+                }}
+              >
+                <colgroup>
+                  <col style={{ width: "50px" }} /> {/* Select */}
+                  <col style={{ width: "50px" }} /> {/* S.No */}
+                  <col style={{ width: "120px" }} /> {/* Bin Location */}
+                  <col style={{ width: "120px" }} /> {/* Part No */}
+                  <col style={{ width: "200px" }} /> {/* Part Desc */}
+                  <col style={{ width: "120px" }} /> {/* Batch No */}
+                  <col style={{ width: "100px" }} /> {/* System Qty */}
+                  <col style={{ width: "100px" }} /> {/* Counted Qty */}
+                  <col style={{ width: "100px" }} /> {/* Variance */}
+                  <col style={{ width: "120px" }} /> {/* Counted By */}
+                  <col style={{ width: "120px" }} /> {/* Count Date */}
+                </colgroup>
+                <thead>
+                  <tr
+                    style={{
+                      borderBottom: "1px dashed #000",
+                      position: "sticky",
+                      top: 0,
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "center",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Select
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "center",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      S.No
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Bin Location
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Part No
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Part Description
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Batch No
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      System Qty
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Counted Qty
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Variance
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Counted By
+                    </th>
+                    <th
+                      style={{
+                        padding: "8px",
+                        textAlign: "left",
+                        color: "white",
+                        backgroundColor: "transparent",
+                      }}
+                    >
+                      Count Date
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fillGridData.map((item, index) => (
+                    <tr
+                      key={index}
+                      style={{
+                        borderBottom: "1px dashed rgba(255, 255, 255, 0.2)",
+                        color: "white",
+                        backgroundColor:
+                          item.variance !== 0
+                            ? "rgba(255, 77, 79, 0.2)"
+                            : "transparent",
+                      }}
+                    >
+                      <td style={{ padding: "8px", textAlign: "center" }}>
+                        <Checkbox
+                          checked={selectedRows.includes(index)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedRows([...selectedRows, index]);
+                            } else {
+                              setSelectedRows(
+                                selectedRows.filter((i) => i !== index)
+                              );
+                            }
+                          }}
+                          style={{ color: "white" }}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px",
+                          textAlign: "center",
+                          color: "white",
+                        }}
+                      >
+                        {index + 1}
+                      </td>
+                      <td style={{ padding: "8px" }}>{item.bin}</td>
+                      <td style={{ padding: "8px" }}>{item.partNo}</td>
+                      <td style={{ padding: "8px" }}>{item.partDesc}</td>
+                      <td style={{ padding: "8px" }}>{item.batchNo}</td>
+                      <td style={{ padding: "8px", textAlign: "right" }}>
+                        {item.systemQty}
+                      </td>
+                      <td style={{ padding: "8px", textAlign: "right" }}>
+                        {item.countedQty}
+                      </td>
+                      <td
+                        style={{
+                          padding: "8px",
+                          textAlign: "right",
+                          color: item.variance !== 0 ? "#ff4d4f" : "white",
+                          fontWeight: item.variance !== 0 ? "bold" : "normal",
+                        }}
+                      >
+                        {item.variance}
+                      </td>
+                      <td style={{ padding: "8px" }}>{item.countedBy}</td>
+                      <td style={{ padding: "8px" }}>{item.countDate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </GlassModal>
       </div>
     </ConfigProvider>
   );

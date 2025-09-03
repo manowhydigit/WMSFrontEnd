@@ -17,6 +17,7 @@ import {
   Select,
   InputNumber,
   Checkbox,
+  Space,
 } from "antd";
 import {
   CloudUploadOutlined,
@@ -32,17 +33,20 @@ import {
   FilterOutlined,
   UnorderedListOutlined,
   RightCircleOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 import CommonBulkUpload from "../utils/CommonBulkUpload";
 import sampleFile from "../assets/sample-files/sample_Stock_Restate_.xls";
 import { ToastContainer } from "react-toastify";
 import dayjs from "dayjs";
 import axios from "axios";
+import * as XLSX from "xlsx";
 
 const { Option } = Select;
 const { Text } = Typography;
 const { TabPane } = Tabs;
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
+const { RangePicker } = DatePicker;
 
 const StockRestate = () => {
   const [theme] = useState(localStorage.getItem("theme") || "light");
@@ -64,6 +68,12 @@ const StockRestate = () => {
   const [loginClient] = useState(localStorage.getItem("client"));
   const [loginWarehouse] = useState(localStorage.getItem("warehouse"));
   const [loginFinYear] = useState(localStorage.getItem("finYear"));
+
+  const [searchText, setSearchText] = useState("");
+  const [filteredData, setFilteredData] = useState([]);
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Data states
   const [stockRestateList, setStockRestateList] = useState([]);
@@ -89,6 +99,20 @@ const StockRestate = () => {
     selectedTransferFromFlag: "",
     entryNo: "",
   });
+
+  const handleSearch = (value) => {
+    setSearchTerm(value);
+    if (!value.trim()) {
+      setFilteredData(stockRestateList);
+      return;
+    }
+
+    const filtered = stockRestateList.filter((item) =>
+      item.DocId?.toLowerCase().includes(value.toLowerCase())
+    );
+
+    setFilteredData(filtered);
+  };
 
   const [searchParams, setSearchParams] = useState({
     fromDate: dayjs().startOf("month"),
@@ -162,6 +186,186 @@ const StockRestate = () => {
       message.error("Failed to fetch stock restate");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Search functionality
+  useEffect(() => {
+    if (searchText) {
+      const filtered = stockRestateList.filter((item) =>
+        Object.values(item).some(
+          (value) =>
+            value &&
+            value.toString().toLowerCase().includes(searchText.toLowerCase())
+        )
+      );
+      setFilteredData(filtered);
+    } else {
+      setFilteredData(stockRestateList);
+    }
+  }, [searchText, stockRestateList]);
+
+  // Excel download function
+  const downloadExcel = async () => {
+    if (!selectedDateRange || selectedDateRange.length !== 2) {
+      message.error("Please select both from and to dates");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      const fromDate = selectedDateRange[0];
+      const toDate = selectedDateRange[1];
+
+      // Fetch Stock Restate data
+      const response = await axios.get(
+        `${API_URL}/api/stockRestate/getAllStockRestate?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&finYear=${loginFinYear}&orgId=${orgId}&warehouse=${loginWarehouse}`
+      );
+
+      if (
+        response.data.status &&
+        response.data.paramObjectsMap.stockRestateVO
+      ) {
+        const allStockRestateData =
+          response.data.paramObjectsMap.stockRestateVO;
+
+        // Filter data based on the selected date range
+        const filteredStockRestateData = allStockRestateData.filter((item) => {
+          if (!item.docDate) return false;
+
+          let itemDate;
+          if (item.docDate.includes("-")) {
+            const parts = item.docDate.split("-");
+            if (parts[0].length === 4) {
+              itemDate = item.docDate;
+            } else if (parts[0].length === 2) {
+              itemDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+          } else {
+            itemDate = dayjs(item.docDate).format("YYYY-MM-DD");
+          }
+
+          const fromDateFormatted = dayjs(fromDate, "DD-MM-YYYY").format(
+            "YYYY-MM-DD"
+          );
+          const toDateFormatted = dayjs(toDate, "DD-MM-YYYY").format(
+            "YYYY-MM-DD"
+          );
+
+          return (
+            itemDate &&
+            itemDate >= fromDateFormatted &&
+            itemDate <= toDateFormatted
+          );
+        });
+
+        if (filteredStockRestateData.length > 0) {
+          const excelData = formatStockRestateDataForExcel(
+            filteredStockRestateData
+          );
+
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          XLSX.utils.book_append_sheet(wb, ws, "Stock Restate Data");
+
+          const fileName = `Stock_Restate_${fromDate}_to_${toDate}.xlsx`;
+          XLSX.writeFile(wb, fileName);
+
+          message.success("Excel file downloaded successfully");
+        } else {
+          message.error("No data found for the selected date range");
+        }
+      } else {
+        message.error("No data available");
+      }
+    } catch (error) {
+      console.error("Error downloading Excel:", error);
+      message.error("Failed to download Excel file");
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  // Format data for Excel
+  const formatStockRestateDataForExcel = (stockRestateData) => {
+    const excelData = [];
+
+    stockRestateData.forEach((mainRecord) => {
+      if (
+        mainRecord.stockRestateDetailsVO &&
+        mainRecord.stockRestateDetailsVO.length > 0
+      ) {
+        mainRecord.stockRestateDetailsVO.forEach((detail) => {
+          excelData.push({
+            "Doc ID": mainRecord.docId || "",
+            "Doc Date": formatDateForDisplay(mainRecord.docDate),
+            "Transfer From": mainRecord.transferFrom || "",
+            "Transfer To": mainRecord.transferTo || "",
+            "Entry No": mainRecord.entryNo || "",
+            "From Bin": detail.fromBin || "",
+            "From Bin Type": detail.fromBinType || "",
+            "Part No": detail.partNo || "",
+            "Part Description": detail.partDesc || "",
+            SKU: detail.sku || "",
+            "GRN No": detail.grnNo || "",
+            "Batch No": detail.batch || "",
+            "To Bin": detail.toBin || "",
+            "To Bin Type": detail.toBinType || "",
+            "From Qty": detail.fromQty || "",
+            "To Qty": detail.toQty || "",
+            Remarks: detail.remarks || "",
+            "Created By": mainRecord.createdBy || "",
+          });
+        });
+      } else {
+        excelData.push({
+          "Doc ID": mainRecord.docId || "",
+          "Doc Date": formatDateForDisplay(mainRecord.docDate),
+          "Transfer From": mainRecord.transferFrom || "",
+          "Transfer To": mainRecord.transferTo || "",
+          "Entry No": mainRecord.entryNo || "",
+          "From Bin": "",
+          "From Bin Type": "",
+          "Part No": "",
+          "Part Description": "",
+          SKU: "",
+          "GRN No": "",
+          "Batch No": "",
+          "To Bin": "",
+          "To Bin Type": "",
+          "From Qty": "",
+          "To Qty": "",
+          Remarks: "",
+          "Created By": mainRecord.createdBy || "",
+        });
+      }
+    });
+
+    return excelData;
+  };
+
+  // Helper function to format dates for display
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return "";
+
+    try {
+      let date;
+      if (dateString.includes("-")) {
+        const parts = dateString.split("-");
+        if (parts[0].length === 4) {
+          date = dayjs(dateString, "YYYY-MM-DD");
+        } else if (parts[0].length === 2) {
+          date = dayjs(dateString, "DD-MM-YYYY");
+        }
+      } else {
+        date = dayjs(dateString);
+      }
+
+      return date && date.isValid() ? date.format("DD-MM-YYYY") : "";
+    } catch (error) {
+      console.warn("Date conversion error:", error, dateString);
+      return "";
     }
   };
 
@@ -1703,9 +1907,9 @@ const StockRestate = () => {
             <div
               className="form-containerSG"
               style={{
-                minHeight: "70vh",
+                minHeight: "80vh",
                 background: "var(--bg-body-gradient)",
-                marginTop: "40px",
+                marginTop: "20px",
               }}
             >
               <div
@@ -1721,26 +1925,8 @@ const StockRestate = () => {
                   level={3}
                   style={{ color: "#fff", margin: "20px 0" }}
                 >
-                  Sales Return List
+                  Stock Restate List
                 </Typography.Title>
-                <Button
-                  icon={
-                    viewMode === "form" ? (
-                      <UnorderedListOutlined />
-                    ) : (
-                      <FormOutlined />
-                    )
-                  }
-                  onClick={toggleViewMode}
-                  style={{
-                    backgroundColor: "transparent",
-                    color: "white",
-                    marginTop: "20px",
-                    border: "none",
-                  }}
-                >
-                  {viewMode === "form" ? "List View" : "New Sales Return"}
-                </Button>
               </div>
 
               <div
@@ -1752,10 +1938,90 @@ const StockRestate = () => {
                   fontSize: "11px",
                   maxHeight: "500px",
                   overflowY: "auto",
-                  margin: "40px auto",
+                  margin: "10px auto",
                   background: "var(--bg-body-gradient)",
                 }}
               >
+                {" "}
+                <Space>
+                  {/* Search Input */}
+                  <Input
+                    placeholder="Search stock restate..."
+                    prefix={<SearchOutlined />}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    style={{
+                      width: 300,
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                  />
+
+                  {/* Date Range Picker */}
+                  <RangePicker
+                    className="white-datepicker"
+                    value={
+                      selectedDateRange.length > 0
+                        ? [
+                            dayjs(selectedDateRange[0], "DD-MM-YYYY"),
+                            dayjs(selectedDateRange[1], "DD-MM-YYYY"),
+                          ]
+                        : null
+                    }
+                    onChange={(dates) => {
+                      if (dates && dates.length === 2) {
+                        setSelectedDateRange([
+                          dates[0].format("DD-MM-YYYY"),
+                          dates[1].format("DD-MM-YYYY"),
+                        ]);
+                      } else {
+                        setSelectedDateRange([]);
+                      }
+                    }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border:
+                        "1px solid rgba(255, 255, 255, 极致的玻璃效果设计)",
+                      color: "white",
+                    }}
+                    placeholder={["From Date", "To Date"]}
+                    format="DD-MM-YYYY"
+                  />
+
+                  {/* Download Excel Button */}
+                  <Button
+                    icon={<DownloadOutlined />}
+                    loading={downloadLoading}
+                    onClick={downloadExcel}
+                    style={{
+                      backgroundColor: "rgba(40, 167, 69, 0.3)",
+                      color: "white",
+                      border: "none",
+                    }}
+                  >
+                    Export Excel
+                  </Button>
+
+                  <Button
+                    icon={
+                      viewMode === "form" ? (
+                        <UnorderedListOutlined />
+                      ) : (
+                        <FormOutlined />
+                      )
+                    }
+                    onClick={toggleViewMode}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      marginTop: "20px",
+                      border: "none",
+                    }}
+                  >
+                    Add New
+                  </Button>
+                </Space>
                 <table
                   style={{
                     width: "100%",
@@ -1819,6 +2085,18 @@ const StockRestate = () => {
                   </thead>
                   <tbody>
                     {stockRestateList
+                      .filter(
+                        (item) =>
+                          !searchTerm ||
+                          (item.docId &&
+                            item.docId
+                              .toLowerCase()
+                              .includes(searchTerm.toLowerCase()))
+                      )
+                      .slice(
+                        (currentPage - 1) * pageSize,
+                        currentPage * pageSize
+                      )
                       .slice(
                         (currentPage - 1) * pageSize,
                         currentPage * pageSize
@@ -1898,7 +2176,6 @@ const StockRestate = () => {
                       ))}
                   </tbody>
                 </table>
-
                 <div
                   style={{
                     display: "flex",
@@ -2151,6 +2428,7 @@ const StockRestate = () => {
                 overflowY: "auto",
               }}
             >
+              {" "}
               <table
                 style={{
                   width: "max-content",

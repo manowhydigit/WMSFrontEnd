@@ -86,6 +86,15 @@ const Header = () => {
   const [user, setUser] = useState(localStorage.getItem("userName"));
   const isMobile = useMediaQuery("(max-width:600px)");
 
+  const [branch, setBranch] = useState(localStorage.getItem("branch"));
+  const [branchCode, setBranchCode] = useState(
+    localStorage.getItem("branchcode")
+  );
+  const [client, setClient] = useState(localStorage.getItem("client"));
+  const [customer, setCustomer] = useState(localStorage.getItem("customer"));
+  const [finYear, setFinYear] = useState(localStorage.getItem("finYear"));
+  const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
+
   const [isActive, setIsActive] = useState(true);
 
   const [data, setData] = useState(null);
@@ -330,8 +339,8 @@ const Header = () => {
                 // color: "#00FFFF",
                 // backgroundColor: "#f44336",
                 backgroundColor: "transparent",
-                fontFamily: "'Orbitron',cursive",
-                color: "#00FFFF",
+                // fontFamily: "'Orbitron',cursive",
+                color: "white",
                 // boxShadow: "0 0 10px #00FFFF, 0 0 20px #00FFFF",
                 // "&:hover": { backgroundColor: "#d32f2f" },
 
@@ -340,7 +349,9 @@ const Header = () => {
                 // fontFamily: "'Lily Script One', cursive",
               }}
             >
-              {formattedDate} - {formattedTime}
+              {/* {formattedDate} - {formattedTime} */}
+              Branch - {branch} &nbsp;&nbsp; Client - {client} &nbsp;&nbsp;
+              FinYear - {finYear}
             </Button>
           )}
           {/* {user === "admin" && ( 

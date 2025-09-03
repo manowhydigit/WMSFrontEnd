@@ -13,7 +13,7 @@ import {
   Typography,
   Table,
   Select,
-  Form,
+  Form, 
   Checkbox,
   Divider,
   Tabs,
@@ -33,7 +33,9 @@ import {
   QrcodeOutlined,
   PrinterOutlined,
   RightCircleOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
+import * as XLSX from "xlsx";
 
 import dayjs from "dayjs";
 import axios from "axios";
@@ -41,6 +43,7 @@ import "./PS.css";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
+const { RangePicker } = DatePicker;
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
 
@@ -75,6 +78,14 @@ const DeliveryChallan = () => {
   const [loginWarehouse, setLoginWarehouse] = useState(
     localStorage.getItem("warehouse")
   );
+  const [branch, setBranch] = useState(localStorage.getItem("branch"));
+  const [branchCode, setBranchCode] = useState(
+    localStorage.getItem("branchcode")
+  );
+  const [client, setClient] = useState(localStorage.getItem("client"));
+  const [customer, setCustomer] = useState(localStorage.getItem("customer"));
+  const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
+  const [finYear, setFinYear] = useState(localStorage.getItem("finYear"));
   const [listViewData, setListViewData] = useState([]);
   const [buyerOrderList, setBuyerOrderList] = useState([]);
   const [viewMode, setViewMode] = useState("form");
@@ -83,7 +94,14 @@ const DeliveryChallan = () => {
   const [deliveryChallanDocId, setDeliveryChallanDocId] = useState("");
   const [editBuyerOrderNo, setEditBuyerOrderNo] = useState("");
 
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState([]);
+  const [searchText, setSearchText] = useState("");
+  const [filteredData, setFilteredData] = useState([]);
   const [showScanner, setShowScanner] = useState(false);
+  const [dcList, setDcList] = useState([]);
+  const [searchFilters, setSearchFilters] = useState([]);
+  const [searchModalVisible, setSearchModalVisible] = useState([]);
 
   // Helper function to safely convert to Day.js
   // Helper function to safely convert to Day.js with proper format
@@ -266,6 +284,223 @@ const DeliveryChallan = () => {
       setDeliveryItems([]);
     }
   };
+
+  // Function to fetch delivery challans with date range
+  const fetchDeliveryChallansWithDateRange = async (fromDate, toDate) => {
+    try {
+      const fromDateFormatted = formatDateForAPI(fromDate);
+      const toDateFormatted = formatDateForAPI(toDate);
+
+      const response = await axios.get(
+        `${API_URL}/api/deliverychallan/getAllDeliveryChallanByDateRange?branch=${loginBranch}&branchCode=${loginBranchCode}&finYear=${loginFinYear}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}&fromDate=${fromDateFormatted}&toDate=${toDateFormatted}`
+      );
+
+      return response.data.paramObjectsMap.DeliveryChallanVO || [];
+    } catch (error) {
+      console.error("Error fetching delivery challans by date range:", error);
+      return [];
+    }
+  };
+
+  // Download Excel function
+  const downloadExcel = async () => {
+    setDownloadLoading(true);
+
+    try {
+      const dataToExport =
+        filteredData.length > 0 ? filteredData : listViewData;
+
+      if (dataToExport.length === 0) {
+        message.warning("No data available to export");
+        setDownloadLoading(false);
+        return;
+      }
+
+      // Format the data for Excel
+      const excelData = dataToExport.map((item) => ({
+        "Doc ID": item.docId || "",
+        "Doc Date": item.docDate
+          ? dayjs(item.docDate).format("DD-MM-YYYY")
+          : "",
+        "Buyer Order No": item.buyerOrderNo || "",
+        Buyer: item.buyer || "",
+        "Gate Pass No": item.gatePassNo || "",
+        "Transport Name": item.transportName || "",
+        "Vehicle No": item.vechileNo || "",
+        "Container No": item.containerNO || "",
+        "Invoice No": item.invoiceNo || "",
+        "Commercial Invoice No": item.commercialInvoiceNo || "",
+        "Excise Invoice No": item.exciseInvoiceNo || "",
+        "Delivery Terms": item.deliveryTerms || "",
+        "Pay Terms": item.payTerms || "",
+        "GR Waiver No": item.grWaiverNo || "",
+        "Bank Name": item.bankName || "",
+        "Insurance No": item.insuranceNo || "",
+        "No of Boxes": item.noOfBoxes || "",
+        "Gross Weight": item.grossWeight || "",
+        Remarks: item.remarks || "",
+      }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths for better readability
+      const colWidths = [
+        { wch: 10 },
+        { wch: 12 },
+        { wch: 15 },
+        { wch: 20 },
+        { wch: 15 },
+        { wch: 20 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 20 },
+        { wch: 18 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 12 },
+        { wch: 12 },
+        { wch: 30 },
+      ];
+      ws["!cols"] = colWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Delivery Challans");
+
+      // Generate file name with current date
+      const fileName = `Delivery_Challans_${dayjs().format(
+        "YYYY-MM-DD_HH-mm-ss"
+      )}.xlsx`;
+
+      // Generate Excel file and download
+      XLSX.writeFile(wb, fileName);
+
+      message.success("Excel file downloaded successfully");
+    } catch (error) {
+      console.error("Error downloading Excel:", error);
+      message.error("Failed to download Excel file");
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  // Update your useEffect to handle search text filtering
+  useEffect(() => {
+    if (searchText) {
+      const filtered = listViewData.filter((item) =>
+        Object.values(item).some(
+          (value) =>
+            value &&
+            value.toString().toLowerCase().includes(searchText.toLowerCase())
+        )
+      );
+      setFilteredData(filtered);
+    } else {
+      setFilteredData(listViewData);
+    }
+  }, [searchText, listViewData]);
+
+  // Add these functions to your component
+
+  // Apply search filters
+  const applyFilters = () => {
+    let filtered = [...listViewData];
+
+    if (searchFilters.docId) {
+      filtered = filtered.filter((item) =>
+        item.docId
+          ?.toString()
+          .toLowerCase()
+          .includes(searchFilters.docId.toLowerCase())
+      );
+    }
+
+    if (searchFilters.buyerOrderNo) {
+      filtered = filtered.filter((item) =>
+        item.buyerOrderNo
+          ?.toLowerCase()
+          .includes(searchFilters.buyerOrderNo.toLowerCase())
+      );
+    }
+
+    if (searchFilters.buyer) {
+      filtered = filtered.filter((item) =>
+        item.buyer?.toLowerCase().includes(searchFilters.buyer.toLowerCase())
+      );
+    }
+
+    if (searchFilters.gatePassNo) {
+      filtered = filtered.filter((item) =>
+        item.gatePassNo
+          ?.toLowerCase()
+          .includes(searchFilters.gatePassNo.toLowerCase())
+      );
+    }
+
+    if (searchFilters.transportName) {
+      filtered = filtered.filter((item) =>
+        item.transportName
+          ?.toLowerCase()
+          .includes(searchFilters.transportName.toLowerCase())
+      );
+    }
+
+    if (searchFilters.dateRange && searchFilters.dateRange.length === 2) {
+      const startDate = searchFilters.dateRange[0];
+      const endDate = searchFilters.dateRange[1];
+
+      filtered = filtered.filter((item) => {
+        const itemDate = dayjs(item.docDate);
+        return (
+          itemDate.isAfter(startDate.subtract(1, "day")) &&
+          itemDate.isBefore(endDate.add(1, "day"))
+        );
+      });
+    }
+
+    setFilteredData(filtered);
+    setCurrentPage(1);
+    setSearchModalVisible(false);
+  };
+
+  // Clear search filters
+  const clearFilters = () => {
+    setSearchFilters({
+      docId: "",
+      buyerOrderNo: "",
+      buyer: "",
+      gatePassNo: "",
+      transportName: "",
+      dateRange: null,
+    });
+    setFilteredData(listViewData);
+    setSearchModalVisible(false);
+  };
+
+  // Download Excel function
+
+  // Update your useEffect to handle search text filtering
+  useEffect(() => {
+    if (searchText) {
+      const filtered = listViewData.filter((item) =>
+        Object.values(item).some(
+          (value) =>
+            value &&
+            value.toString().toLowerCase().includes(searchText.toLowerCase())
+        )
+      );
+      setFilteredData(filtered);
+    } else {
+      setFilteredData(listViewData);
+    }
+  }, [searchText, listViewData]);
+
+  // Update getAllDeliveryChallans to set filteredData
 
   // Get delivery challan doc id
   const getDeliveryChallanDocId = async () => {
@@ -2259,6 +2494,70 @@ const DeliveryChallan = () => {
                   background: "var(--bg-body-gradient)",
                 }}
               >
+                <Input
+                  placeholder="Search Reverse Picks..."
+                  prefix={<SearchOutlined />}
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  style={{
+                    width: 300,
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "white",
+                  }}
+                />
+
+                <RangePicker
+                  className="white-datepicker"
+                  value={
+                    selectedDateRange.length > 0
+                      ? [
+                          dayjs(selectedDateRange[0], "DD-MM-YYYY"),
+                          dayjs(selectedDateRange[1], "DD-MM-YYYY"),
+                        ]
+                      : null
+                  }
+                  onChange={(dates) => {
+                    if (dates && dates.length === 2) {
+                      setSelectedDateRange([
+                        dates[0].format("DD-MM-YYYY"),
+                        dates[1].format("DD-MM-YYYY"),
+                      ]);
+                    } else {
+                      setSelectedDateRange([]);
+                    }
+                  }}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "white",
+                  }}
+                  placeholder={["From Date", "To Date"]}
+                  format="DD-MM-YYYY"
+                />
+                <Button
+                  icon={<DownloadOutlined />}
+                  loading={downloadLoading}
+                  onClick={downloadExcel}
+                  style={{
+                    backgroundColor: "transparent",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                  }}
+                >
+                  Download Excel
+                </Button>
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={toggleViewMode}
+                  style={{
+                    backgroundColor: "transparent",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                  }}
+                >
+                  Add New
+                </Button>
                 <table
                   style={{
                     width: "100%",
@@ -2434,7 +2733,6 @@ const DeliveryChallan = () => {
                     ))}
                   </tbody>
                 </table>
-
                 <div
                   style={{
                     display: "flex",

@@ -8,6 +8,8 @@ import {
   FormOutlined,
   PlusOutlined,
   SaveOutlined,
+  EditOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 
 import {
@@ -28,6 +30,7 @@ import {
   DatePicker,
   Select,
   Typography,
+  Space,
 } from "antd";
 
 import ClearIcon from "@mui/icons-material/Clear";
@@ -75,6 +78,14 @@ export const DeKitting = () => {
     localStorage.getItem("branchcode")
   );
 
+  useEffect(() => {
+    getAllDeKittingByOrgId();
+    getDocId();
+    getAllBinDetails();
+    getAllChildPart();
+    getAllPartNo();
+  }, []);
+
   const [searchParams, setSearchParams] = useState({
     fromDate: dayjs().startOf("month"),
     toDate: dayjs(),
@@ -88,7 +99,7 @@ export const DeKitting = () => {
   const [client, setClient] = useState(localStorage.getItem("client"));
   const [customer, setCustomer] = useState(localStorage.getItem("customer"));
   // const [finYear, setFinYear] = useState(localStorage.getItem('finYear') ? localStorage.getItem('finYear') : '2024');
-  const [finYear, setFinYear] = useState("2024");
+  const [finYear, setFinYear] = useState(localStorage.getItem("finYear"));
   const [warehouse, setWarehouse] = useState(localStorage.getItem("warehouse"));
   const [value, setValue] = useState(0);
   const [partNoOptions, setPartNoOptions] = useState([]);
@@ -265,6 +276,27 @@ export const DeKitting = () => {
     ]);
     getDocId();
   };
+  // Add this utility function at the top of your component
+  const formatDateFromAPI = (dateString) => {
+    if (!dateString) return "";
+
+    // Handle different date formats from API
+    let dateObj;
+    if (dateString.includes(" ")) {
+      // Format: "2025-09-01 00:00:00.0"
+      dateObj = new Date(dateString.split(" ")[0]);
+    } else {
+      // Format: "2025-09-01"
+      dateObj = new Date(dateString);
+    }
+
+    // Format as dd-mm-yyyy
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const year = dateObj.getFullYear();
+
+    return `${day}-${month}-${year}`;
+  };
 
   const [parentTableErrors, setParentTableErrors] = useState([
     {
@@ -342,12 +374,12 @@ export const DeKitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
+      if (response.data.status === true) {
         console.log(
           "response.paramObjectsMap.Bins:",
-          response.paramObjectsMap.Bins
+          response.data.paramObjectsMap.Bins
         );
-        setBinsData(response.paramObjectsMap.Bins);
+        setBinsData(response.data.paramObjectsMap.Bins);
       } else {
         console.error("API Error:", response);
       }
@@ -363,10 +395,10 @@ export const DeKitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        console.log("paramObjectsMap:", response.paramObjectsMap);
+      if (response.data.status === true) {
+        console.log("paramObjectsMap:", response.data.paramObjectsMap);
 
-        const partData = response.paramObjectsMap.partNoDetails.map(
+        const partData = response.data.paramObjectsMap.partNoDetails.map(
           ({ partNo, partDesc, sku }) => ({ partNo, partDesc, sku })
         );
 
@@ -416,13 +448,13 @@ export const DeKitting = () => {
         `${API_URL}/api/deKitting/getGrnDetailsForDekittingParent?branch=${branch}&branchCode=${branchCode}&client=${client}&orgId=${orgId}&partNo=${selectedRowPartNo}`
       );
       console.log("THE FROM GRN NO LIST IS:", response);
-      if (response.status === true) {
+      if (response.data.status === true) {
         setParentTable((prev) =>
           prev.map((r) =>
             r.id === row.id
               ? {
                   ...r,
-                  rowGrnNoList: response.paramObjectsMap.grnDetails,
+                  rowGrnNoList: response.data.paramObjectsMap.grnDetails,
                 }
               : r
           )
@@ -464,13 +496,13 @@ export const DeKitting = () => {
         `${API_URL}/api/deKitting/getBatchNoForDeKittingParent?branch=${branch}&branchCode=${branchCode}&client=${client}&grnNo=${selectedGrnNo}&orgId=${orgId}&partNo=${selectedPartNo}`
       );
       console.log("getBatchNoForDeKittingParent IS:", response);
-      if (response.status === true) {
+      if (response.data.status === true) {
         setParentTable((prev) =>
           prev.map((r) =>
             r.id === row.id
               ? {
                   ...r,
-                  rowBatchNoList: response.paramObjectsMap.batchDetails,
+                  rowBatchNoList: response.data.paramObjectsMap.batchDetails,
                 }
               : r
           )
@@ -520,13 +552,13 @@ export const DeKitting = () => {
         `${API_URL}/api/deKitting/getBinForDeKittingParent?batchNo=${selectedBatchNo}&branch=${branch}&branchCode=${branchCode}&client=${client}&grnNo=${selectedGrnNo}&orgId=${orgId}&partNo=${selectedPartNo}`
       );
       console.log("THE TO BIN LIST ARE:", response);
-      if (response.status === true) {
+      if (response.data.status === true) {
         setParentTable((prev) =>
           prev.map((r) =>
             r.id === row.id
               ? {
                   ...r,
-                  rowBinList: response.paramObjectsMap.binDetails,
+                  rowBinList: response.data.paramObjectsMap.binDetails,
                 }
               : r
           )
@@ -570,7 +602,6 @@ export const DeKitting = () => {
 
     getAvlQty(row.batchNo, value, row.grnNo, row.partNo, row);
   };
-
   const getAvlQty = async (
     selectedBatchNo,
     selectedBin,
@@ -582,24 +613,53 @@ export const DeKitting = () => {
       const response = await axios.get(
         `${API_URL}/api/deKitting/getAvlQtyForDeKittingParent?batchNo=${selectedBatchNo}&bin=${selectedBin}&branch=${branch}&branchCode=${branchCode}&client=${client}&grnNo=${selectedGrnNo}&orgId=${orgId}&partNo=${selectedPartNo}`
       );
-      console.log("THE ROW. TO BIN IS IS:", selectedBin);
-      console.log("avlQty", response.paramObjectsMap.avlQty);
+      console.log("API Response:", response.data);
+      console.log("Available Qty:", response.data.paramObjectsMap.avlQty);
 
+      // Check if avlQty exists in the response
+      if (
+        response.data.paramObjectsMap &&
+        response.data.paramObjectsMap.avlQty !== undefined
+      ) {
+        setParentTable((prevData) =>
+          prevData.map((r) =>
+            r.id === row.id
+              ? {
+                  ...r,
+                  avlQty: response.data.paramObjectsMap.avlQty,
+                }
+              : r
+          )
+        );
+      } else {
+        console.warn("avlQty not found in response");
+        // Set default value if not found
+        setParentTable((prevData) =>
+          prevData.map((r) =>
+            r.id === row.id
+              ? {
+                  ...r,
+                  avlQty: 0, // or whatever default value you prefer
+                }
+              : r
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching available quantity:", error);
+      // Set default value on error
       setParentTable((prevData) =>
         prevData.map((r) =>
           r.id === row.id
             ? {
                 ...r,
-                avlQty: response.paramObjectsMap.avlQty,
+                avlQty: 0, // or whatever default value you prefer
               }
             : r
         )
       );
-    } catch (error) {
-      console.error("Error fetching locationType data:", error);
     }
   };
-
   const getAllDeKittingByOrgId = async () => {
     try {
       const response = await axios.get(
@@ -607,8 +667,8 @@ export const DeKitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        setListViewData(response.paramObjectsMap.deKittingVO);
+      if (response.data.status === true) {
+        setListViewData(response.data.paramObjectsMap.deKittingVO);
       } else {
         console.error("API Error:", response);
       }
@@ -624,12 +684,14 @@ export const DeKitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        const options = response.paramObjectsMap.partNoChild.map((item) => ({
-          partNo: item.partNo,
-          partDesc: item.partDesc,
-          sku: item.sku,
-        }));
+      if (response.data.status === true) {
+        const options = response.data.paramObjectsMap.partNoChild.map(
+          (item) => ({
+            partNo: item.partNo,
+            partDesc: item.partDesc,
+            sku: item.sku,
+          })
+        );
         setPartNoOptions(options);
         console.log("Mapped Part No Options:", options);
       } else {
@@ -659,14 +721,14 @@ export const DeKitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
-        setDocId(response.paramObjectsMap.deKittingDocId);
+      if (response.data.status === true) {
+        setDocId(response.data.paramObjectsMap.deKittingDocId);
         setFormData((prevFormData) => ({
           ...prevFormData,
-          docId: response.paramObjectsMap.deKittingDocId,
+          docId: response.data.paramObjectsMap.deKittingDocId,
         }));
         const modifiedDocId = appendGNToDocumentId(
-          response.paramObjectsMap.deKittingDocId
+          response.data.paramObjectsMap.deKittingDocId
         );
         console.log("Modified docId:", modifiedDocId);
 
@@ -700,9 +762,9 @@ export const DeKitting = () => {
       );
       console.log("API Response:", response);
 
-      if (response.status === true) {
+      if (response.data.status === true) {
         setListView(false);
-        const particularDekitting = response.paramObjectsMap.deKittingVO;
+        const particularDekitting = response.data.paramObjectsMap.deKittingVO;
         console.log("THE PARTICULAR DeKitting IS:", particularDekitting);
         getAllBinDetails();
         setFormData({
@@ -887,6 +949,14 @@ export const DeKitting = () => {
     //   return;
     // }
 
+    const formattedDocDate = formData.docDate
+      ? dayjs(formData.docDate).format("YYYY-MM-DD")
+      : "";
+
+    const formattedGRNDate = formData.grnDate
+      ? dayjs(formData.grnDate).format("YYYY-MM-DD")
+      : "";
+
     const errors = {};
     let firstInvalidFieldRef = null;
 
@@ -991,15 +1061,16 @@ export const DeKitting = () => {
         finYear: finYear,
         orgId: orgId,
         warehouse: warehouse,
+        docDate: formattedDocDate,
       };
 
       console.log("DATA TO SAVE IS:", saveFormData);
       try {
         const response = await axios.put(
-          `${API_URL}/deKitting/createUpdateDeKitting`,
+          `${API_URL}/api/deKitting/createUpdateDeKitting`,
           saveFormData
         );
-        if (response.status === true) {
+        if (response.data.status === true) {
           console.log("Response:", response);
           handleClear();
           showToast("success", "De-Kitting created successfully");
@@ -1008,7 +1079,7 @@ export const DeKitting = () => {
         } else {
           showToast(
             "error",
-            response.paramObjectsMap.errorMessage ||
+            response.data.paramObjectsMap.errorMessage ||
               "De-Kitting creation failed"
           );
           setIsLoading(false);
@@ -1087,146 +1158,130 @@ export const DeKitting = () => {
         >
           {listView ? (
             <div
+              className="form-containerSG"
               style={{
-                padding: "20px",
-                marginTop: "20px",
-                display: "revert",
-                placeContent: "center",
-                overflowY: "none",
-                minHeight: "20dvh",
+                minHeight: "80vh",
                 background: "var(--bg-body-gradient)",
+                marginTop: "40px",
               }}
             >
               {/* Header */}
               <div
-                className="form-containerSG"
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
                   background: "var(--bg-body-gradient)",
+                  padding: "0 20px",
                 }}
               >
-                <div>
-                  <Typography.Title
-                    level={3}
-                    style={{ color: "#fff", margin: 0 }}
-                  >
-                    De-Kitting List
-                  </Typography.Title>
-                  <Typography.Text
-                    style={{ color: "rgba(255, 255, 255, 0.8)" }}
-                  >
-                    View and manage de-kitting entries
-                  </Typography.Text>
-                </div>
-                <div>
-                  <Button
-                    icon={<FormOutlined />}
-                    onClick={() => setListView(false)}
-                    style={{
-                      backgroundColor: "transparent",
-                      color: "white",
-                      border: "none",
-                    }}
-                  >
-                    Form View
-                  </Button>
-                </div>
+                <Typography.Title
+                  level={3}
+                  style={{ color: "#fff", margin: 0 }}
+                >
+                  De-Kitting List
+                </Typography.Title>
+                <Button
+                  icon={<FormOutlined />}
+                  onClick={() => setListView(false)}
+                  style={{
+                    backgroundColor: "transparent",
+                    color: "white",
+                    border: "none",
+                  }}
+                >
+                  Form View
+                </Button>
               </div>
 
-              {/* Search Filters */}
+              {/* Search and Filter Controls */}
               <div
                 style={{
-                  marginTop: "20px",
-                  padding: "20px",
-                  borderRadius: "8px",
-                  background: "rgba(255, 255, 255, 0.1)",
-                  backdropFilter: "blur(10px)",
+                  margin: "20px",
+                  display: "flex",
+                  gap: "10px",
+                  flexWrap: "wrap",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
-                <Row gutter={16}>
-                  <Col span={6}>
-                    <Form.Item
-                      label={<span style={{ color: "#fff" }}>From Date</span>}
-                    >
-                      <DatePicker
-                        style={{ width: "100%" }}
-                        value={dayjs(searchParams.fromDate)}
-                        onChange={(date) =>
-                          setSearchParams({
-                            ...searchParams,
-                            fromDate: date,
-                          })
-                        }
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item
-                      label={<span style={{ color: "#fff" }}>To Date</span>}
-                    >
-                      <DatePicker
-                        style={{ width: "100%" }}
-                        value={dayjs(searchParams.toDate)}
-                        onChange={(date) =>
-                          setSearchParams({
-                            ...searchParams,
-                            toDate: date,
-                          })
-                        }
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item
-                      label={<span style={{ color: "#fff" }}>Document No</span>}
-                    >
-                      <Input
-                        value={searchParams.docId}
-                        onChange={(e) =>
-                          setSearchParams({
-                            ...searchParams,
-                            docId: e.target.value,
-                          })
-                        }
-                        placeholder="Enter document no"
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item
-                      label={<span style={{ color: "#fff" }}>Status</span>}
-                    >
-                      <Select
-                        value={searchParams.status}
-                        onChange={(value) =>
-                          setSearchParams({
-                            ...searchParams,
-                            status: value,
-                          })
-                        }
-                        style={{ width: "100%" }}
-                      >
-                        <Option value="ALL">All</Option>
-                        <Option value="PENDING">Pending</Option>
-                        <Option value="COMPLETED">Completed</Option>
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                </Row>
-                <div style={{ textAlign: "right", marginTop: "16px" }}>
+                <Input
+                  placeholder="Search de-kitting entries..."
+                  allowClear
+                  value={searchParams.docId}
+                  onChange={(e) =>
+                    setSearchParams({ ...searchParams, docId: e.target.value })
+                  }
+                  style={{
+                    width: "300px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                  }}
+                  prefix={
+                    <SearchOutlined
+                      style={{ color: "rgba(255, 255, 255, 0.5)" }}
+                    />
+                  }
+                />
+
+                <div
+                  style={{ display: "flex", gap: "10px", alignItems: "center" }}
+                >
+                  <DatePicker
+                    placeholder="From Date"
+                    value={dayjs(searchParams.fromDate)}
+                    onChange={(date) =>
+                      setSearchParams({ ...searchParams, fromDate: date })
+                    }
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                  />
+                  <DatePicker
+                    placeholder="To Date"
+                    value={dayjs(searchParams.toDate)}
+                    onChange={(date) =>
+                      setSearchParams({ ...searchParams, toDate: date })
+                    }
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "white",
+                    }}
+                  />
+                  <Select
+                    value={searchParams.status}
+                    onChange={(value) =>
+                      setSearchParams({ ...searchParams, status: value })
+                    }
+                    style={{
+                      width: "150px",
+                      background: "rgba(255, 255, 255, 0.1)",
+                      color: "white",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                    }}
+                  >
+                    <Option value="ALL">All Status</Option>
+                    <Option value="PENDING">Pending</Option>
+                    <Option value="COMPLETED">Completed</Option>
+                  </Select>
+
                   <Button
                     type="primary"
                     icon={<SearchOutlined />}
-                    onClick={() => {
-                      // Implement search functionality
-                      console.log("Search clicked", searchParams);
+                    onClick={() => console.log("Search clicked", searchParams)}
+                    style={{
+                      background: "rgba(108, 99, 255, 0.3)",
+                      color: "#fff",
+                      border: "none",
                     }}
-                    style={{ marginRight: "8px" }}
                   >
                     Search
                   </Button>
+
                   <Button
                     icon={<ClearOutlined />}
                     onClick={() => {
@@ -1237,43 +1292,364 @@ export const DeKitting = () => {
                         status: "ALL",
                       });
                     }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.1)",
+                      color: "#fff",
+                      border: "none",
+                    }}
                   >
                     Clear
+                  </Button>
+
+                  <Button
+                    type="primary"
+                    icon={<DownloadOutlined />}
+                    onClick={() => console.log("Export to Excel")}
+                    style={{
+                      background: "rgba(108, 99, 255, 0.3)",
+                      color: "#fff",
+                      border: "none",
+                    }}
+                  >
+                    Export to Excel
                   </Button>
                 </div>
               </div>
 
               {/* Data Table */}
               <div
+                className="table-container"
                 style={{
+                  position: "relative",
+                  width: "95%",
+                  margin: "0 auto",
+                  overflowX: "auto",
+                  fontSize: "11px",
+                  maxHeight: "500px",
+                  overflowY: "auto",
                   marginTop: "20px",
-                  borderRadius: "8px",
-                  overflow: "hidden",
+                  background: "var(--bg-body-gradient)",
                 }}
               >
-                <Table
-                  columns={listViewColumns.map((col) => ({
-                    title: col.title,
-                    dataIndex: col.dataIndex,
-                    key: col.key,
-                    width: col.width,
-                    render: col.render,
-                  }))}
-                  dataSource={listViewData}
-                  rowKey="id"
-                  pagination={{
-                    current: currentPage,
-                    pageSize: pageSize,
-                    total: listViewData.length,
-                    onChange: (page, size) => {
-                      setCurrentPage(page);
-                      setPageSize(size);
-                    },
-                    showSizeChanger: true,
-                    pageSizeOptions: ["10", "20", "50", "100"],
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    background: "var(--bg-body-gradient)",
                   }}
-                  scroll={{ x: true }}
-                />
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.3)",
+                        backgroundColor: "rgba(255, 255, 255, 0.1)",
+                      }}
+                    >
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Document No
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Document Date
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Ref Id
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Ref Date
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Status
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "white",
+                        }}
+                      >
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listViewData
+                      .slice(
+                        (currentPage - 1) * pageSize,
+                        currentPage * pageSize
+                      )
+                      .map((item, index) => (
+                        <tr
+                          key={item.id}
+                          style={{
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                            color: "white",
+                            backgroundColor:
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              "rgba(255, 255, 255, 0.1)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)";
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.docId}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.docDate
+                              ? formatDateFromAPI(item.docDate)
+                              : "-"}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.refNo || "-"}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            {item.refDate
+                              ? formatDateFromAPI(item.refDate)
+                              : "-"}
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            <span
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: "12px",
+                                backgroundColor:
+                                  item.status === "COMPLETED"
+                                    ? "rgba(76, 175, 80, 0.3)"
+                                    : "rgba(255, 193, 7, 0.3)",
+                                color:
+                                  item.status === "COMPLETED"
+                                    ? "#4CAF50"
+                                    : "#FFC107",
+                              }}
+                            >
+                              {item.status || "PENDING"}
+                            </span>
+                          </td>
+                          <td
+                            style={{
+                              padding: "12px",
+                              textAlign: "left",
+                              color: "white",
+                              fontSize: "11px",
+                            }}
+                          >
+                            <Space>
+                              <Button
+                                type="link"
+                                icon={<EditOutlined />}
+                                onClick={() => getDeKittingById(item)}
+                                style={{ color: "white" }}
+                              />
+                              <Button
+                                type="link"
+                                icon={<EyeOutlined />}
+                                onClick={() => console.log("View", item)}
+                                style={{ color: "white" }}
+                              />
+                            </Space>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+
+                {/* Custom Pagination */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    marginTop: "16px",
+                    padding: "0 20px",
+                    color: "white",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ marginRight: "16px", fontSize: "12px" }}>
+                    {(currentPage - 1) * pageSize + 1}-
+                    {Math.min(currentPage * pageSize, listViewData.length)} of{" "}
+                    {listViewData.length} items
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
+                    disabled={currentPage === 1}
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid white",
+                      margin: "0 4px",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                      opacity: currentPage === 1 ? 0.5 : 1,
+                    }}
+                  >
+                    Prev
+                  </button>
+
+                  {Array.from(
+                    { length: Math.ceil(listViewData.length / pageSize) },
+                    (_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i + 1)}
+                        style={{
+                          backgroundColor:
+                            currentPage === i + 1
+                              ? "rgba(255,255,255,0.2)"
+                              : "transparent",
+                          color: "white",
+                          border: "1px solid white",
+                          margin: "0 2px",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          minWidth: "28px",
+                        }}
+                      >
+                        {i + 1}
+                      </button>
+                    )
+                  )}
+
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) =>
+                        Math.min(
+                          prev + 1,
+                          Math.ceil(listViewData.length / pageSize)
+                        )
+                      )
+                    }
+                    disabled={
+                      currentPage === Math.ceil(listViewData.length / pageSize)
+                    }
+                    style={{
+                      backgroundColor: "transparent",
+                      color: "white",
+                      border: "1px solid white",
+                      margin: "0 4px",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      cursor:
+                        currentPage ===
+                        Math.ceil(listViewData.length / pageSize)
+                          ? "not-allowed"
+                          : "pointer",
+                      opacity:
+                        currentPage ===
+                        Math.ceil(listViewData.length / pageSize)
+                          ? 0.5
+                          : 1,
+                    }}
+                  >
+                    Next
+                  </button>
+
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      color: "white",
+                      border: "1px solid white",
+                      marginLeft: "8px",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    <option value="5" style={{ background: "#1A1A2E" }}>
+                      5 / page
+                    </option>
+                    <option value="10" style={{ background: "#1A1A2E" }}>
+                      10 / page
+                    </option>
+                    <option value="20" style={{ background: "#1A1A2E" }}>
+                      20 / page
+                    </option>
+                    <option value="50" style={{ background: "#1A1A2E" }}>
+                      50 / page
+                    </option>
+                  </select>
+                </div>
               </div>
             </div>
           ) : (
@@ -1405,9 +1781,11 @@ export const DeKitting = () => {
                               }
                             >
                               <DatePicker
+                                className="white-datepicker"
                                 style={{ width: "100%", ...readOnlyInputStyle }}
                                 value={dayjs(formData.docDate)}
                                 disabled
+                                format="DD-MM-YYYY"
                               />
                             </Form.Item>
                           </Col>
@@ -1645,7 +2023,7 @@ export const DeKitting = () => {
                                         icon={<DeleteOutlined />}
                                         onClick={() => handleDeleteRow(row.id)}
                                         style={{
-                                          color: "#ff4d4f",
+                                          color: "white",
                                           background: "transparent",
                                           border: "none",
                                         }}
@@ -1656,6 +2034,7 @@ export const DeKitting = () => {
                                     style={{
                                       padding: "8px",
                                       textAlign: "center",
+                                      color: "white",
                                     }}
                                   >
                                     {index + 1}
@@ -2128,7 +2507,7 @@ export const DeKitting = () => {
                                         icon={<DeleteOutlined />}
                                         onClick={() => handleDeleteRow1(row.id)}
                                         style={{
-                                          color: "#ff4d4f",
+                                          color: "white",
                                           background: "transparent",
                                           border: "none",
                                         }}
@@ -2139,6 +2518,7 @@ export const DeKitting = () => {
                                     style={{
                                       padding: "8px",
                                       textAlign: "center",
+                                      color: "white",
                                     }}
                                   >
                                     {index + 1}

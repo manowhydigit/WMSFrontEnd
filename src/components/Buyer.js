@@ -172,7 +172,7 @@ const Buyer = () => {
     contactPerson: "",
     mobile: "",
     addressLine1: "",
-    country: "",
+    country: "INDIA",
     state: "",
     city: "",
     controlBranch: branchCode,
@@ -292,7 +292,10 @@ const Buyer = () => {
         `${API_URL}/api/commonmaster/country?orgid=${orgId}`
       );
       if (response.data?.paramObjectsMap?.countryVO) {
-        setCountryList(response.data.paramObjectsMap.countryVO);
+        const sortedCountries = response.data.paramObjectsMap.countryVO.sort(
+          (a, b) => a.countryName.localeCompare(b.countryName)
+        );
+        setCountryList(sortedCountries);
       } else {
         showToast("warning", "No country data found");
       }
@@ -310,7 +313,11 @@ const Buyer = () => {
         }&orgid=${orgId}`
       );
       if (response.data?.paramObjectsMap?.stateVO) {
-        setStateList(response.data.paramObjectsMap.stateVO);
+        const sortedState = response.data.paramObjectsMap.stateVO.sort((a, b) =>
+          a.stateName.localeCompare(b.stateName)
+        );
+        setStateList(sortedState);
+
         setFormData((prev) => ({ ...prev, state: "", city: "" }));
       } else {
         showToast("warning", "No state data found");
@@ -330,7 +337,11 @@ const Buyer = () => {
         }&orgid=${orgId}`
       );
       if (response.data?.paramObjectsMap?.cityVO) {
-        setCityList(response.data.paramObjectsMap.cityVO);
+        const sortedCity = response.data.paramObjectsMap.cityVO.sort((a, b) =>
+          a.cityName.localeCompare(b.cityName)
+        );
+
+        setCityList(sortedCity);
         setFormData((prev) => ({ ...prev, city: "" }));
       } else {
         showToast("warning", "No city data found");
@@ -413,7 +424,6 @@ const Buyer = () => {
 
     switch (name) {
       case "buyerName":
-      case "shortName":
       case "contactPerson":
         if (!nameRegex.test(value)) {
           errorMessage = "Only Alphabet are allowed";
@@ -1068,7 +1078,7 @@ const Buyer = () => {
                                   {countryList.map((country) => (
                                     <Option
                                       key={country.id}
-                                      value={country.countryName}
+                                      value={country.countryName || "INDIA"}
                                     >
                                       {country.countryName}
                                     </Option>

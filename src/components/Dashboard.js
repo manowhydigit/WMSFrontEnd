@@ -9,30 +9,6 @@ const Dashboard = () => {
   const location = useLocation();
   // const [isAuthenticated, setIsAuthenticated] = useState(null); // Start with null to indicate "loading" state
 
-  // useEffect(() => {
-  //   const authToken = localStorage.getItem("authToken");
-
-  //   // If the route is "/authenticate", don't redirect to login
-  //   if (location.pathname !== '/authenticate') {
-  //     if (!authToken) {
-  //       setIsAuthenticated(false);
-  //       navigate("/login", { replace: true }); // Redirect to login if not authenticated
-  //     } else {
-  //       setIsAuthenticated(true);
-  //     }
-  //   }
-  // }, [navigate, location.pathname]);
-
-  // if (isAuthenticated === null) {
-  //   // While checking authentication, return a loading spinner or empty state
-  //   return <div>Loading...</div>;
-  // }
-
-  // if (!isAuthenticated) {
-  //   // Prevent rendering the Dashboard if not authenticated
-  //   return null;
-  // }
-
   return (
     <Box sx={{ display: "flex" }}>
       <CssBaseline />

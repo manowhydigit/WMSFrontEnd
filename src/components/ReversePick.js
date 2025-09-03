@@ -9,6 +9,7 @@ import {
   CloudDownloadOutlined,
   FormOutlined,
   RightCircleOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -33,11 +34,13 @@ import { useEffect, useState } from "react";
 import Draggable from "react-draggable";
 import axios from "axios";
 import { getAllActiveGroups } from "../utils/CommonFunctions";
+import * as XLSX from "xlsx";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
 const { TextArea } = Input;
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
+const { RangePicker } = DatePicker;
 
 function PaperComponent(props) {
   return (
@@ -81,6 +84,11 @@ export const ReversePick = () => {
   const [pageSize, setPageSize] = useState(5);
   const [reversePickList, setReversePickList] = useState([]);
   const [reversePickItems, setReversePickItems] = useState([]);
+
+  const [searchText, setSearchText] = useState("");
+  const [filteredData, setFilteredData] = useState([]);
+  const [downloadLoading, setDownloadLoading] = useState(false);
+  const [selectedDateRange, setSelectedDateRange] = useState([]);
 
   const [formData, setFormData] = useState({
     docId: "",
@@ -140,6 +148,210 @@ export const ReversePick = () => {
     getAllGroups();
     getDocId();
   }, []);
+
+  // Helper function to format dates for display
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return "";
+    try {
+      return dayjs(dateString).format("DD-MM-YYYY");
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  // Filter data by date range
+  const filterDataByDateRange = (data, dateRange) => {
+    if (dateRange.length !== 2) return data;
+
+    const fromDate = dayjs(dateRange[0], "DD-MM-YYYY");
+    const toDate = dayjs(dateRange[1], "DD-MM-YYYY");
+
+    return data.filter((item) => {
+      const itemDate = dayjs(item.docDate, "DD-MM-YYYY");
+      return (
+        itemDate.isAfter(fromDate.subtract(1, "day")) &&
+        itemDate.isBefore(toDate.add(1, "day"))
+      );
+    });
+  };
+
+  // Format Reverse Pick data for Excel export
+  const formatReversePickDataForExcel = (reversePickData) => {
+    const excelData = [];
+
+    reversePickData.forEach((mainRecord) => {
+      if (
+        mainRecord.reversePickDetailsVO &&
+        mainRecord.reversePickDetailsVO.length > 0
+      ) {
+        // Create a row for each detail record
+        mainRecord.reversePickDetailsVO.forEach((detail) => {
+          excelData.push({
+            "Document No": mainRecord.docId,
+            "Document Date": formatDateForDisplay(mainRecord.docDate),
+            "Pick Request ID": mainRecord.pickRequestDocId,
+            "Buyer Order No": mainRecord.buyerOrderNo,
+            "Buyer Ref No": mainRecord.buyerRefNo,
+            "Buyer Ref Date": formatDateForDisplay(mainRecord.buyerRefDate),
+            "Client Name": mainRecord.clientName,
+            "Customer Name": mainRecord.customerName,
+            Status: mainRecord.status,
+            "BO Amendment": mainRecord.boAmendment,
+            "In Time": mainRecord.inTime,
+            "Part No": detail.partNo,
+            "Part Description": detail.partDesc,
+            Bin: detail.bin,
+            "Batch No": detail.batchNo,
+            "Order Qty": detail.orderQty,
+            "Pick Qty": detail.pickQty,
+            "Revised Qty": detail.revisedQty,
+            "GRN No": detail.grnNo,
+            "GRN Date": formatDateForDisplay(detail.grnDate),
+            "Total Picked Qty": mainRecord.totalPickQty,
+            "Total Revised Qty": mainRecord.totalRevisedQty,
+            "Created By": mainRecord.createdBy,
+            Branch: mainRecord.branch,
+          });
+        });
+      } else {
+        // Create a row even if there are no details
+        excelData.push({
+          "Document No": mainRecord.docId,
+          "Document Date": formatDateForDisplay(mainRecord.docDate),
+          "Pick Request ID": mainRecord.pickRequestDocId,
+          "Buyer Order No": mainRecord.buyerOrderNo,
+          "Buyer Ref No": mainRecord.buyerRefNo,
+          "Buyer Ref Date": formatDateForDisplay(mainRecord.buyerRefDate),
+          "Client Name": mainRecord.clientName,
+          "Customer Name": mainRecord.customerName,
+          Status: mainRecord.status,
+          "BO Amendment": mainRecord.boAmendment,
+          "In Time": mainRecord.inTime,
+          "Part No": "",
+          "Part Description": "",
+          Bin: "",
+          "Batch No": "",
+          "Order Qty": "",
+          "Pick Qty": "",
+          "Revised Qty": "",
+          "GRN No": "",
+          "GRN Date": "",
+          "Total Picked Qty": mainRecord.totalPickQty,
+          "Total Revised Qty": mainRecord.totalRevisedQty,
+          "Created By": mainRecord.createdBy,
+          Branch: mainRecord.branch,
+        });
+      }
+    });
+
+    return excelData;
+  };
+
+  // Download Excel function
+  const downloadExcel = async () => {
+    if (!selectedDateRange || selectedDateRange.length !== 2) {
+      message.error("Please select both from and to dates");
+      return;
+    }
+
+    setDownloadLoading(true);
+    try {
+      const fromDate = selectedDateRange[0];
+      const toDate = selectedDateRange[1];
+
+      // Fetch Reverse Pick data from the API endpoint
+      const response = await axios.get(
+        `${API_URL}/api/reversePick/getAllReversePick?orgId=${orgId}&branchCode=${branchCode}&branch=${branch}&client=${client}&warehouse=${warehouse}&finYear=${finYear}`
+      );
+
+      if (response.data.status && response.data.paramObjectsMap.reversePickVO) {
+        const allReversePickData = response.data.paramObjectsMap.reversePickVO;
+
+        // Filter data based on the selected date range
+        const filteredReversePickData = allReversePickData.filter((item) => {
+          // Convert the date string to a format that can be compared
+          let itemDate;
+          if (item.docDate) {
+            // Handle different date formats that might come from the API
+            if (item.docDate.includes("-")) {
+              const parts = item.docDate.split("-");
+              if (parts[0].length === 4) {
+                // YYYY-MM-DD format
+                itemDate = item.docDate;
+              } else if (parts[0].length === 2) {
+                // DD-MM-YYYY format, convert to YYYY-MM-DD for comparison
+                itemDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+              }
+            } else {
+              // If it's a timestamp or other format, try to parse it
+              itemDate = dayjs(item.docDate).format("YYYY-MM-DD");
+            }
+          }
+
+          // Convert selected dates to YYYY-MM-DD format for comparison
+          const fromDateFormatted = dayjs(fromDate, "DD-MM-YYYY").format(
+            "YYYY-MM-DD"
+          );
+          const toDateFormatted = dayjs(toDate, "DD-MM-YYYY").format(
+            "YYYY-MM-DD"
+          );
+
+          return (
+            itemDate &&
+            itemDate >= fromDateFormatted &&
+            itemDate <= toDateFormatted
+          );
+        });
+
+        if (filteredReversePickData.length > 0) {
+          // Format filtered data for Excel
+          const excelData = formatReversePickDataForExcel(
+            filteredReversePickData
+          );
+
+          // Create workbook and worksheet
+          const wb = XLSX.utils.book_new();
+          const ws = XLSX.utils.json_to_sheet(excelData);
+
+          // Add worksheet to workbook
+          XLSX.utils.book_append_sheet(wb, ws, "Reverse Pick Data");
+
+          // Generate file name with date range
+          const fileName = `Reverse_Pick_${fromDate}_to_${toDate}.xlsx`;
+
+          // Generate Excel file and download
+          XLSX.writeFile(wb, fileName);
+
+          message.success("Excel file downloaded successfully");
+        } else {
+          message.error("No data found for the selected date range");
+        }
+      } else {
+        message.error("No data available");
+      }
+    } catch (error) {
+      console.error("Error downloading Excel:", error);
+      message.error("Failed to download Excel file");
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  // Filter data based on search text
+  useEffect(() => {
+    if (searchText) {
+      const filtered = reversePickList.filter((reversePick) =>
+        Object.values(reversePick).some(
+          (value) =>
+            value &&
+            value.toString().toLowerCase().includes(searchText.toLowerCase())
+        )
+      );
+      setFilteredData(filtered);
+    } else {
+      setFilteredData(reversePickList);
+    }
+  }, [searchText, reversePickList]);
 
   const getDocId = async () => {
     try {
@@ -1336,7 +1548,7 @@ export const ReversePick = () => {
                 >
                   Reverse Pick List
                 </Typography.Title>
-                <Button
+                {/* <Button
                   icon={
                     viewMode === "form" ? (
                       <UnorderedListOutlined />
@@ -1353,7 +1565,7 @@ export const ReversePick = () => {
                   }}
                 >
                   {viewMode === "form" ? "List View" : "New Reverse Pick"}
-                </Button>
+                </Button> */}
               </div>
 
               <div
@@ -1369,6 +1581,72 @@ export const ReversePick = () => {
                   background: "var(--bg-body-gradient)",
                 }}
               >
+                <Input
+                  placeholder="Search Reverse Picks..."
+                  prefix={<SearchOutlined />}
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  style={{
+                    width: 300,
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "white",
+                  }}
+                />
+
+                <RangePicker
+                  className="white-datepicker"
+                  value={
+                    selectedDateRange.length > 0
+                      ? [
+                          dayjs(selectedDateRange[0], "DD-MM-YYYY"),
+                          dayjs(selectedDateRange[1], "DD-MM-YYYY"),
+                        ]
+                      : null
+                  }
+                  onChange={(dates) => {
+                    if (dates && dates.length === 2) {
+                      setSelectedDateRange([
+                        dates[0].format("DD-MM-YYYY"),
+                        dates[1].format("DD-MM-YYYY"),
+                      ]);
+                    } else {
+                      setSelectedDateRange([]);
+                    }
+                  }}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    color: "white",
+                  }}
+                  placeholder={["From Date", "To Date"]}
+                  format="DD-MM-YYYY"
+                />
+
+                <Button
+                  icon={<DownloadOutlined />}
+                  loading={downloadLoading}
+                  onClick={downloadExcel}
+                  style={{
+                    backgroundColor: "transparent",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                  }}
+                >
+                  Download Excel
+                </Button>
+
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={toggleViewMode}
+                  style={{
+                    backgroundColor: "transparent",
+                    color: "white",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                  }}
+                >
+                  Add New
+                </Button>
                 <table
                   style={{
                     width: "100%",

@@ -673,13 +673,60 @@ const Putaway = () => {
     return excelData;
   };
 
+  const filterDataByDateRange = (data, dateRange) => {
+    if (dateRange.length !== 2) return data;
+
+    const fromDate = dayjs(dateRange[0], "DD-MM-YYYY");
+    const toDate = dayjs(dateRange[1], "DD-MM-YYYY");
+
+    return data.filter((item) => {
+      if (!item.docDate) return false;
+
+      // Convert item date to dayjs object for comparison
+      let itemDate;
+      try {
+        itemDate = dayjs(item.docDate, "DD-MM-YYYY");
+        if (!itemDate.isValid()) {
+          // Try other date formats if DD-MM-YYYY fails
+          itemDate = dayjs(item.docDate);
+        }
+      } catch (error) {
+        console.warn("Error parsing date:", item.docDate, error);
+        return false;
+      }
+
+      // Check if item date is within the selected range (inclusive)
+      return (
+        itemDate.isValid() &&
+        itemDate.isAfter(fromDate.subtract(1, "day")) &&
+        itemDate.isBefore(toDate.add(1, "day"))
+      );
+    });
+  };
+
   const downloadPutAwayExcel = () => {
+    if (!selectedDateRange || selectedDateRange.length !== 2) {
+      message.error("Please select both from and to dates");
+      return;
+    }
+
     try {
+      // Filter data based on selected date range
+      const filteredData = filterDataByDateRange(
+        listViewData,
+        selectedDateRange
+      );
+
+      if (filteredData.length === 0) {
+        message.error("No data found for the selected date range");
+        return;
+      }
+
       // Create a new workbook
       const wb = XLSX.utils.book_new();
 
-      // Prepare data for Excel
-      const excelData = formatPutAwayDataForExcel(listViewData);
+      // Prepare data for Excel - use the filtered data
+      const excelData = formatPutAwayDataForExcel(filteredData);
 
       // Convert data to worksheet
       const ws = XLSX.utils.json_to_sheet(excelData);
@@ -687,13 +734,16 @@ const Putaway = () => {
       // Add worksheet to workbook
       XLSX.utils.book_append_sheet(wb, ws, "PutAway Data");
 
+      // Generate file name with date range
+      const fileName = `PutAway_Data_${selectedDateRange[0]}_to_${selectedDateRange[1]}.xlsx`;
+
       // Generate Excel file and trigger download
-      XLSX.writeFile(wb, "PutAway_Data.xlsx");
+      XLSX.writeFile(wb, fileName);
 
       // Show notification
       notification.success({
         message: "Excel Downloaded",
-        description: "PutAway data has been exported to Excel successfully!",
+        description: `PutAway data from ${selectedDateRange[0]} to ${selectedDateRange[1]} has been exported to Excel successfully!`,
         placement: "topRight",
       });
     } catch (error) {
@@ -2702,8 +2752,24 @@ const Putaway = () => {
                 <Space>
                   <RangePicker
                     className="white-datepicker"
-                    value={selectedDateRange}
-                    onChange={setSelectedDateRange}
+                    value={
+                      selectedDateRange.length > 0
+                        ? [
+                            dayjs(selectedDateRange[0], "DD-MM-YYYY"),
+                            dayjs(selectedDateRange[1], "DD-MM-YYYY"),
+                          ]
+                        : null
+                    }
+                    onChange={(dates) => {
+                      if (dates && dates.length === 2) {
+                        setSelectedDateRange([
+                          dates[0].format("DD-MM-YYYY"),
+                          dates[1].format("DD-MM-YYYY"),
+                        ]);
+                      } else {
+                        setSelectedDateRange([]);
+                      }
+                    }}
                     style={{
                       background: "rgba(255, 255, 255, 0.1)",
                       border: "1px solid rgba(255, 255, 255, 0.3)",

@@ -70,6 +70,11 @@ import Kitting from "./components/Kitting";
 import DeKitting from "./components/DeKitting";
 import GatePassIn from "./components/GatePassIn";
 import WMSPickRequest from "./components/WMSPickRequest";
+import StockConsolidation from "./components/StockConsolidation";
+import StockConsolidationBinWise from "./components/StockConsolidationBinWise";
+import StockBinBatchStatusWise from "./components/StockBinBatchStatusWise";
+import StockLedger from "./components/StockLedger";
+import StockBatchWise from "./components/StockBatchWise";
 
 function App() {
   const [isSelected, setIsSelected] = useState(false);
@@ -148,6 +153,23 @@ function App() {
               <Route path="StockRestate" element={<StockRestate />} />
               <Route path="Kitting" element={<Kitting />} />
               <Route path="DeKitting" element={<DeKitting />} />
+              <Route
+                path="StockConsolidation"
+                element={<StockConsolidation />}
+              />
+              <Route
+                path="StockConsolidationBinWise"
+                element={<StockConsolidationBinWise />}
+              />
+
+              <Route
+                path="StockBinBatchStatusWise"
+                element={<StockBinBatchStatusWise />}
+              />
+
+              <Route path="StockLedger" element={<StockLedger />} />
+
+              <Route path="StockBatchWise" element={<StockBatchWise />} />
 
               {/* <Route
                 path="ExternalDataMismatch"

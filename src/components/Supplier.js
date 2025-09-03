@@ -108,7 +108,7 @@ const Supplier = () => {
     contactPerson: "",
     mobile: "",
     address: "",
-    country: "",
+    country: "INDIA",
     state: "",
     city: "",
     controlBranch: localStorage.getItem("branchcode"),
@@ -143,13 +143,28 @@ const Supplier = () => {
     getAllCountries();
   }, []);
 
+  useEffect(() => {
+    if (formData.country) {
+      getAllStates();
+    }
+  }, [formData.country]);
+
+  useEffect(() => {
+    if (formData.state) {
+      getAllCities();
+    }
+  }, [formData.state]);
+
   const getAllCountries = async () => {
     try {
       const response = await axios.get(
         `${API_URL}/api/commonmaster/country?orgid=${orgId}`
       );
       if (response.data?.paramObjectsMap?.countryVO) {
-        setCountryList(response.data.paramObjectsMap.countryVO);
+        const sortedCountries = response.data.paramObjectsMap.countryVO.sort(
+          (a, b) => a.countryName.localeCompare(b.countryName)
+        );
+        setCountryList(sortedCountries);
       } else {
         showToast("warning", "No country data found");
       }
@@ -165,7 +180,11 @@ const Supplier = () => {
         `${API_URL}/api/commonmaster/state/?country=${countryName}&orgid=${orgId}`
       );
       if (response.data?.paramObjectsMap?.stateVO) {
-        setStateList(response.data.paramObjectsMap.stateVO);
+        const sortedState = response.data.paramObjectsMap.stateVO.sort((a, b) =>
+          a.stateName.localeCompare(b.stateName)
+        );
+        setStateList(sortedState);
+        setFormData((prev) => ({ ...prev, state: "", city: "" }));
       } else {
         showToast("warning", "No state data found");
       }
@@ -181,7 +200,12 @@ const Supplier = () => {
         `${API_URL}/api/commonmaster/city/state?state=${stateName}&orgid=${orgId}`
       );
       if (response.data?.paramObjectsMap?.cityVO) {
-        setCityList(response.data.paramObjectsMap.cityVO);
+        const sortedCity = response.data.paramObjectsMap.cityVO.sort((a, b) =>
+          a.cityName.localeCompare(b.cityName)
+        );
+
+        setCityList(sortedCity);
+        setFormData((prev) => ({ ...prev, city: "" }));
       } else {
         showToast("warning", "No city data found");
       }
