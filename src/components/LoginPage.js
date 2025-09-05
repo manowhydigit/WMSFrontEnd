@@ -1085,7 +1085,8 @@ const LoginPage = () => {
         });
 
         // Navigate to transactions
-        navigate("/InBound");
+        navigate("/Dashboard1");
+
         // window.location.reload(); // Force refresh to ensure all data is loaded
       } else {
         const errorMsg = response?.data.paramObjectsMap.errorMessage;

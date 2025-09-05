@@ -12,10 +12,57 @@ import {
   IconButton,
   Popover,
   Typography,
+  Chip,
+  Button,
 } from "@mui/material";
+import { styled } from "@mui/material/styles";
 import axios from "axios";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
+
+// Glass design styles
+const glassStyle = {
+  backdropFilter: "blur(10px)",
+  backgroundColor: "rgba(255, 255, 255, 0.1)",
+  borderRadius: "16px",
+  boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+  border: "1px solid rgba(255, 255, 255, 0.3)",
+};
+
+// Styled components with glass effect
+const GlassDialog = styled(Dialog)(({ theme }) => ({
+  "& .MuiDialog-paper": {
+    ...glassStyle,
+    backgroundColor: "rgba(28, 27, 29, 0.9)",
+    color: "white",
+    // backgroundImage:
+    //   "url(https://assets.codepen.io/13471/abstract-light.jpg), linear-gradient(to right in oklab, hsl(260 50% 75%), hsl(220 50% 75%))",
+    backgroundSize: "cover",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  },
+}));
+
+const GlassCard = styled(Card)(({ theme }) => ({
+  ...glassStyle,
+  backgroundColor: "rgba(28, 27, 29, 0.7)",
+  color: "white",
+  marginBottom: "8px",
+}));
+
+const GlassPopover = styled(Popover)(({ theme }) => ({
+  ...glassStyle,
+  color: "white",
+  padding: "20px",
+  height: "100%",
+  cursor: "pointer",
+  transition: "transform 0.2s, box-shadow 0.2s",
+  "&:hover": {
+    transform: "translateY(-4px)",
+    boxShadow: "0 8px 32px rgba(108, 99, 255, 0.3)",
+  },
+}));
 
 // This is the main component that displays the warehouse data
 const BinWiseData = ({ userName = "User", open, onClose }) => {
@@ -61,16 +108,10 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
 
         // Check response structure - adjust based on your API
         if (binResponse.data?.paramObjectsMap?.binDetails) {
-          console.log(
-            "Setting binDetails:",
-            binResponse.data.paramObjectsMap.binDetails
-          );
           setWarehouseClientData(binResponse.data.paramObjectsMap.binDetails);
         } else if (Array.isArray(binResponse.data)) {
-          console.log("Setting root array:", binResponse.data);
           setWarehouseClientData(binResponse.data);
         } else {
-          console.warn("No binDetails found in response");
           setWarehouseClientData([]);
         }
       } catch (error) {
@@ -129,9 +170,9 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
   const getColorByAvailability = (bin) => {
     const commonBin = commonBins.find((item) => item.bin === bin);
     if (commonBin) {
-      return commonBin.binStatus === "Occupied" ? "#ffa500" : "green";
+      return commonBin.binStatus === "Occupied" ? "#14857bff" : "#08dd4fff";
     }
-    return "grey";
+    return "rgba(255, 255, 255, 0.3)";
   };
 
   const handleClick = (event, location) => {
@@ -169,17 +210,33 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
 
   return (
     <>
-      <Dialog fullWidth maxWidth="lg" open={open} onClose={handleCloseDialog}>
+      <GlassDialog
+        fullWidth
+        maxWidth="lg"
+        open={open}
+        onClose={handleCloseDialog}
+      >
         <DialogTitle>
           <Grid container alignItems="center" justifyContent="space-between">
             <Grid item xs={6}>
-              <Typography variant="h5" component="div">
-                Warehouse Location
+              <Typography
+                variant="h5"
+                component="div"
+                sx={{ color: "white", fontWeight: "bold", fontSize: "14px" }}
+              >
+                Warehouse Location - {client}
               </Typography>
             </Grid>
 
             <Grid item xs={4}>
-              <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  fontSize: "14px",
+                  width: "400px",
+                }}
+              >
                 <Grid container spacing={1} alignItems="center">
                   <Grid item>
                     <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -187,14 +244,14 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
                         sx={{
                           width: 20,
                           height: 20,
-                          backgroundColor: "#ffa500",
-                          border: "1px solid #ccc",
+                          backgroundColor: "#14857bff",
+                          border: "1px solid rgba(255, 255, 255, 0.3)",
                           borderRadius: "3px",
                           mr: 1,
                         }}
                       />
-                      <Typography variant="body2">
-                        {client}'s Occupied Bin
+                      <Typography variant="body2" sx={{ color: "#43e7ccff" }}>
+                        Occupied Bin
                       </Typography>
                     </Box>
                   </Grid>
@@ -205,13 +262,15 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
                         sx={{
                           width: 20,
                           height: 20,
-                          backgroundColor: "green",
-                          border: "1px solid #ccc",
+                          backgroundColor: "#08dd4fff",
+                          border: "1px solid rgba(255, 255, 255, 0.3)",
                           borderRadius: "3px",
                           mr: 1,
                         }}
                       />
-                      <Typography variant="body2">Empty</Typography>
+                      <Typography variant="body2" sx={{ color: "white" }}>
+                        Empty
+                      </Typography>
                     </Box>
                   </Grid>
 
@@ -221,13 +280,15 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
                         sx={{
                           width: 20,
                           height: 20,
-                          backgroundColor: "grey",
-                          border: "1px solid #ccc",
+                          backgroundColor: "rgba(255, 255, 255, 0.3)",
+                          border: "1px solid rgba(255, 255, 255, 0.3)",
                           borderRadius: "3px",
                           mr: 1,
                         }}
                       />
-                      <Typography variant="body2">Others</Typography>
+                      <Typography variant="body2" sx={{ color: "white" }}>
+                        Others
+                      </Typography>
                     </Box>
                   </Grid>
                 </Grid>
@@ -238,7 +299,7 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
               <IconButton
                 aria-label="close"
                 onClick={handleCloseDialog}
-                sx={{ color: (theme) => theme.palette.grey[500] }}
+                sx={{ color: "white" }}
               >
                 <CloseIcon />
               </IconButton>
@@ -248,9 +309,13 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
 
         <DialogContent>
           {loading ? (
-            <Typography>Loading warehouse data...</Typography>
+            <Typography sx={{ color: "white" }}>
+              Loading warehouse data...
+            </Typography>
           ) : !warehouseData.length ? (
-            <Typography>No warehouse data available.</Typography>
+            <Typography sx={{ color: "white" }}>
+              No warehouse data available.
+            </Typography>
           ) : (
             <Grid container spacing={2} justifyContent="center">
               {Object.keys(groupedData)
@@ -265,7 +330,7 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
                       variant="h6"
                       gutterBottom
                       align="center"
-                      sx={{ mb: 1 }}
+                      sx={{ mb: 1, color: "white" }}
                     >
                       Level {level}
                     </Typography>
@@ -284,7 +349,7 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
                               backgroundColor: getColorByAvailability(
                                 location.bin
                               ),
-                              border: "1px solid #ccc",
+                              border: "1px solid rgba(255, 255, 255, 0.3)",
                               borderRadius: "8px",
                               display: "flex",
                               alignItems: "center",
@@ -295,8 +360,9 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
                               padding: "5px",
                               transition: "0.3s",
                               "&:hover": {
-                                borderColor: "black",
+                                borderColor: "#6C63FF",
                                 transform: "scale(1.05)",
+                                boxShadow: "0 0 10px rgba(108, 99, 255, 0.5)",
                               },
                             }}
                             onClick={(event) =>
@@ -313,9 +379,9 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
             </Grid>
           )}
         </DialogContent>
-      </Dialog>
+      </GlassDialog>
 
-      <Popover
+      <GlassPopover
         open={popoverOpen}
         anchorEl={anchorEl}
         onClose={handleClosePopover}
@@ -325,44 +391,53 @@ const BinWiseData = ({ userName = "User", open, onClose }) => {
         {popoverData && popoverData.length > 0 ? (
           <Box sx={{ p: 2, maxWidth: 300 }}>
             {popoverData.map((data, index) => (
-              <Card key={index} sx={{ mb: 1 }}>
+              <GlassCard key={index}>
                 <CardContent sx={{ padding: 1 }}>
                   <Grid container spacing={1} alignItems="center">
                     <Grid item>
-                      <InventoryIcon color="secondary" />
+                      <InventoryIcon sx={{ color: "#6C63FF" }} />
                     </Grid>
                     <Grid item xs>
-                      <Typography variant="h6" component="div">
+                      <Typography
+                        variant="h6"
+                        component="div"
+                        sx={{ color: "white" }}
+                      >
                         Part No: {data.partNo || "N/A"}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        sx={{ color: "rgba(255, 255, 255, 0.7)" }}
+                      >
                         {data.partDesc || "No description available"}
                       </Typography>
                     </Grid>
                   </Grid>
 
                   <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2">
+                    <Typography variant="subtitle2" sx={{ color: "white" }}>
                       <strong>Location:</strong> {selectedBin || "N/A"}
                     </Typography>
-                    <Typography variant="subtitle2">
+                    <Typography variant="subtitle2" sx={{ color: "white" }}>
                       <strong>Available Qty:</strong>{" "}
                       {data.avilQty || data.availableQty || "0"}
                     </Typography>
-                    <Typography variant="subtitle2">
+                    <Typography variant="subtitle2" sx={{ color: "white" }}>
                       <strong>Status:</strong> {data.status || ""}
                     </Typography>
                   </Box>
                 </CardContent>
-              </Card>
+              </GlassCard>
             ))}
           </Box>
         ) : (
           <Box sx={{ p: 2 }}>
-            <Typography>No data available for this bin.</Typography>
+            <Typography sx={{ color: "white" }}>
+              No data available for this bin.
+            </Typography>
           </Box>
         )}
-      </Popover>
+      </GlassPopover>
     </>
   );
 };
