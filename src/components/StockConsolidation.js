@@ -167,7 +167,7 @@ export const StockConsolidation = () => {
       setIsLoading(true);
       try {
         // Format the date to YYYY-MM-DD
-        const formattedDate = dayjs(formData.selectedDate).format("YYYY/DD/MM");
+        const formattedDate = dayjs(formData.selectedDate).format("MM/DD/YYYY");
 
         const response = await axios.get(
           `${API_URL}/api/Reports/getStockConsolidation?branchCode=${loginBranchCode}&client=${loginClient}&customer=${loginCustomer}&orgId=${orgId}&partNo=${formData.partNo}&warehouse=${loginWarehouse}&asondt=${formattedDate}`

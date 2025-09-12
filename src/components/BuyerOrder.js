@@ -31,6 +31,7 @@ import {
   RightCircleOutlined,
   DownloadOutlined,
 } from "@ant-design/icons";
+import GridOnIcon from "@mui/icons-material/GridOn";
 import dayjs from "dayjs";
 import axios from "axios";
 import "./PS.css";
@@ -76,6 +77,7 @@ const BuyerOrder = () => {
 
   const [downloadLoading, setDownloadLoading] = useState(false);
   const [selectedDateRange, setSelectedDateRange] = useState([]);
+  const [orderNoInput, setOrderNoInput] = useState("");
 
   const [skuDetailsTableData, setSkuDetailsTableData] = useState([
     {
@@ -326,6 +328,50 @@ const BuyerOrder = () => {
       message.error("Failed to download Excel file");
     } finally {
       setDownloadLoading(false);
+    }
+  };
+
+  const fetchSkuDetailsByOrder = async (orderNumber) => {
+    try {
+      setLoading(true);
+      const response = await axios.get(
+        `${API_URL}/api/buyerOrder/getBoSkuDetails?branchCode=${loginBranchCode}&client=${loginClient}&orderno=${encodeURIComponent(
+          orderNumber
+        )}&orgId=${orgId}&warehouse=${loginWarehouse}`
+      );
+
+      console.log("Order-based SKU details response:", response);
+
+      if (response.data.status === true) {
+        const skuDetails = response.data.paramObjectsMap.skuDetails || [];
+        console.log("Order-based SKU details:", skuDetails);
+
+        // Transform the API response to match your table structure
+        const transformedData = skuDetails.map((item, index) => ({
+          id: index + 1,
+          partNo: item.partNo || "",
+          partDesc: item.partDesc || "",
+          sku: item.sku || "",
+          batchNo: item.batch || "",
+          avlqty: item.sqty || 0,
+          orderqty: item.qty || 0, // Using sqty as quantity
+          rowBatchNoList: [], // Will be populated later if needed
+          expDate: item.expDate || "",
+        }));
+
+        setOrderItems(transformedData);
+        showToast(
+          "success",
+          `Loaded ${transformedData.length} items from order ${orderNumber}`
+        );
+      } else {
+        showToast("error", "No SKU details found for this order");
+      }
+    } catch (error) {
+      console.error("Error fetching order-based SKU details:", error);
+      showToast("error", "Failed to fetch order details");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -722,8 +768,8 @@ const BuyerOrder = () => {
         `${API_URL}/api/buyerOrder/getBoSkuDetails?branchCode=${loginBranchCode}&client=${loginClient}&orgId=${orgId}&warehouse=${loginWarehouse}`
       );
       console.log("THE WAREHOUSE IS:", response);
-      if (response.status === true) {
-        const sku = response.paramObjectsMap.skuDetails;
+      if (response.data.status === true) {
+        const sku = response.data.paramObjectsMap.skuDetails;
         console.log("THE SKU DETAILS ARE:", sku);
 
         setSkuDetails(
@@ -1588,10 +1634,14 @@ const BuyerOrder = () => {
                                   </span>
                                 }
                               >
-                                <Input
+                                <Input.Search
                                   name="orderNo"
                                   value={formData.orderNo}
                                   onChange={handleInputChange}
+                                  onSearch={() =>
+                                    fetchSkuDetailsByOrder(formData.orderNo)
+                                  }
+                                  enterButton={<SearchOutlined />}
                                   style={{
                                     background: "rgba(255, 255, 255, 0.1)",
                                     border:
@@ -2003,6 +2053,18 @@ const BuyerOrder = () => {
                         }}
                       >
                         Add Item
+                      </Button>
+                      <Button
+                        icon={<GridOnIcon />}
+                        onClick={fetchSkuDetailsByOrder}
+                        style={{
+                          marginRight: "8px",
+                          background: "rgba(108, 99, 255, 0.3)",
+                          color: "#fff",
+                          border: "none",
+                        }}
+                      >
+                        Fill Grid
                       </Button>
                       <Button
                         icon={<ClearOutlined />}

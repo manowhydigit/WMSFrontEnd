@@ -7,46 +7,36 @@ import { Button, Typography } from "antd";
 const menuCategories = [
   {
     category: "Stock Operations",
-    items: [{ name: "CodeConversion" }, { name: "StockRestate" }],
+    items: [
+      { name: "CODE CONVERSION", backendName: "CODECONVERSION" },
+      { name: "STOCK RESTATE", backendName: "STOCKRESTATE" },
+    ],
   },
   {
     category: "Inventory Management",
     items: [
-      { name: "LocationMovement" },
-      { name: "OpeningStock" },
-      { name: "CycleCount" },
+      { name: "LOCATION MOVEMENT", backendName: "LOCATIONMOVEMENT" },
+      { name: "OPENING STOCK", backendName: "OPENINGSTOCK" },
+      { name: "CYCLE COUNT", backendName: "CYCLECOUNT" },
     ],
   },
   {
     category: "Kitting Operations",
-    items: [{ name: "Kitting" }, { name: "DeKitting" }],
-  },
-  {
-    category: "Transaction Tracking",
-    items: [{ name: "TT Listing" }, { name: "TT Approved List" }],
-  },
-  {
-    category: "Warehouse Management",
-    items: [{ name: "WH Listing" }, { name: "WH Approved List" }],
-  },
-  {
-    category: "Reviews",
-    items: [{ name: "Pre Goals" }, { name: "Self Review" }],
+    items: [
+      { name: "KITTING", backendName: "KITTING" },
+      { name: "DEKITTING", backendName: "DEKITTING" },
+    ],
   },
 ];
 
 const routes = {
-  CodeConversion: "/CodeConversion",
-  LocationMovement: "/LocationMovement",
-  StockRestate: "/StockRestate",
-  OpeningStock: "/OpeningStock",
-  Kitting: "/Kitting",
-  CycleCount: "/CycleCount",
-  DeKitting: "/DeKitting",
-  "TT Listing": "/TTlisting",
-  "TT Approved List": "/TTApprovedList",
-  "WH Listing": "/WHlisting",
-  "WH Approved List": "/WHApprovedList",
+  "CODE CONVERSION": "/CodeConversion",
+  "LOCATION MOVEMENT": "/LocationMovement",
+  "STOCK RESTATE": "/StockRestate",
+  "OPENING STOCK": "/OpeningStock",
+  KITTING: "/Kitting",
+  "CYCLE COUNT": "/CycleCount",
+  DEKITTING: "/DeKitting",
 };
 
 const StockMovements = () => {
@@ -104,7 +94,7 @@ const StockMovements = () => {
     const filteredCategories = menuCategories
       .map((category) => {
         const filteredItems = category.items.filter((menu) => {
-          const normalizedMenuName = menu.name
+          const normalizedMenuName = menu.backendName
             .replace(/\s+/g, "")
             .toUpperCase();
           return normalizedUserScreens.includes(normalizedMenuName);
@@ -162,17 +152,6 @@ const StockMovements = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
-
-      {/* <Button
-        className="button1"
-        type="text"
-        icon={theme === "light" ? <MoonOutlined /> : <SunOutlined />}
-        onClick={toggleTheme}
-        size="small"
-        style={{ marginLeft: "550px", marginTop: "-90px" }}
-      >
-        {theme === "light" ? "Dark Mode" : "Light Mode"}
-      </Button> */}
 
       {/* Grouped Buttons */}
       <div style={{ marginTop: "20px" }}>

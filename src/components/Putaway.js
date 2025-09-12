@@ -569,13 +569,6 @@ const Putaway = () => {
     { accessorKey: "totalPutawayQty", header: "Total Putaway Qty", size: 140 },
   ];
 
-  useEffect(() => {
-    getPutAwayDocId();
-    getAllPutAway();
-    getGrnForPutaway();
-    getAllLocationTypes();
-  }, []);
-
   const formatPutAwayDataForExcel = (putAwayData) => {
     const excelData = [];
 
@@ -876,7 +869,7 @@ const Putaway = () => {
       setLocationTypeList(response.data.paramObjectsMap.Locationtype);
       console.log(
         "THE LOCATIONTYPE IS:",
-        response.paramObjectsMap.Locationtype
+        response.data.paramObjectsMap.Locationtype
       );
     } catch (error) {
       console.error("Error fetching locationType data:", error);
@@ -1298,6 +1291,13 @@ const Putaway = () => {
     setEditId("");
     getPutAwayDocId();
   };
+
+  useEffect(() => {
+    getPutAwayDocId();
+    getAllPutAway();
+    getGrnForPutaway();
+    getAllLocationTypes();
+  }, []);
 
   const handleSave = async () => {
     if (loading) return;
@@ -2063,10 +2063,8 @@ const Putaway = () => {
                                 }
                               >
                                 <Select
-                                  labelId="binType-label"
                                   id="binType"
                                   name="binType"
-                                  label="Bin Type"
                                   disabled={formData.freeze}
                                   value={formData.binType}
                                   onChange={(value) =>
@@ -2080,16 +2078,17 @@ const Putaway = () => {
                                   }}
                                 >
                                   {locationTypeList?.map((row) => (
-                                    <MenuItem
+                                    <Option
                                       key={row.id}
                                       value={row.ltype.toUpperCase()}
                                     >
                                       {row.ltype.toUpperCase()}
-                                    </MenuItem>
+                                    </Option>
                                   ))}
                                 </Select>
                               </Form.Item>
                             </Col>
+
                             <Col span={4}>
                               <Form.Item
                                 label={

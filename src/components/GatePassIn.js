@@ -610,9 +610,40 @@ const GatePassIn = () => {
       const response = await axios.get(
         `${API_URL}/api/gatePassIn/getAllModeOfShipment?orgId=${orgId}`
       );
-      setModeOfShipmentList(response.data.paramObjectsMap.modOfShipments);
+
+      const defaultModes = [
+        { id: 1, shipmentMode: "AIR" },
+        { id: 2, shipmentMode: "SEA" },
+        { id: 3, shipmentMode: "ROAD" },
+      ];
+
+      // Merge API response with defaults, avoiding duplicates
+      const apiModes = response.data?.paramObjectsMap?.modOfShipments || [];
+      const mergedModes = [...defaultModes];
+
+      apiModes.forEach((apiMode) => {
+        if (
+          !mergedModes.some(
+            (defaultMode) =>
+              defaultMode.shipmentMode.toUpperCase() ===
+              apiMode.shipmentMode.toUpperCase()
+          )
+        ) {
+          mergedModes.push(apiMode);
+        }
+      });
+
+      setModeOfShipmentList(mergedModes);
     } catch (error) {
       console.error("Error fetching modes of shipment:", error);
+
+      // Set default values on error
+      const defaultModes = [
+        { id: 1, shipmentMode: "AIR" },
+        { id: 2, shipmentMode: "SEA" },
+        { id: 3, shipmentMode: "ROAD" },
+      ];
+      setModeOfShipmentList(defaultModes);
     }
   };
 

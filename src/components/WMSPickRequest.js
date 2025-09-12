@@ -42,6 +42,7 @@ import { ThemeProvider, createTheme } from "@mui/material/styles";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import WMSGeneratePdfTempPick from "./WMSPickRequestPdf";
+import JsBarcode from "jsbarcode";
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -64,8 +65,13 @@ const LabelPrintModal = ({ visible, onClose, formData, items }) => {
   const [numberOfLabels, setNumberOfLabels] = useState(1);
   const labelRef = useRef(null);
 
+  // Function to generate barcode for customer name and buyer order number
+  const generateBarcodeData = () => {
+    return `${formData.buyerOrderNo || "ORDER"}`;
+  };
+
   const handlePrintLabels = () => {
-    if (numberOfLabels <= InputNumber) {
+    if (numberOfLabels <= 0) {
       message.error("Number of labels must be greater than 0");
       return;
     }
@@ -77,48 +83,64 @@ const LabelPrintModal = ({ visible, onClose, formData, items }) => {
         <head>
           <title>Print Labels</title>
           <style>
+            @page {
+              size: 4in 2in;
+              margin: 0;
+            }
             body { 
               font-family: Arial, sans-serif; 
               margin: 0;
-              padding: 15px;
-            }
-            .labels-container {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 15px;
-              width: 100%;
+              padding: 0;
+              width: 4in;
+              height: 2in;
             }
             .label {
-              border: 1px solid #ddd;
-              padding: 10px;
-              page-break-inside: avoid;
-              break-inside: avoid;
-              font-size: 12px;
+              width: 4in;
+              height: 2in;
+              padding: 5px;
+              box-sizing: border-box;
+              border: 1px dotted #ccc;
+              page-break-after: always;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
             }
             .label-header {
               text-align: center;
-              margin-bottom: 8px;
-              border-bottom: 1px dashed #ccc;
-              padding-bottom: 5px;
+              font-size: 12px;
+              font-weight: bold;
+              margin-bottom: 3px;
             }
-            .label-addresses {
+            .label-content {
+              display: flex;
+              flex-direction: column;
+              gap: 2px;
+              flex-grow: 1;
+            }
+            .address-section {
               display: flex;
               justify-content: space-between;
-              margin-bottom: 10px;
+              font-size: 10px;
+              margin-bottom: 3px;
+              line-height: 1.2;
             }
             .company-address, .customer-address {
               width: 48%;
             }
-            .label-info {
-              margin: 3px 0;
-              line-height: 1.2;
+            .info-row {
+              font-size: 10px;
+              margin: 1px 0;
+              display: flex;
+              justify-content: space-between;
+            }
+            .barcode-section {
+              text-align: center;
+              margin: 2px 0;
             }
             .label-footer {
               text-align: center;
-              margin-top: 8px;
-              border-top: 1px dashed #ccc;
-              padding-top: 5px;
-              font-weight: bold;
+              font-size: 12px;
+              margin-top: 2px;
             }
             @media print {
               .no-print {
@@ -126,27 +148,24 @@ const LabelPrintModal = ({ visible, onClose, formData, items }) => {
               }
               body {
                 padding: 0;
-              }
-              .labels-container {
-                gap: 10px;
+                margin: 0;
               }
             }
           </style>
+          <script src="https://unpkg.com/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
         </head>
         <body>
-          <div class="labels-container">
-            ${Array.from(
-              { length: numberOfLabels },
-              (_, i) => `
-              <div class="label">
-                <div class="label-header">
-                  <strong>SHIPPING LABEL</strong>
-                </div>
-                <div class="label-addresses">
+          ${Array.from(
+            { length: numberOfLabels },
+            (_, i) => `
+            <div class="label">
+              <div class="label-header">SHIPPING LABEL</div>
+              <div class="label-content">
+                <div class="address-section">
                   <div class="company-address">
                     <strong>From:</strong><br/>
-                    "Uniworld Logistics pvt ltd"}<br/>
-                    "Bilapur tauru road mewat 122105"}
+                    Uniworld Logistics pvt ltd<br/>
+                    Bilapur tauru road mewat 122105
                   </div>
                   <div class="customer-address">
                     <strong>To:</strong><br/>
@@ -154,28 +173,46 @@ const LabelPrintModal = ({ visible, onClose, formData, items }) => {
                     ${formData.customerAddress || "N/A"}
                   </div>
                 </div>
-                <div class="label-info"><strong>Buyer Order No:</strong> ${
-                  formData.buyerOrderNo || "N/A"
-                }</div>
-                <div class="label-info"><strong>Buyer Ref No:</strong> ${
-                  formData.buyerRefNo || "N/A"
-                }</div>
-                <div class="label-info"><strong>Date:</strong> ${
-                  formData.docDate || "N/A"
-                }</div>
-                <div class="label-footer">
-                  Label ${i + 1} of ${numberOfLabels}
+                <div class="info-row">
+                  <span><strong>Order No:</strong> ${
+                    formData.buyerOrderNo || "N/A"
+                  }</span>
+                  
+                </div>
+                <div class="info-row">
+                  <span><strong>Date:</strong> ${
+                    formData.docDate || "N/A"
+                  }</span>
+                </div>
+                <div class="barcode-section">
+                  <svg id="barcode-${i}" width="180" height="30"></svg>
                 </div>
               </div>
+              <div class="label-footer">
+                Label ${i + 1} of ${numberOfLabels}
+              </div>
+            </div>
             `
-            ).join("")}
-          </div>
+          ).join("")}
           <div class="no-print" style="margin-top:20px; text-align:center;">
             <button onclick="window.print()">Print</button>
             <button onclick="window.close()">Close</button>
           </div>
           <script>
+            // Generate barcodes after page loads
             window.onload = function() {
+              ${Array.from(
+                { length: numberOfLabels },
+                (_, i) => `
+                JsBarcode("#barcode-${i}", "${generateBarcodeData()}", {
+                  format: "CODE128",
+                  width: 1,
+                  height: 30,
+                  displayValue: false,
+                  margin: 0
+                });
+                `
+              ).join("")}
               window.print();
             }
           </script>
@@ -185,37 +222,46 @@ const LabelPrintModal = ({ visible, onClose, formData, items }) => {
     printWindow.document.close();
   };
 
-  const handleDownloadLabels = () => {
+  const handleDownloadLabels = async () => {
     if (numberOfLabels <= 0) {
       message.error("Number of labels must be greater than 0");
       return;
     }
 
-    // Create a temporary container for all labels
+    const sessionId = Date.now();
+
+    // Clean up previous containers
+    const existingContainers = document.querySelectorAll(
+      ".temp-label-container"
+    );
+    existingContainers.forEach((container) => container.remove());
+
     const container = document.createElement("div");
-    container.style.display = "grid";
-    container.style.gridTemplateColumns = "repeat(2, 1fr)";
-    container.style.gap = "15px";
-    container.style.width = "210mm"; // A4 width
-    container.style.padding = "15px";
+    container.className = "temp-label-container";
+    container.style.cssText = `
+    display: flex; flex-direction: column; gap: 0; width: 4in;
+    position: absolute; left: -9999px; top: -9999px;
+  `;
 
     // Create labels
     for (let i = 0; i < numberOfLabels; i++) {
       const label = document.createElement("div");
-      label.style.border = "1px solid #ddd";
-      label.style.padding = "10px";
-      label.style.fontSize = "12px";
-      label.style.boxSizing = "border-box";
+      label.style.cssText = `
+      width: 4in; height: 2in; padding: 5px; box-sizing: border-box;
+      border: 1px dotted #ccc; display: flex; flex-direction: column;
+      justify-content: space-between;
+    `;
 
       label.innerHTML = `
-        <div style="text-align: center; margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
-          <strong>SHIPPING LABEL</strong>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+      <div style="text-align: center; font-size: 12px; font-weight: bold; margin-bottom: 3px;">
+        SHIPPING LABEL
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+        <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 3px; line-height: 1.2;">
           <div style="width: 48%;">
             <strong>From:</strong><br/>
-            ${formData.clientName || "N/A"}<br/>
-            ${formData.clientAddress || "N/A"}
+            Uniworld Logistics pvt ltd<br/>
+            Bilapur tauru road mewat 122105
           </div>
           <div style="width: 48%;">
             <strong>To:</strong><br/>
@@ -223,52 +269,75 @@ const LabelPrintModal = ({ visible, onClose, formData, items }) => {
             ${formData.customerAddress || "N/A"}
           </div>
         </div>
-        <div style="margin: 3px 0;"><strong>Buyer Order No:</strong> ${
-          formData.buyerOrderNo || "N/A"
-        }</div>
-        <div style="margin: 3px 0;"><strong>Buyer Ref No:</strong> ${
-          formData.buyerRefNo || "N/A"
-        }</div>
-        <div style="margin: 3px 0;"><strong>Date:</strong> ${
-          formData.docDate || "N/A"
-        }</div>
-        <div style="text-align: center; margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 5px; font-weight: bold;">
-          Label ${i + 1} of ${numberOfLabels}
+        <div style="font-size: 10px; margin: 1px 0; display: flex; justify-content: space-between;">
+          <span><strong>Order No:</strong> ${
+            formData.buyerOrderNo || "N/A"
+          }</span>
         </div>
-      `;
+        <div style="font-size: 10px; margin: 1px 0; display: flex; justify-content: space-between;">
+          <span><strong>Date:</strong> ${formData.docDate || "N/A"}</span>
+        </div>
+        <div style="text-align: center; margin: 2px 0;">
+          <svg id="barcode-${sessionId}-${i}" width="180" height="30"></svg>
+        </div>
+      </div>
+      <div style="text-align: center; font-size: 12px; margin-top: 2px;">
+        Label ${i + 1} of ${numberOfLabels}
+      </div>
+    `;
 
       container.appendChild(label);
     }
 
-    // Append to body temporarily
     document.body.appendChild(container);
 
-    // Generate PDF
-    html2canvas(container, { scale: 2 }).then((canvas) => {
+    try {
+      // Generate barcodes
+      await Promise.all(
+        Array.from({ length: numberOfLabels }, (_, i) => {
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              JsBarcode(`#barcode-${sessionId}-${i}`, generateBarcodeData(), {
+                format: "CODE128",
+                width: 1,
+                height: 30,
+                displayValue: false,
+                margin: 0,
+              });
+              resolve();
+            }, 50);
+          });
+        })
+      );
+
+      // Generate PDF
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        width: 384,
+        height: numberOfLabels * 192,
+        windowWidth: 384,
+        useCORS: true,
+        logging: false,
+      });
+
       const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "in",
+        format: [4, 2 * numberOfLabels],
+      });
 
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      // Add additional pages if needed
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
+      pdf.addImage(imgData, "PNG", 0, 0, 4, 2 * numberOfLabels);
       pdf.save(`shipping_labels_${formData.buyerOrderNo || "labels"}.pdf`);
-
-      // Clean up
-      document.body.removeChild(container);
-    });
+    } catch (error) {
+      console.error("Error generating labels:", error);
+      message.error("Failed to generate labels");
+    } finally {
+      // Always clean up
+      if (container.parentNode) {
+        document.body.removeChild(container);
+      }
+    }
   };
 
   return (
@@ -313,67 +382,584 @@ const LabelPrintModal = ({ visible, onClose, formData, items }) => {
 
         <div style={{ marginTop: "16px" }}>
           <p>
-            <strong>Label Preview:</strong>
+            <strong>Label Preview (4" x 2"):</strong>
           </p>
           <div
             ref={labelRef}
             style={{
+              width: "4in",
+              height: "2in",
               border: "1px solid #d9d9d9",
-              padding: "10px",
-              fontSize: "12px",
+              padding: "5px",
+              fontSize: "10px",
               marginBottom: "10px",
-              width: "100%",
               boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              lineHeight: "1.2",
             }}
           >
             <div
               style={{
                 textAlign: "center",
-                marginBottom: "8px",
-                borderBottom: "1px dashed #ccc",
-                paddingBottom: "5px",
+                fontWeight: "bold",
+                marginBottom: "3px",
+                fontSize: "12px",
               }}
             >
-              <strong>SHIPPING LABEL</strong>
+              SHIPPING LABEL
             </div>
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "10px",
+                flexDirection: "column",
+                gap: "2px",
+                flexGrow: 1,
               }}
             >
-              <div style={{ width: "48%" }}>
-                <strong>From:</strong>
-                <br />
-                Uniworld Logistics pvt ltd
-                <br />
-                Bilapur tauru road mewat 122105
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "3px",
+                }}
+              >
+                <div style={{ width: "48%" }}>
+                  <strong>From:</strong>
+                  <br />
+                  Uniworld Logistics pvt ltd
+                  <br />
+                  Bilapur tauru road mewat 122105
+                </div>
+                <div style={{ width: "48%" }}>
+                  <strong>To:</strong>
+                  <br />
+                  {formData.customerName || "N/A"}
+                  <br />
+                  {formData.customerAddress || "N/A"}
+                </div>
               </div>
-              <div style={{ width: "48%" }}>
-                <strong>To:</strong>
-                <br />
-                {formData.customerName || "N/A"}
-                <br />
-                {formData.customerAddress || "N/A"}
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>
+                  <strong>Order No:</strong>{" "}
+                  <strong>{formData.buyerOrderNo || "N/A"}</strong>
+                </span>
               </div>
-            </div>
-            <div style={{ margin: "3px 0" }}>
-              <strong>Buyer Order No:</strong> {formData.buyerOrderNo || "N/A"}
-            </div>
-            <div style={{ margin: "3px 0" }}>
-              <strong>Buyer Ref No:</strong> {formData.buyerRefNo || "N/A"}
-            </div>
-            <div style={{ margin: "3px 0" }}>
-              <strong>Date:</strong> {formData.docDate || "N/A"}
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>
+                  <strong>Date:</strong> {formData.docDate || "N/A"}
+                </span>
+              </div>
+              <div style={{ textAlign: "center", margin: "2px 0" }}>
+                <Barcode
+                  value={generateBarcodeData()}
+                  width={1}
+                  height={30}
+                  fontSize={10}
+                  margin={0}
+                  displayValue={false}
+                />
+              </div>
             </div>
             <div
               style={{
                 textAlign: "center",
-                marginTop: "8px",
-                borderTop: "1px dashed #ccc",
-                paddingTop: "5px",
+                marginTop: "2px",
+                fontSize: "8px",
+              }}
+            >
+              Label 1 of {numberOfLabels}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// Add this modal component for single order printing
+const RowLabelPrintModal = ({ visible, onClose, order }) => {
+  const [numberOfLabels, setNumberOfLabels] = useState(1);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [toAddress, setToAddress] = useState("");
+  const [toName, setToName] = useState("");
+
+  // Initialize toAddress and toName when order changes
+  useEffect(() => {
+    if (order) {
+      const defaultToAddress = order.customerAddress || "";
+      const defaultToName = order.customerName || "";
+      setToAddress(defaultToAddress);
+      setToName(defaultToName);
+    }
+  }, [order]);
+
+  // Reset when modal closes
+  const handleClose = () => {
+    setNumberOfLabels(1);
+    setIsDownloading(false);
+    if (order) {
+      setToAddress(order.customerAddress || "");
+      setToName(order.customerName || "");
+    }
+    onClose();
+  };
+
+  const generateBarcodeData = () => {
+    return `${order.buyerOrderNo || "ORDER"}`;
+  };
+
+  const handlePrintLabels = () => {
+    if (numberOfLabels <= 0) {
+      message.error("Number of labels must be greater than 0");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    const barcodeData = generateBarcodeData();
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print Labels</title>
+          <style>
+            @page {
+              size: 4in 2in;
+              margin: 0;
+            }
+            body { 
+              font-family: Arial, sans-serif; 
+              margin: 0;
+              padding: 0;
+              width: 4in;
+              height: 2in;
+            }
+            .label {
+              width: 4in;
+              height: 2in;
+              padding: 5px;
+              box-sizing: border-box;
+              border: 1px dotted #ccc;
+              page-break-after: always;
+              display: flex;
+              flex-direction: column;
+              justify-content: space-between;
+            }
+            .label-header {
+              text-align: center;
+              font-size: 14px;
+              font-weight: bold;
+              margin-bottom: 3px;
+            }
+            .label-content {
+              display: flex;
+              flex-direction: column;
+              gap: 2px;
+              flex-grow: 1;
+            }
+            .address-section {
+              display: flex;
+              justify-content: space-between;
+              font-size: 12px;
+              margin-bottom: 3px;
+              line-height: 1.2;
+            }
+            .company-address, .customer-address {
+              width: 48%;
+              font-size: 12px;
+            }
+            .info-row {
+              font-size: 16px;
+              margin: 1px 0;
+              display: flex;
+              justify-content: space-between;
+              font-weight:bold;
+            }
+            .barcode-section {
+              text-align: center;
+              margin: 2px 0;
+            }
+            .label-footer {
+              text-align: center;
+              font-size: 12px;
+              margin-top: 2px;
+            }
+            @media print {
+              .no-print {
+                display: none;
+              }
+              body {
+                padding: 0;
+                margin: 0;
+              }
+            }
+          </style>
+          <script src="https://unpkg.com/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+        </head>
+        <body>
+          ${Array.from(
+            { length: numberOfLabels },
+            (_, i) => `
+            <div class="label">
+              <div class="label-header">SHIPPING LABEL</div>
+              <div class="label-content">
+                <div class="address-section">
+                  <div class="company-address">
+                    <strong>From:</strong><br/>
+                    Uniworld Logistics pvt ltd<br/>
+                    Bilapur tauru road mewat 122105
+                  </div>
+                  <div class="customer-address">
+                    <strong>To:</strong><br/>
+                    ${toName || order.customerName || "N/A"}<br/>
+                    ${toAddress || order.customerAddress || "N/A"}
+                  </div>
+                </div>
+                <div style="font-size: 16px; margin: 1px 0; display: flex; justify-content: space-between;">
+                  <span><strong>Order No:</strong> <strong> ${
+                    order.buyerOrderNo || "N/A"
+                  } </strong> </span>
+                </div>
+                <div class="barcode-section">
+                  <svg id="barcode-${i}" width="180" height="30"></svg>
+                </div>
+              </div>
+              <div class="label-footer">
+                Label ${i + 1} of ${numberOfLabels}
+              </div>
+            </div>
+            `
+          ).join("")}
+          <div class="no-print" style="margin-top:20px; text-align:center;">
+            <button onclick="window.print()">Print</button>
+            <button onclick="window.close()">Close</button>
+          </div>
+          <script>
+            // Generate barcodes after page loads
+            window.onload = function() {
+              ${Array.from(
+                { length: numberOfLabels },
+                (_, i) => `
+                try {
+                  JsBarcode("#barcode-${i}", "${barcodeData}", {
+                    format: "CODE128",
+                    width: 1,
+                    height: 30,
+                    displayValue: false,
+                    margin: 0
+                  });
+                } catch (e) {
+                  console.error('Barcode error:', e);
+                }
+                `
+              ).join("")}
+              window.print();
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleDownloadLabels = async () => {
+    if (numberOfLabels <= 0) {
+      message.error("Number of labels must be greater than 0");
+      return;
+    }
+
+    if (isDownloading) return; // Prevent multiple clicks
+
+    setIsDownloading(true);
+
+    try {
+      // Create a unique container ID to avoid conflicts
+      const containerId = `label-container-${Date.now()}`;
+      const container = document.createElement("div");
+      container.id = containerId;
+      container.style.position = "absolute";
+      container.style.left = "-9999px";
+      container.style.display = "flex";
+      container.style.flexDirection = "column";
+      container.style.gap = "10px";
+      container.style.width = "4in";
+
+      // Create labels
+      for (let i = 0; i < numberOfLabels; i++) {
+        const label = document.createElement("div");
+        label.style.width = "4in";
+        label.style.height = "2in";
+        label.style.padding = "5px";
+        label.style.boxSizing = "border-box";
+        label.style.border = "1px dotted #ccc";
+        label.style.display = "flex";
+        label.style.flexDirection = "column";
+        label.style.justifyContent = "space-between";
+
+        label.innerHTML = `
+          <div style="text-align: center; font-size: 12px; font-weight: bold; margin-bottom: 3px;">
+            SHIPPING LABEL
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; line-height: 1.2;">
+              <div style="width: 48%;">
+                <strong>From:</strong><br/>
+                Uniworld Logistics pvt ltd<br/>
+                Bilapur tauru road mewat 122105
+              </div>
+              <div style="width: 48%;">
+                <strong>To:</strong><br/>
+                ${order.customerName || "N/A"}<br/>
+                ${order.customerAddress || "N/A"}
+              </div>
+            </div>
+            <div style="font-size: 16px; margin: 1px 0; display: flex; justify-content: space-between;">
+              <span><strong>Order No:</strong> <strong>${
+                order.buyerOrderNo || "N/A"
+              }</strong></span>
+            </div>
+            <div style="text-align: center; margin: 2px 0;">
+              <svg id="barcode-download-${containerId}-${i}" width="180" height="30"></svg>
+            </div>
+          </div>
+          <div style="text-align: center; font-size: 12px; margin-top: 2px;">
+            Label ${i + 1} of ${numberOfLabels}
+          </div>
+        `;
+
+        container.appendChild(label);
+      }
+
+      // Append to body
+      document.body.appendChild(container);
+
+      // Generate barcodes with a small delay to ensure DOM is ready
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const barcodeData = generateBarcodeData();
+      Array.from({ length: numberOfLabels }, (_, i) => {
+        const barcodeElement = document.getElementById(
+          `barcode-download-${containerId}-${i}`
+        );
+        if (barcodeElement) {
+          JsBarcode(barcodeElement, barcodeData, {
+            format: "CODE128",
+            width: 1,
+            height: 30,
+            displayValue: false,
+            margin: 0,
+          });
+        }
+      });
+
+      // Wait a bit more for barcodes to render
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Generate PDF
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        width: 384,
+        height: numberOfLabels * 192 + (numberOfLabels - 1) * 10,
+        windowWidth: 384,
+        useCORS: true,
+        logging: false,
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "in",
+        format: [4, 2 * numberOfLabels + (numberOfLabels - 1) * 0.1],
+      });
+
+      pdf.addImage(
+        imgData,
+        "PNG",
+        0,
+        0,
+        4,
+        2 * numberOfLabels + (numberOfLabels - 1) * 0.1
+      );
+      pdf.save(`shipping_labels_${order.buyerOrderNo || "labels"}.pdf`);
+    } catch (error) {
+      console.error("Download error:", error);
+      message.error("Failed to download labels");
+    } finally {
+      // Clean up all temporary containers
+      const containers = document.querySelectorAll('[id^="label-container-"]');
+      containers.forEach((container) => document.body.removeChild(container));
+      setIsDownloading(false);
+    }
+  };
+
+  if (!order) return null;
+
+  return (
+    <Modal
+      title={`Print Labels for Order: ${order.buyerOrderNo || "N/A"}`}
+      visible={visible}
+      onCancel={handleClose}
+      footer={[
+        <Button
+          key="print"
+          icon={<PrinterOutlined />}
+          onClick={handlePrintLabels}
+          disabled={isDownloading}
+        >
+          Print Labels
+        </Button>,
+        <Button
+          key="download"
+          onClick={handleDownloadLabels}
+          loading={isDownloading}
+          disabled={isDownloading}
+        >
+          {isDownloading ? "Downloading..." : "Download PDF"}
+        </Button>,
+        <Button key="close" onClick={handleClose} disabled={isDownloading}>
+          Close
+        </Button>,
+      ]}
+      width={700}
+    >
+      <div>
+        <p>This will generate shipping labels for this specific order.</p>
+
+        <div style={{ margin: "16px 0" }}>
+          <label style={{ marginRight: "8px", fontWeight: "bold" }}>
+            Number of labels to print:
+          </label>
+          <InputNumber
+            min={1}
+            max={100}
+            value={numberOfLabels}
+            onChange={setNumberOfLabels}
+            disabled={isDownloading}
+          />
+        </div>
+
+        {/* Editable Ship To Section */}
+        <div style={{ margin: "16px 0" }}>
+          <label style={{ marginRight: "8px", fontWeight: "bold" }}>
+            Ship To (Editable):
+          </label>
+          <div style={{ marginTop: "8px" }}>
+            <div style={{ marginBottom: "8px" }}>
+              <label style={{ display: "block", marginBottom: "4px" }}>
+                Name:
+              </label>
+              <Input
+                value={toName}
+                onChange={(e) => setToName(e.target.value)}
+                placeholder="Enter recipient name"
+                style={{ fontSize: "14px" }}
+                disabled={isDownloading}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "4px" }}>
+                Address:
+              </label>
+              <TextArea
+                value={toAddress}
+                onChange={(e) => setToAddress(e.target.value)}
+                placeholder="Enter shipping address"
+                rows={3}
+                style={{ fontSize: "14px" }}
+                disabled={isDownloading}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: "16px" }}>
+          <p>
+            <strong>Label Preview (4" x 2"):</strong>
+          </p>
+          <div
+            style={{
+              width: "4in",
+              height: "2in",
+              border: "1px solid #d9d9d9",
+              padding: "5px",
+              fontSize: "12px",
+              marginBottom: "10px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              lineHeight: "1.2",
+            }}
+          >
+            <div
+              style={{
+                textAlign: "center",
                 fontWeight: "bold",
+                marginBottom: "3px",
+                fontSize: "14px",
+              }}
+            >
+              SHIPPING LABEL
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "2px",
+                flexGrow: "1",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: "3px",
+                }}
+              >
+                <div style={{ width: "48%", fontSize: "12px" }}>
+                  <strong>From:</strong>
+                  <br />
+                  Uniworld Logistics pvt ltd
+                  <br />
+                  Bilapur tauru road mewat 122105
+                </div>
+                <div style={{ width: "48%", fontSize: "12px" }}>
+                  <strong>To:</strong>
+                  <br />
+                  {toName || order.customerName || "N/A"}
+                  <br />
+                  {toAddress || order.customerAddress || "N/A"}
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "16px",
+                }}
+              >
+                <span>
+                  <strong>Order No:</strong>{" "}
+                  <strong>{order.buyerOrderNo || "N/A"}</strong>
+                </span>
+              </div>
+              <div style={{ textAlign: "center", margin: "2px 0" }}>
+                <Barcode
+                  value={generateBarcodeData()}
+                  width={1}
+                  height={30}
+                  fontSize={10}
+                  margin={0}
+                  displayValue={false}
+                />
+              </div>
+            </div>
+            <div
+              style={{
+                textAlign: "center",
+                marginTop: "2px",
+                fontSize: "8px",
               }}
             >
               Label 1 of {numberOfLabels}
@@ -508,7 +1094,7 @@ const BulkBarcodePrint = ({ visible, onClose, items, formData }) => {
         <div style={{ marginTop: "16px" }}>
           <Text strong>Details:</Text>
           <br />
-          <Text>Buyer Ref: {formData.buyerOrderNo || "N/A"}</Text>
+          <Text>Buyer Ref: {formData.buyerRefNo || "N/A"}</Text>
           <br />
           <Text>Customer: {formData.customerName || "N/A"}</Text>
           <br />
@@ -609,6 +1195,16 @@ export const WMSPickRequest = () => {
   // Generate barcode for an item
 
   // Print barcode
+
+  // Add this to your component's state
+  const [labelPrintModalVisible, setLabelPrintModalVisible] = useState(false);
+  const [currentOrder, setCurrentOrder] = useState(null);
+
+  // Add this function to handle printing for a single order
+  const handleRowLabelPrint = (order) => {
+    setCurrentOrder(order);
+    setLabelPrintModalVisible(true);
+  };
 
   // Download barcode as PDF
   const handleDownloadBarcode = () => {
@@ -796,6 +1392,9 @@ export const WMSPickRequest = () => {
     localStorage.getItem("customer")
   );
 
+  const [bulkLabelPrintVisible, setBulkLabelPrintVisible] = useState(false);
+  const [selectedOrders, setSelectedOrders] = useState([]);
+
   // State for bulk barcode printing
 
   const [barcodePrintItems, setBarcodePrintItems] = useState([]);
@@ -819,10 +1418,8 @@ export const WMSPickRequest = () => {
     }
     setBulkPrintVisible(true);
   };
-  const paginatedData = buyerOrderList.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
+
+  // First, ensure buyerOrderList is an array
 
   const toggleViewMode = () => {
     setViewMode(viewMode === "form" ? "list" : "form");
@@ -1027,21 +1624,128 @@ export const WMSPickRequest = () => {
     }
   };
 
-  // Get all pick request (example function)
   const getAllPickRequest = async () => {
     try {
       setLoading(true);
+      console.log(
+        "API URL:",
+        `${API_URL}/api/wmspickrequest/findAllPick?branchCode=${branchCode}&client=${client}&finYear=${loginFinYear}`
+      );
+
       const response = await axios.get(
         `${API_URL}/api/wmspickrequest/findAllPick?branchCode=${branchCode}&client=${client}&finYear=${loginFinYear}`
       );
-      setBuyerOrderList(response.data);
+
+      console.log("Full response:", response);
+      console.log("Response data:", response.data);
+      console.log("Response data type:", typeof response.data);
+
+      // Check if response.data exists and log its properties
+      if (response.data) {
+        console.log("Response data keys:", Object.keys(response.data));
+        console.log("Is array:", Array.isArray(response.data));
+
+        // Check common response patterns
+        if (Array.isArray(response.data)) {
+          console.log("Direct array response received");
+          setBuyerOrderList(response.data);
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          console.log("Response with data property containing array");
+          setBuyerOrderList(response.data.data);
+        } else if (
+          response.data.result &&
+          Array.isArray(response.data.result)
+        ) {
+          console.log("Response with result property containing array");
+          setBuyerOrderList(response.data.result);
+        } else if (response.data.items && Array.isArray(response.data.items)) {
+          console.log("Response with items property containing array");
+          setBuyerOrderList(response.data.items);
+        } else if (response.data.paramObjectsMap) {
+          console.log("Response with paramObjectsMap");
+          // Check if there's a specific property inside paramObjectsMap
+          const mapKeys = Object.keys(response.data.paramObjectsMap);
+          console.log("paramObjectsMap keys:", mapKeys);
+
+          if (
+            mapKeys.length > 0 &&
+            Array.isArray(response.data.paramObjectsMap[mapKeys[0]])
+          ) {
+            setBuyerOrderList(response.data.paramObjectsMap[mapKeys[0]]);
+          } else {
+            throw new Error("Unexpected paramObjectsMap structure");
+          }
+        } else if (response.data.status !== undefined) {
+          console.log("Response with status property");
+          // Many APIs return {status: true, data: [...]} or {status: true, result: [...]}
+          if (response.data.data && Array.isArray(response.data.data)) {
+            setBuyerOrderList(response.data.data);
+          } else if (
+            response.data.result &&
+            Array.isArray(response.data.result)
+          ) {
+            setBuyerOrderList(response.data.result);
+          } else {
+            throw new Error("Status response but no array data found");
+          }
+        } else {
+          console.error("Unknown response format:", response.data);
+          throw new Error("Unexpected data format received");
+        }
+      } else {
+        throw new Error("No data in response");
+      }
     } catch (error) {
       console.error("Error fetching pick requests:", error);
-      message.error("Failed to fetch pick requests");
+      if (error.response) {
+        console.error("Error response data:", error.response.data);
+        console.error("Error status:", error.response.status);
+        console.error("Error headers:", error.response.headers);
+      }
+      message.error(error.message || "Failed to fetch pick requests");
+      setBuyerOrderList([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Get all pick request (example function)
+  // const getAllPickRequest = async () => {
+  //   try {
+  //     setLoading(true);
+  //     const response = await axios.get(
+  //       `${API_URL}/api/wmspickrequest/findAllPick?branchCode=${branchCode}&client=${client}&finYear=${loginFinYear}`
+  //     );
+  //     setBuyerOrderList(response.data);
+  //     console.log("buyerOrderlist", response.data); // Use response.data directly
+  //   } catch (error) {
+  //     console.error("Error fetching pick requests:", error);
+  //     message.error("Failed to fetch pick requests");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  // Add safety checks
+  const safeBuyerOrderList = buyerOrderList ? buyerOrderList : [];
+
+  console.log("safeBuyerOrderList", safeBuyerOrderList);
+  // Use the safe array for pagination
+  const paginatedData = safeBuyerOrderList.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  useEffect(() => {
+    console.log("buyerOrderList updated:", buyerOrderList);
+    console.log(
+      "safeBuyerOrderList:",
+      Array.isArray(buyerOrderList) ? buyerOrderList : []
+    );
+    console.log("paginatedData", paginatedData);
+  }, [buyerOrderList]);
+
+  console.log("paginatedData", paginatedData);
 
   // Get item by ID (example function)
   const getAllItemById = async (order) => {
@@ -1144,6 +1848,15 @@ export const WMSPickRequest = () => {
     // Fetch initial data
     getAllPickRequest();
   }, []);
+
+  useEffect(() => {
+    console.log("buyerOrderList state:", buyerOrderList);
+    console.log("Type of buyerOrderList:", typeof buyerOrderList);
+    console.log("Is array:", Array.isArray(buyerOrderList));
+    if (Array.isArray(buyerOrderList)) {
+      console.log("Number of items:", buyerOrderList.length);
+    }
+  }, [buyerOrderList]);
 
   return (
     <ConfigProvider
@@ -2325,79 +3038,21 @@ export const WMSPickRequest = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedData.map((order, index) => (
-                      <tr
-                        key={order.id}
-                        style={{
-                          borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                          color: "white",
-                          backgroundColor:
-                            index % 2 === 0
-                              ? "rgba(255, 255, 255, 0.02)"
-                              : "rgba(255, 255, 255, 0.05)",
-                        }}
-                      >
-                        <td
+                    {Array.isArray(buyerOrderList) &&
+                    buyerOrderList.length > 0 ? (
+                      buyerOrderList?.map((order, index) => (
+                        <tr
+                          key={order.id}
                           style={{
-                            padding: "12px",
-                            textAlign: "left",
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
                             color: "white",
-                            fontSize: "11px",
+                            backgroundColor:
+                              index % 2 === 0
+                                ? "rgba(255, 255, 255, 0.02)"
+                                : "rgba(255, 255, 255, 0.05)",
                           }}
                         >
-                          {/* View Button */}
-                          <Button
-                            type="link"
-                            icon={<RightCircleOutlined />}
-                            onClick={() => {
-                              getAllItemById(order);
-                              toggleViewMode();
-                            }}
-                            style={{ color: "white", marginRight: "8px" }}
-                            title="View Details"
-                          />
-                          {/* PDF Download Button */}
-                          <Button
-                            type="link"
-                            icon={<CloudDownloadOutlined />}
-                            onClick={() => {
-                              if (order && order.wmsPickrequestdtlVO) {
-                                setCurrentPdfData(order);
-                                setPdfVisible(true);
-                              } else {
-                                message.warning(
-                                  "No order data available for PDF generation!"
-                                );
-                              }
-                            }}
-                            style={{ color: "white" }}
-                            title="Download PDF"
-                          />
-                          {/* Barcode Print Button */}
-                          <Button
-                            icon={<BarcodeOutlined />}
-                            onClick={() => handleBulkPrintClick(order)}
-                            style={{
-                              background: "rgba(108, 99, 255, 0.3)",
-                              color: "#fff",
-                              border: "none",
-                              marginRight: "8px",
-                            }}
-                          >
-                            Print All Barcodes
-                          </Button>
-                          <BulkBarcodePrint
-                            visible={bulkPrintVisible}
-                            onClose={() => setBulkPrintVisible(false)}
-                            items={barcodePrintItems} // ✅ use the state from handleBulkPrintClick
-                            formData={barcodeFormData} // ✅ correct buyerRefNo/customerName
-                          />
-                        </td>
-
-                        {/* Table Columns */}
-                        {listViewColumns.map((column) => (
                           <td
-                            key={column.key}
                             style={{
                               padding: "12px",
                               textAlign: "left",
@@ -2405,17 +3060,92 @@ export const WMSPickRequest = () => {
                               fontSize: "11px",
                             }}
                           >
-                            {column.render
-                              ? column.render(
-                                  order[column.dataIndex],
-                                  order,
-                                  index
-                                )
-                              : order[column.dataIndex]}
+                            {/* View Button */}
+                            <Button
+                              type="link"
+                              icon={<RightCircleOutlined />}
+                              onClick={() => {
+                                getAllItemById(order);
+                                toggleViewMode();
+                              }}
+                              style={{ color: "white", marginRight: "8px" }}
+                              title="View Details"
+                            />
+                            {/* PDF Download Button */}
+                            {/* <Button
+                              type="link"
+                              icon={<CloudDownloadOutlined />}
+                              onClick={() => {
+                                if (order && order.wmsPickrequestdtlVO) {
+                                  setCurrentPdfData(order);
+                                  setPdfVisible(true);
+                                } else {
+                                  message.warning(
+                                    "No order data available for PDF generation!"
+                                  );
+                                }
+                              }}
+                              style={{ color: "white" }}
+                              title="Download PDF"
+                            />{" "} */}
+                            <Button
+                              icon={<BarcodeOutlined />}
+                              onClick={() => handleRowLabelPrint(order)}
+                              style={{
+                                background: order.customerAddress
+                                  ? "rgba(108, 99, 255, 0.3)" // blue
+                                  : "rgba(255, 99, 99, 0.8)", // red
+                                color: "#fff",
+                                border: "none",
+                                marginRight: "8px",
+                              }}
+                              title="Print Labels"
+                            >
+                              Print Labels
+                            </Button>
+                            <RowLabelPrintModal
+                              visible={labelPrintModalVisible}
+                              onClose={() => setLabelPrintModalVisible(false)}
+                              order={currentOrder}
+                            />
                           </td>
-                        ))}
+
+                          {/* Table Columns */}
+                          {listViewColumns.map((column) => (
+                            <td
+                              key={column.key}
+                              style={{
+                                padding: "12px",
+                                textAlign: "left",
+                                color: "white",
+                                fontSize: "11px",
+                              }}
+                            >
+                              {column.render
+                                ? column.render(
+                                    order[column.dataIndex],
+                                    order,
+                                    index
+                                  )
+                                : order[column.dataIndex]}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan="10"
+                          style={{
+                            textAlign: "center",
+                            color: "white",
+                            padding: "20px",
+                          }}
+                        >
+                          {loading ? "Loading..." : "No data available"}
+                        </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
 
@@ -2430,8 +3160,8 @@ export const WMSPickRequest = () => {
                 >
                   <span style={{ marginRight: "16px", fontSize: "12px" }}>
                     {(currentPage - 1) * pageSize + 1}-
-                    {Math.min(currentPage * pageSize, buyerOrderList.length)} of{" "}
-                    {buyerOrderList.length} items
+                    {Math.min(currentPage * pageSize, paginatedData.length)} of{" "}
+                    {paginatedData.length} items
                   </span>
 
                   <button
@@ -2454,7 +3184,7 @@ export const WMSPickRequest = () => {
                   </button>
 
                   {Array.from(
-                    { length: Math.ceil(buyerOrderList.length / pageSize) },
+                    { length: Math.ceil(paginatedData.length / pageSize) },
                     (_, i) => (
                       <button
                         key={i}
@@ -2483,13 +3213,12 @@ export const WMSPickRequest = () => {
                       setCurrentPage((prev) =>
                         Math.min(
                           prev + 1,
-                          Math.ceil(buyerOrderList.length / pageSize)
+                          Math.ceil(paginatedData.length / pageSize)
                         )
                       )
                     }
                     disabled={
-                      currentPage ===
-                      Math.ceil(buyerOrderList.length / pageSize)
+                      currentPage === Math.ceil(paginatedData.length / pageSize)
                     }
                     style={{
                       backgroundColor: "transparent",
@@ -2500,12 +3229,12 @@ export const WMSPickRequest = () => {
                       borderRadius: "4px",
                       cursor:
                         currentPage ===
-                        Math.ceil(buyerOrderList.length / pageSize)
+                        Math.ceil(paginatedData.length / pageSize)
                           ? "not-allowed"
                           : "pointer",
                       opacity:
                         currentPage ===
-                        Math.ceil(buyerOrderList.length / pageSize)
+                        Math.ceil(paginatedData.length / pageSize)
                           ? 0.5
                           : 1,
                     }}

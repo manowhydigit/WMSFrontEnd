@@ -762,27 +762,44 @@ const GRN = () => {
   };
 
   // Get all suppliers
+  // Get all suppliers
   const getAllSuppliers = async () => {
     try {
       const response = await axios.get(
         `${API_URL}/api/warehousemastercontroller/supplier?cbranch=${loginBranch}&client=${loginClient}&orgid=${orgId}`
       );
 
-      // Check response.data.status instead of response.status
-      if (response.data?.status) {
-        // Sort carriers by ID in descending order (highest ID first)
-        const sortedSupplier = (
-          response.data.paramObjectsMap.supplierVO || []
-        ).sort((a, b) => b.id - a.id);
+      // FIX: More robust response checking with proper null safety
+      if (response.data?.status && response.data.paramObjectsMap?.supplierVO) {
+        const sortedSupplier = (response.data.paramObjectsMap.supplierVO || [])
+          .filter(
+            (supplier) => supplier && supplier.id && supplier.supplierShortName
+          ) // Filter out invalid entries
+          .sort((a, b) => (b.id || 0) - (a.id || 0));
+
         setSupplierList(sortedSupplier);
+
+        // Log for debugging
+        console.log("Loaded suppliers:", sortedSupplier);
       } else {
         showToast("warning", "No supplier data found");
+        setSupplierList([]); // Ensure it's always an array
       }
     } catch (error) {
       console.error("Error fetching suppliers:", error);
-      showToast("error", "Error", "Failed to fetch suppliers");
+      showToast("error", "Failed to fetch suppliers");
+      setSupplierList([]); // Ensure it's always an array even on error
     }
   };
+
+  // Add this useEffect to debug supplier data
+  useEffect(() => {
+    console.log("Supplier list updated:", supplierList);
+    if (supplierList && supplierList.length > 0) {
+      console.log("First supplier:", supplierList[0]);
+      console.log("Has supplierShortName:", supplierList[0]?.supplierShortName);
+    }
+  }, [supplierList]);
 
   // Get all modes of shipment
   const getAllModesOfShipment = async () => {
@@ -790,9 +807,40 @@ const GRN = () => {
       const response = await axios.get(
         `${API_URL}/api/gatePassIn/getAllModeOfShipment?orgId=${orgId}`
       );
-      setModeOfShipmentList(response.data.paramObjectsMap.modOfShipments);
+
+      const defaultModes = [
+        { id: 1, shipmentMode: "AIR" },
+        { id: 2, shipmentMode: "SEA" },
+        { id: 3, shipmentMode: "ROAD" },
+      ];
+
+      // Merge API response with defaults, avoiding duplicates
+      const apiModes = response.data?.paramObjectsMap?.modOfShipments || [];
+      const mergedModes = [...defaultModes];
+
+      apiModes.forEach((apiMode) => {
+        if (
+          !mergedModes.some(
+            (defaultMode) =>
+              defaultMode.shipmentMode.toUpperCase() ===
+              apiMode.shipmentMode.toUpperCase()
+          )
+        ) {
+          mergedModes.push(apiMode);
+        }
+      });
+
+      setModeOfShipmentList(mergedModes);
     } catch (error) {
       console.error("Error fetching modes of shipment:", error);
+
+      // Set default values on error
+      const defaultModes = [
+        { id: 1, shipmentMode: "AIR" },
+        { id: 2, shipmentMode: "SEA" },
+        { id: 3, shipmentMode: "ROAD" },
+      ];
+      setModeOfShipmentList(defaultModes);
     }
   };
 
@@ -920,8 +968,11 @@ const GRN = () => {
       if (response.data && response.data.status === true) {
         const gatePassData = response.data.paramObjectsMap.GatePassIn;
 
-        // Use the improved formatDateForDisplay function instead of parseAndFormatDate
-        // Populate form data with properly formatted dates
+        // FIX: Handle null carrier value
+        const carrierValue = selectedGatePass.carrier
+          ? selectedGatePass.carrier.toUpperCase()
+          : "";
+
         setFormData((prev) => ({
           ...prev,
           docId: gatePassData.docId || "",
@@ -938,7 +989,7 @@ const GRN = () => {
           supplierShortName: gatePassData.supplierShortName || "",
           supplier: gatePassData.supplier || "",
           modeOfShipment: gatePassData.modeOfShipment || "",
-          carrier: gatePassData.carrier || "",
+          carrier: carrierValue, // Use the safe value here
           vehicleType: gatePassData.vehicleType || "",
           contact: gatePassData.contact || "",
           driverName: gatePassData.driverName || "",
@@ -1038,6 +1089,11 @@ const GRN = () => {
         const particularGrn = response.data.paramObjectsMap.Grn;
         setGatePassIdEdit(particularGrn.docId);
 
+        // FIX: Handle null carrier value
+        const carrierValue = particularGrn.carrier
+          ? particularGrn.carrier.toUpperCase()
+          : "";
+
         setFormData({
           docId: particularGrn.docId,
           editDocDate: formatDateForDisplay(particularGrn.docdate),
@@ -1075,10 +1131,11 @@ const GRN = () => {
           noOfPacks: particularGrn.noOfPacks,
           totAmt: particularGrn.totAmt,
           totGrnQty: particularGrn.totalGrnQty,
-
           freeze: particularGrn.freeze !== null ? particularGrn.freeze : false,
           remarks: particularGrn.remarks,
+          carrier: carrierValue, // Use the safe value here
         });
+
         getAllCarriers(particularGrn.modeOfShipment);
         setFormData((prevData) => ({
           ...prevData,
@@ -1374,6 +1431,7 @@ const GRN = () => {
   };
 
   // Add this function to handle Entry No changes and fetch data
+  // Add this function to handle Entry No changes and fetch data
   const handleEntryNoChange = async (value) => {
     if (!value) return;
 
@@ -1392,11 +1450,23 @@ const GRN = () => {
         const entryDetails =
           entryResponse.data.paramObjectsMap.entryNoDetails[0];
 
+        // FIX: Find the matching supplier from supplierList first
+        const matchingSupplier = supplierList.find(
+          (supplier) =>
+            supplier &&
+            supplier.supplierShortName &&
+            supplier.supplierShortName.toUpperCase() ===
+              (entryDetails.supplierShortName || "").toUpperCase()
+        );
+
         // Update form with entry details
         setFormData((prev) => ({
           ...prev,
-          supplierShortName: entryDetails.supplierShortName || "",
-          supplier: entryDetails.supplier || "",
+          supplierShortName:
+            matchingSupplier?.supplierShortName ||
+            entryDetails.supplierShortName ||
+            "",
+          supplier: matchingSupplier?.supplier || entryDetails.supplier || "",
           modeOfShipment: entryDetails.modeOfShipment || "",
           carrier: entryDetails.carrierShortName || "",
         }));
@@ -1449,7 +1519,6 @@ const GRN = () => {
       setLoading(false);
     }
   };
-
   const handleInputChange = (e) => {
     const { name, value, checked, selectionStart, selectionEnd } = e.target;
     const nameRegex = /^[A-Za-z ]*$/;
@@ -1868,66 +1937,25 @@ const GRN = () => {
     handleBulkUploadClose();
   };
 
-  const handleBinQtyChange = (event, row, index) => {
-    const value = event.target.value;
-    const maxPalletQty = row.grnQty || 0;
-    const intPattern = /^\d*$/;
+  const handleBinQtyChange = (e, row, index) => {
+    const palletQty = e.target.value;
+    const recQty = parseFloat(row.recQty) || 0;
 
-    if (value === "") {
-      setLrTableData((prev) =>
-        prev.map((r) =>
-          r.id === row.id ? { ...r, palletQty: value, noOfBin: "" } : r
-        )
-      );
-      setLrTableErrors((prev) => {
-        const newErrors = [...prev];
-        newErrors[index] = {
-          ...newErrors[index],
-          palletQty: "Bin Qty is required",
-        };
-        return newErrors;
-      });
-    } else if (!intPattern.test(value)) {
-      setLrTableErrors((prev) => {
-        const newErrors = [...prev];
-        newErrors[index] = {
-          ...newErrors[index],
-          palletQty: "Only numbers are allowed",
-        };
-        return newErrors;
-      });
-    } else if (Number(value) <= 0) {
-      setLrTableErrors((prev) => {
-        const newErrors = [...prev];
-        newErrors[index] = {
-          ...newErrors[index],
-          palletQty: "Bin Qty must be greater than zero",
-        };
-        return newErrors;
-      });
-    } else if (Number(value) > maxPalletQty) {
-      setLrTableErrors((prev) => {
-        const newErrors = [...prev];
-        newErrors[index] = {
-          ...newErrors[index],
-          palletQty: `Pallet Qty cannot exceed ${maxPalletQty}`,
-        };
-        return newErrors;
-      });
-    } else {
-      const noOfBin = Math.ceil(maxPalletQty / Number(value));
-
-      setLrTableData((prev) =>
-        prev.map((r) =>
-          r.id === row.id ? { ...r, palletQty: value, noOfPallets: noOfBin } : r
-        )
-      );
-      setLrTableErrors((prev) => {
-        const newErrors = [...prev];
-        newErrors[index] = { ...newErrors[index], palletQty: "" };
-        return newErrors;
-      });
+    // Calculate number of pallets
+    let noOfPallets = "";
+    if (palletQty && recQty > 0) {
+      noOfPallets = Math.ceil(recQty / palletQty).toString();
     }
+
+    // Update the table data
+    const updatedData = [...lrTableData];
+    updatedData[index] = {
+      ...updatedData[index],
+      palletQty: palletQty,
+      noOfPallets: noOfPallets,
+    };
+
+    setLrTableData(updatedData);
   };
 
   const handleKeyDown = (e, row, table) => {
@@ -2869,7 +2897,6 @@ const GRN = () => {
                                 />
                               </Form.Item>
                             </Col>
-
                             <Col span={4}>
                               <Form.Item
                                 label={
@@ -2932,16 +2959,21 @@ const GRN = () => {
                                 <Select
                                   showSearch
                                   value={formData.supplierShortName}
-                                  onChange={(value) =>
+                                  onChange={(value) => {
+                                    const selectedSupplier = supplierList?.find(
+                                      (s) =>
+                                        s &&
+                                        s.supplierShortName &&
+                                        s.supplierShortName.toUpperCase() ===
+                                          value.toUpperCase()
+                                    );
                                     setFormData({
                                       ...formData,
                                       supplierShortName: value,
                                       supplier:
-                                        supplierList.find(
-                                          (s) => s.supplierShortName === value
-                                        )?.supplier || "",
-                                    })
-                                  }
+                                        selectedSupplier?.supplier || "",
+                                    });
+                                  }}
                                   disabled={editId || formData.freeze}
                                   style={{
                                     background: "rgba(255, 255, 255, 0.1)",
@@ -2956,14 +2988,30 @@ const GRN = () => {
                                       .indexOf(input.toLowerCase()) >= 0
                                   }
                                 >
-                                  {supplierList?.map((row) => (
-                                    <Option
-                                      key={row.id}
-                                      value={row.supplierShortName.toUpperCase()}
-                                    >
-                                      {row.supplierShortName.toUpperCase()}
-                                    </Option>
-                                  ))}
+                                  {/* FIX: Add comprehensive null checks for supplierList and individual suppliers */}
+
+                                  {Array.isArray(supplierList) &&
+                                    supplierList
+                                      .filter(
+                                        (supplier) =>
+                                          supplier &&
+                                          typeof supplier === "object" &&
+                                          supplier.supplierShortName
+                                      )
+                                      .map((row) => (
+                                        <Option
+                                          key={row.id || Math.random()} // Fallback key if id is missing
+                                          value={
+                                            row.supplierShortName
+                                              ? row.supplierShortName.toUpperCase()
+                                              : ""
+                                          }
+                                        >
+                                          {row.supplierShortName
+                                            ? row.supplierShortName.toUpperCase()
+                                            : "N/A"}
+                                        </Option>
+                                      ))}
                                 </Select>
                               </Form.Item>
                             </Col>
@@ -4198,7 +4246,7 @@ const GRN = () => {
                           {/* Bin QTY */}
                           <td style={{ padding: "8px" }}>
                             <Input
-                              value={row.palletQty}
+                              value={row.binQty}
                               onChange={(e) =>
                                 handleBinQtyChange(e, row, index)
                               }
@@ -4207,9 +4255,12 @@ const GRN = () => {
                           </td>
 
                           {/* No of Bins */}
+                          {/* Bin/Pallet QTY */}
+
+                          {/* No of Pallets */}
                           <td style={{ padding: "8px" }}>
                             <Input
-                              value={row.noOfPallets}
+                              value={row.noOfPallets || ""}
                               readOnly
                               style={readOnlyInputStyle}
                             />
@@ -4735,7 +4786,7 @@ const datePickerStyle = {
 };
 
 const selectStyle = {
-  width: "100%",
+  width: "110%",
   background: "rgba(255, 255, 255, 0.1)",
   color: "white",
   border: "1px solid rgba(255, 255, 255, 0.3)",

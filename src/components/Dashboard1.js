@@ -336,7 +336,7 @@ const GaugeValueRangeNoSnap = ({
         {data.length > 0 ? (
           renderTable(data, type)
         ) : (
-          <Typography sx={{ color: "white" }}>No data found!</Typography>
+          <Typography sx={{ color: "black" }}>No data found!</Typography>
         )}
       </DialogContent>
     </Dialog>
@@ -383,7 +383,7 @@ const GaugeValueRangeNoSnap = ({
           ) : (
             <div
               style={{
-                color: "white",
+                color: "black",
                 textAlign: "center",
                 paddingTop: "80px",
               }}

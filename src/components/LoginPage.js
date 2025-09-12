@@ -1085,7 +1085,12 @@ const LoginPage = () => {
         });
 
         // Navigate to transactions
-        navigate("/Dashboard1");
+        navigate("/Outbound");
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+
+        // navigate("/Outbound");
 
         // window.location.reload(); // Force refresh to ensure all data is loaded
       } else {
@@ -1112,15 +1117,7 @@ const LoginPage = () => {
       <LoginPageStyles />
       <div className={`full-page-background wow-bg ${backgroundStyle}`}>
         <header className="top-header"></header>
-        {/* <div
-          style={{
-            background: "transparent",
-            marginTop: "-5px",
-          }}
-        >
-          <img src={UWLNL2} width="260px" height="90px" alt="Your Image" />
-        </div> */}
-        {/* <div className="rain-container" ref={rainContainerRef} /> */}
+
         <div
           style={{
             background: "transparent",
