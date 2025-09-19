@@ -5,7 +5,7 @@ import { IconWorld } from "@tabler/icons-react";
 import { ToastContainer } from "react-toastify";
 import { showToast } from "../utils/toast-component";
 // material-ui
-import { Form, Modal } from "antd"; // Added missing imports
+import { Form, Modal } from "antd";
 import {
   Avatar,
   Box,
@@ -25,17 +25,7 @@ import {
 import { useTheme } from "@mui/material/styles";
 import "./GlobalSection.css";
 
-// third-party
-
-// project imports
-
-// assets
-
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
-
-// notification status options
-
-// ==============================|| NOTIFICATION ||============================== //
 
 const GlobalSection = () => {
   const theme = useTheme();
@@ -62,9 +52,7 @@ const GlobalSection = () => {
 
   const [client, setClient] = useState("");
   const [branch, setBranch] = useState("");
-  /**
-   * anchorRef is used on different componets and specifying one type leads to other components throwing an error
-   * */
+
   const anchorRef = useRef(null);
 
   useEffect(() => {
@@ -94,7 +82,6 @@ const GlobalSection = () => {
       const result = await axios.get(
         `${API_URL}/api/commonmaster/globalparamBranchByUserName?orgid=${orgId}&userName=${userName}`
       );
-      // Response has "GlopalParameters" array (note the typo in the API response)
       setBranchVO(result.data?.paramObjectsMap?.GlopalParameters || []);
       console.log("Branch Data:", result.data);
     } catch (err) {
@@ -112,7 +99,7 @@ const GlobalSection = () => {
       console.log("Test", result.data);
     } catch (err) {
       console.log("error", err);
-      setFinVO([]); // Ensure state is cleared on error
+      setFinVO([]);
     }
   };
 
@@ -129,7 +116,6 @@ const GlobalSection = () => {
       const result = await axios.get(
         `${API_URL}/api/commonmaster/globalparamCustomerByUserName?${queryParams}`
       );
-      // Response has "GlopalParameterCustomer" array
       setCustomerVO(
         result.data?.paramObjectsMap?.GlopalParameterCustomer || []
       );
@@ -154,7 +140,6 @@ const GlobalSection = () => {
       const result = await axios.get(
         `${API_URL}/api/commonmaster/globalparamClientByUserName?${queryParams}`
       );
-      // Response has "GlopalParameterClient" array
       setClientVO(result.data?.paramObjectsMap?.GlopalParameterClient || []);
       console.log("Client Data:", result.data);
     } catch (err) {
@@ -168,7 +153,6 @@ const GlobalSection = () => {
       const result = await axios.get(
         `${API_URL}/api/warehousemastercontroller/warehouse/branch?branchcode=${branchcode}&orgid=${orgId}`
       );
-      // Make sure we're getting the array correctly from the response
       const warehouses = result.data?.paramObjectsMap?.Warehouse || [];
       setWarehouseVO(warehouses);
       console.log("Warehouse Data:", warehouses);
@@ -186,7 +170,6 @@ const GlobalSection = () => {
       const globalParameterVO = result.data?.paramObjectsMap?.globalParam;
       if (globalParameterVO) {
         setGlobalParameter(globalParameterVO);
-        // Set all values first
         setCustomerValue(globalParameterVO.customer || "");
         setClientValue(globalParameterVO.client || "");
         setFinYearValue(globalParameterVO.finYear || "");
@@ -239,7 +222,6 @@ const GlobalSection = () => {
         formData
       );
       showToast("success", "Global Parameter updated succesfully");
-      // setOpen(false);
       console.log("Test", result);
     } catch (err) {
       console.log("error", err);
@@ -265,32 +247,44 @@ const GlobalSection = () => {
     if (branch) {
       setSelectedBranch({ branch: branch.branch, branchcode: branchcode });
       setBranchName(branch.branch);
+      setBranchValue(branchcode); // Update branchValue state
       form.setFieldsValue({ branch: branchcode });
     }
 
-    setBranchValue(branchcode);
+    // Reset dependent values
+    setCustomerValue("");
+    setClientValue("");
+    setWarehouseValue("");
+    form.setFieldsValue({ customer: "", client: "", warehouse: "" });
+
+    // Fetch new data based on selected branch
     getCustomer(branchcode);
   };
 
-  // Similarly update other handlers:
   const handleCustomerChange = (event) => {
     const value = event.target.value;
     setCustomerValue(value);
     form.setFieldsValue({ customer: value });
-    getClient(value, selectedBranch.branchcode);
+
+    // Use the current branchValue instead of selectedBranch.branchcode
+    getClient(value, branchValue); // FIXED: Using branchValue instead of selectedBranch.branchcode
   };
 
   const handleClientChange = (event) => {
     const value = event.target.value;
     setClientValue(value);
     form.setFieldsValue({ client: value });
-    getWareHouse(selectedBranch.branchcode);
+    getWareHouse(branchValue); // FIXED: Using branchValue instead of selectedBranch.branchcode
   };
 
   const handleWarehouseChange = (event) => {
     const value = event.target.value;
     setWarehouseValue(value);
     form.setFieldsValue({ warehouse: value });
+  };
+
+  const handleFinYearChange = (event) => {
+    setFinYearValue(event.target.value);
   };
 
   const prevOpen = useRef(open);
@@ -303,50 +297,6 @@ const GlobalSection = () => {
 
   const handleChange = (event) => {
     if (event?.target.value) setValue(event?.target.value);
-  };
-
-  const handleFinYearChange = (event) => {
-    setFinYearValue(event.target.value);
-  };
-
-  // Glass effect styles
-  const glassStyle = {
-    background: "rgba(255, 255, 255, 0.15)",
-    backdropFilter: "blur(10px)",
-    borderRadius: "16px",
-    border: "1px solid rgba(255, 255, 255, 0.2)",
-    boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
-    padding: "16px",
-    color: "#fff",
-  };
-
-  const textFieldStyle = {
-    "& .MuiInputLabel-root": {
-      color: "rgba(255, 255, 255, 0.7)",
-    },
-    "& .MuiOutlinedInput-root": {
-      color: "#fff",
-      "& fieldset": {
-        borderColor: "rgba(255, 255, 255, 0.3)",
-      },
-      "&:hover fieldset": {
-        borderColor: "rgba(255, 255, 255, 0.5)",
-      },
-      "&.Mui-focused fieldset": {
-        borderColor: "rgba(255, 255, 255, 0.8)",
-      },
-    },
-    "& .MuiSelect-icon": {
-      color: "rgba(255, 255, 255, 0.7)",
-    },
-  };
-
-  const buttonStyle = {
-    background: "rgba(255, 255, 255, 0.2)",
-    color: "#fff",
-    "&:hover": {
-      background: "rgba(255, 255, 255, 0.3)",
-    },
   };
 
   return (
@@ -425,7 +375,7 @@ const GlobalSection = () => {
                   size="small"
                   className="glass-input"
                   value={finYearValue}
-                  onChange={(e) => setFinYearValue(e.target.value)}
+                  onChange={handleFinYearChange}
                   SelectProps={{ native: true }}
                 >
                   <option value="" disabled></option>

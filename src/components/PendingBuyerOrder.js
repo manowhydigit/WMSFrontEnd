@@ -1,40 +1,20 @@
 import React, { useState, useEffect } from "react";
-import {
-  Button,
-  Card,
-  Col,
-  ConfigProvider,
-  DatePicker,
-  Input,
-  notification,
-  Row,
-  Spin,
-  Typography,
-  Table,
-  Select,
-  Form,
-  Checkbox,
-  Divider,
-  Tabs,
-} from "antd";
+import { Button, ConfigProvider, Spin, Typography, Checkbox } from "antd";
 import {
   SearchOutlined,
   ClearOutlined,
   SaveOutlined,
   CloudUploadOutlined,
   CloudDownloadOutlined,
-  DeleteOutlined,
-  PlusOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import CommonBulkUpload from "../utils/CommonBulkUpload";
+import sampleFile from "../assets/sample-files/sample_data_buyerorder.xls";
 import axios from "axios";
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
-
-const { Option } = Select;
-const { TabPane } = Tabs;
 
 const PendingBuyerOrder = () => {
   const [theme] = useState(localStorage.getItem("theme") || "light");
@@ -54,6 +34,44 @@ const PendingBuyerOrder = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [toastId, setToastId] = useState(null);
+
+  useEffect(() => {
+    return () => {
+      // Clean up any active toasts when component unmounts
+      if (toastId) {
+        toast.dismiss(toastId);
+      }
+    };
+  }, [toastId]);
+
+  const showToast = (message, type = "default") => {
+    const id =
+      type === "error"
+        ? toast.error(message)
+        : type === "success"
+        ? toast.success(message)
+        : toast(message);
+
+    setToastId(id);
+    return id;
+  };
+
+  const handleSubmit = () => {
+    console.log("Submit clicked");
+    handleBulkUploadClose();
+    // After successful upload, refresh the data
+    getPendingBuyerOrderDetails();
+  };
+
+  const handleBulkUploadOpen = () => {
+    setUploadOpen(true);
+  };
+
+  const handleBulkUploadClose = () => {
+    setUploadOpen(false);
+  };
 
   // Add checkbox column
   const columns = [
@@ -155,13 +173,14 @@ const PendingBuyerOrder = () => {
           );
         setRowData(dataWithKeys);
       } else {
-        toast.error(
-          response.paramObjectsMap.errorMessage || "Report Fetch failed"
+        showToast(
+          response.paramObjectsMap.errorMessage || "Report Fetch failed",
+          "error"
         );
       }
     } catch (error) {
       console.error("Error:", error);
-      toast.error("Report Fetch failed");
+      showToast("Report Fetch failed", "error");
     } finally {
       setIsLoading(false);
     }
@@ -219,7 +238,7 @@ const PendingBuyerOrder = () => {
 
   const handleGenerateBuyerOrders = async () => {
     if (selectedRows.length === 0) {
-      toast.error("Please select at least one order");
+      showToast("Please select at least one order", "error");
       return;
     }
 
@@ -232,7 +251,7 @@ const PendingBuyerOrder = () => {
     if (!loginFinYear) errors.loginFinYear = "FinYear is required";
 
     if (Object.keys(errors).length > 0) {
-      toast.error("Please fix validation errors");
+      showToast("Please fix validation errors", "error");
       return;
     }
 
@@ -281,18 +300,19 @@ const PendingBuyerOrder = () => {
 
       if (result.data.status === true) {
         console.log("Response:", result.data);
-        toast.success("Multiple Buyer Orders created successfully");
+        showToast("Multiple Buyer Orders created successfully", "success");
         handleClear();
         getPendingBuyerOrderDetails();
       } else {
-        toast.error(
+        showToast(
           result.data.paramObjectsMap?.errorMessage ||
-            "Multiple Buyer Order creation failed"
+            "Multiple Buyer Order creation failed",
+          "error"
         );
       }
     } catch (err) {
       console.log("error", err);
-      toast.error("Multiple Buyer Order creation failed");
+      showToast("Multiple Buyer Order creation failed", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -442,7 +462,7 @@ const PendingBuyerOrder = () => {
               </Button>
               <Button
                 icon={<CloudUploadOutlined />}
-                className="action-btn"
+                onClick={handleBulkUploadOpen}
                 style={{
                   background: "rgba(108, 99, 255, 0.3)",
                   color: "#fff",
@@ -699,6 +719,21 @@ const PendingBuyerOrder = () => {
               </div>
             </div>
           </div>
+          <CommonBulkUpload
+            open={uploadOpen}
+            handleClose={() => setUploadOpen(false)}
+            title="Upload Buyer Order Files"
+            uploadText="Upload file"
+            downloadText="Sample File"
+            onSubmit={handleSubmit}
+            sampleFileDownload={sampleFile}
+            apiUrl={`${API_URL}/api/buyerOrder/ExcelUploadForBuyerOrder?branch=${loginBranch}&branchCode=${loginBranchCode}&client=${loginClient}&createdBy=${loginUserName}&customer=${loginCustomer}&finYear=${loginFinYear}&orgId=${orgId}&type=DOC&warehouse=${loginWarehouse}`}
+            screen="Buyer Order"
+            onSuccess={() => {
+              // Refresh the data after successful upload
+              getPendingBuyerOrderDetails();
+            }}
+          />
         </div>
         <ToastContainer position="top-right" autoClose={5000} />
       </div>

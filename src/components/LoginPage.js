@@ -1085,7 +1085,7 @@ const LoginPage = () => {
         });
 
         // Navigate to transactions
-        navigate("/Outbound");
+        navigate("/Inbound");
         setTimeout(() => {
           window.location.reload();
         }, 300);

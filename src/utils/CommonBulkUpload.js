@@ -24,7 +24,7 @@ const CommonBulkUpload = ({
 }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [orgId] = useState(localStorage.getItem("orgId"));
+  // const [orgId] = useState(localStorage.getItem("orgId"));
 
   const handleFileChange = (event) => {
     const file = event.target.files[0];
@@ -238,7 +238,7 @@ const CommonBulkUpload = ({
         <div style={{ marginTop: "25px" }}>
           <Text
             style={{
-              color: "rgba(255, 255, 255, 0.7)",
+              // color: "rgba(255, 255, 255, 0.7)",
               display: "block",
               marginBottom: "5px",
               color: "white",

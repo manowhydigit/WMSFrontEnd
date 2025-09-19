@@ -31,7 +31,8 @@ import {
 import dayjs from "dayjs";
 import Draggable from "react-draggable";
 import axios from "axios";
-import { getAllActivePartDetails } from "../utils/CommonFunctions";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8085";
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -88,13 +89,61 @@ export const CycleCount = () => {
 
   const [selectAllCycleCount, setSelectAllCycleCount] = useState([]);
 
+  const [loginCustomer] = useState(localStorage.getItem("customer"));
+  const [loginClient] = useState(localStorage.getItem("client"));
+  const [loginWarehouse] = useState(localStorage.getItem("warehouse"));
+  const [loginFinYear] = useState(localStorage.getItem("finYear"));
+  const [loginBranchCode] = useState(localStorage.getItem("branchcode"));
+  const [loginBranch] = useState(localStorage.getItem("branch"));
+
   const [formData, setFormData] = useState({
     docId: "",
     docDate: dayjs(),
     stockStatus: "",
     stockStatusFlag: "",
+    statusFlag: "",
     remarks: "",
   });
+
+  // Toast management
+  const isMounted = useRef(true);
+  const [toastId, setToastId] = useState(null);
+
+  useEffect(() => {
+    isMounted.current = true;
+    getAllCycleCounts();
+    getDocId();
+
+    return () => {
+      isMounted.current = false;
+      // Clean up any active toasts when component unmounts
+      if (toastId) {
+        toast.dismiss(toastId);
+      }
+    };
+  }, []);
+
+  // Safe toast function
+  const showToast = (messageText, type = "default") => {
+    if (!isMounted.current) return null;
+
+    let id;
+    switch (type) {
+      case "error":
+        id = toast.error(messageText);
+        break;
+      case "success":
+        id = toast.success(messageText);
+        break;
+      case "warning":
+        id = toast.warning(messageText);
+        break;
+      default:
+        id = toast(messageText);
+    }
+    setToastId(id);
+    return id;
+  };
 
   // Styles
   const inputStyle = {
@@ -112,15 +161,10 @@ export const CycleCount = () => {
 
   const selectStyle = {
     width: "90%",
-    background: "rgba(255, 255, 255, 0.1)",
+    background: "rgba(255, 255, 255, 极致的玻璃效果设计)",
     color: "white",
     border: "1px solid rgba(255, 255, 255, 0.3)",
   };
-
-  useEffect(() => {
-    getAllCycleCounts();
-    getDocId();
-  }, []);
 
   const getDocId = async () => {
     try {
@@ -135,6 +179,7 @@ export const CycleCount = () => {
       }
     } catch (error) {
       console.error("Error fetching doc ID:", error);
+      showToast("Failed to fetch document ID", "error");
     }
   };
 
@@ -148,6 +193,7 @@ export const CycleCount = () => {
       }
     } catch (error) {
       console.error("Error fetching cycle counts:", error);
+      showToast("Failed to fetch cycle counts", "error");
     }
   };
 
@@ -161,8 +207,29 @@ export const CycleCount = () => {
       }
     } catch (error) {
       console.error("Error fetching part numbers:", error);
+      showToast("Failed to fetch part numbers", "error");
     }
   };
+
+  const deleteToast = () => {
+    if (this.props.toastId) {
+      toast.dismiss(this.props.toastId);
+    }
+  };
+
+  useEffect(() => {
+    isMounted.current = true;
+    getAllCycleCounts();
+    getDocId();
+
+    return () => {
+      isMounted.current = false;
+      // Clean up any active toasts when component unmounts
+      if (toastId) {
+        toast.dismiss(toastId);
+      }
+    };
+  }, []);
 
   const handleAddItem = () => {
     const newItem = {
@@ -200,40 +267,101 @@ export const CycleCount = () => {
       docDate: dayjs(),
       stockStatus: "",
       stockStatusFlag: "",
+      statusFlag: "",
       remarks: "",
     });
     setCycleCountItems([]);
     getDocId();
     setEditId("");
   };
-
   const handleSave = async () => {
     setIsSubmitting(true);
     try {
+      // Validate required fields
+      if (!formData.stockStatus) {
+        showToast("Please select Stock Status", "error");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (cycleCountItems.length === 0) {
+        showToast("Please add at least one item", "error");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Format the date correctly (YYYY-MM-DD)
+      const formattedDocDate = formData.docDate.format("YYYY-MM-DD");
+
       const saveData = {
+        ...(editId && { id: parseInt(editId) }),
         ...formData,
-        cycleCountDetailsDTO: cycleCountItems.map((item) => ({
-          ...(editId && { id: item.id }),
-          partNo: item.partNo,
-          partDesc: item.partDesc,
-          sku: item.sku,
-          grnNo: item.grnNo,
-          batchNo: item.batchNo,
-          bin: item.bin,
-          binType: item.binType,
-          core: item.core,
-          avlQty: parseFloat(item.avlQty) || 0,
-          actualQty: parseFloat(item.actualQty) || 0,
-        })),
-        orgId,
-        branch,
-        branchCode,
-        client,
-        customer,
-        warehouse,
-        finYear,
+        docDate: formattedDocDate,
+        branch: loginBranch,
+        branchCode: loginBranchCode,
+        client: loginClient,
+        customer: loginCustomer,
+        warehouse: loginWarehouse,
+        finYear: loginFinYear,
+        orgId: parseInt(orgId),
         createdBy: loginUserName,
+        cycleCountDetailsDTO: cycleCountItems.map((item) => {
+          // Find the selected bin details to get binClass, binType, etc.
+          const selectedBin = item.rowBinList?.find(
+            (bin) => bin.bin === item.bin
+          );
+
+          // Find the selected GRN details to get grnDate
+          const selectedGrn = item.rowGrnNoList?.find(
+            (grn) => grn.grnNo === item.grnNo
+          );
+
+          // Find the selected batch details to get batchDate, expDate
+          const selectedBatch = item.rowBatchNoList?.find(
+            (batch) => batch.batch === item.batchNo
+          );
+
+          // Format GRN date (remove time portion if present)
+          let formattedGrnDate = "";
+          if (selectedGrn?.grnDate) {
+            // Extract just the date part (YYYY-MM-DD) from the datetime string
+            formattedGrnDate = selectedGrn.grnDate.split(" ")[0];
+          }
+
+          // Format batch date and exp date if needed
+          let formattedBatchDate = "";
+          if (selectedBatch?.batchDate) {
+            formattedBatchDate = selectedBatch.batchDate.split(" ")[0];
+          }
+
+          let formattedExpDate = "";
+          if (selectedBatch?.expDate) {
+            formattedExpDate = selectedBatch.expDate.split(" ")[0];
+          }
+
+          return {
+            ...(editId && { id: item.id }),
+            partNo: item.partNo,
+            partDescription: item.partDesc,
+            sku: item.sku,
+            grnNo: item.grnNo,
+            grnDate: formattedGrnDate, // Use formatted date
+            binClass: selectedBin?.binClass || "Fixed",
+            cellType: selectedBin?.cellType || "",
+            expDate: formattedExpDate, // Use formatted date
+            qcFlag: selectedBin?.qcFlag || "",
+            batchNo: item.batchNo,
+            batchDate: formattedBatchDate, // Use formatted date
+            bin: item.bin,
+            binType: selectedBin?.binType || "",
+            core: selectedBin?.core || "",
+            avlQty: parseFloat(item.avlQty) || 0,
+            actualQty: parseFloat(item.actualQty) || 0,
+          };
+        }),
       };
+
+      console.log("Sending payload:", saveData); // For debugging
 
       const response = await axios.put(
         `${API_URL}/api/cycleCount/createUpdateCycleCount`,
@@ -241,19 +369,23 @@ export const CycleCount = () => {
       );
 
       if (response.data.status === true) {
-        message.success(
+        showToast(
           editId
             ? "Cycle Count updated successfully"
-            : "Cycle Count created successfully"
+            : "Cycle Count created successfully",
+          "success"
         );
         handleClear();
         getAllCycleCounts();
       } else {
-        message.error(response.data.message || "Failed to save Cycle Count");
+        showToast(
+          response.data.message || "Failed to save Cycle Count",
+          "error"
+        );
       }
     } catch (error) {
       console.error("Error saving Cycle Count:", error);
-      message.error("Failed to save Cycle Count");
+      showToast("Failed to save Cycle Count", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -267,13 +399,15 @@ export const CycleCount = () => {
     setViewMode(viewMode === "form" ? "list" : "form");
     handleClear();
   };
+
   const handleEditCycleCount = (record) => {
     setEditId(record.id);
     setFormData({
       docId: record.docId,
-      docDate: record.docDate,
+      docDate: dayjs(record.docDate),
       stockStatus: record.stockStatus,
       stockStatusFlag: record.stockStatusFlag,
+      statusFlag: record.stockStatusFlag,
       remarks: record.remarks,
     });
 
@@ -284,12 +418,21 @@ export const CycleCount = () => {
         partDesc: item.partDesc,
         sku: item.sku,
         grnNo: item.grnNo,
+        grnDate: item.grnDate,
         batchNo: item.batchNo,
+        batchDate: item.batchDate,
         bin: item.bin,
         binType: item.binType,
+        binClass: item.binClass,
+        cellType: item.cellType,
+        expDate: item.expDate,
+        qcFlag: item.qcFlag,
         core: item.core,
         avlQty: item.avlQty,
         actualQty: item.actualQty,
+        rowGrnNoList: [],
+        rowBatchNoList: [],
+        rowBinList: [],
       })) || []
     );
 
@@ -305,9 +448,12 @@ export const CycleCount = () => {
       if (response.data.status === true) {
         setFillGridData(response.data.paramObjectsMap.cycleCountGrid);
         setModalOpen(true);
+      } else {
+        showToast("Failed to fetch grid details", "error");
       }
     } catch (error) {
       console.error("Error fetching fill grid data:", error);
+      showToast("Error fetching grid details", "error");
     }
   };
 
@@ -317,6 +463,7 @@ export const CycleCount = () => {
     setSelectedRows([]);
     setSelectAll(false);
     setModalOpen(false);
+    showToast("Selected items added successfully", "success");
   };
 
   const handleSelectAll = () => {
@@ -343,6 +490,7 @@ export const CycleCount = () => {
       ...formData,
       stockStatus: value,
       stockStatusFlag: flag,
+      statusFlag: flag,
     });
     getPartNoList(flag);
   };
@@ -366,6 +514,7 @@ export const CycleCount = () => {
               binType: "",
               core: "",
               avlQty: "",
+              binClass: "Fixed",
             }
           : item
       )
@@ -395,6 +544,7 @@ export const CycleCount = () => {
       }
     } catch (error) {
       console.error("Error fetching GRN numbers:", error);
+      showToast("Failed to fetch GRN numbers", "error");
     }
   };
 
@@ -421,7 +571,7 @@ export const CycleCount = () => {
             background: "rgba(255, 255, 255, 0.1)",
             backdropFilter: "blur(12px)",
             borderRadius: "16px",
-            boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+            boxShadow: "0 4px 30px rgba(0, 0, 0, 极致的玻璃效果设计)",
             border: "1px solid rgba(255, 255, 255, 0.2)",
             color: "white",
           },
@@ -507,6 +657,7 @@ export const CycleCount = () => {
       }
     } catch (error) {
       console.error("Error fetching batch numbers:", error);
+      showToast("Failed to fetch batch numbers", "error");
     }
   };
 
@@ -529,6 +680,7 @@ export const CycleCount = () => {
     setSelectedRows([]);
     setSelectAll(false);
     setModalOpen(false);
+    showToast("Selected items added successfully", "success");
   };
 
   const handleBatchNoChange = (id, value) => {
@@ -578,6 +730,7 @@ export const CycleCount = () => {
       }
     } catch (error) {
       console.error("Error fetching bins:", error);
+      showToast("Failed to fetch bins", "error");
     }
   };
 
@@ -626,10 +779,15 @@ export const CycleCount = () => {
       }
     } catch (error) {
       console.error("Error fetching available quantity:", error);
+      showToast("Failed to fetch available quantity", "error");
     }
   };
 
   const handleOpenModal = () => {
+    if (!formData.stockStatusFlag) {
+      showToast("Please select Stock Status first", "error");
+      return;
+    }
     getAllFillGrid();
   };
 
@@ -797,7 +955,7 @@ export const CycleCount = () => {
                               <DatePicker
                                 className="white-datepicker"
                                 style={{ width: "100%", ...readOnlyInputStyle }}
-                                value={dayjs(formData.docDate)}
+                                value={formData.docDate}
                                 disabled
                                 format="DD-MM-YYYY"
                               />
@@ -882,7 +1040,6 @@ export const CycleCount = () => {
                         </Button>
                         <Button
                           icon={<TableOutlined />}
-                          // onClick={getAllFillGrid}
                           onClick={handleOpenModal}
                           style={{
                             marginRight: "8px",
@@ -900,7 +1057,7 @@ export const CycleCount = () => {
                             marginRight: "8px",
                             background: "rgba(108, 99, 255, 0.3)",
                             color: "#fff",
-                            border: "none",
+                            border: "极致的玻璃效果设计)",
                           }}
                         >
                           Clear Items
@@ -933,7 +1090,7 @@ export const CycleCount = () => {
                         },
                         scrollbarWidth: "thin",
                         scrollbarColor:
-                          "rgba(255, 255, 255, 0.3) rgba(0, 0, 0, 0.1)",
+                          "极致的玻璃效果设计) rgba(0, 0, 0, 0.1)",
                       }}
                     >
                       <table
@@ -984,7 +1141,7 @@ export const CycleCount = () => {
                             <th
                               style={{
                                 padding: "8px",
-                                textAlign: "center",
+                                textAlign: "极致的玻璃效果设计)",
                                 color: "white",
                               }}
                             >
@@ -1037,7 +1194,7 @@ export const CycleCount = () => {
                             </th>
                             <th
                               style={{
-                                padding: "8px",
+                                padding: "8极致的玻璃效果设计)",
                                 textAlign: "left",
                                 color: "white",
                               }}
@@ -1460,7 +1617,7 @@ export const CycleCount = () => {
             <Button
               key="cancel"
               onClick={() => {
-             setModalOpen(false); // FIXED: Changed from setCycleCountModalOpen to setModalOpen
+                setModalOpen(false); // FIXED: Changed from setCycleCountModalOpen to setModalOpen
                 setSelectedRows([]);
                 setSelectAll(false);
               }}

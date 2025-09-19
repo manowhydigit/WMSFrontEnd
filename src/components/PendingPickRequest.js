@@ -57,6 +57,13 @@ const PendingPickRequest = () => {
   const [selectedRows, setSelectedRows] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState({
+    total: 0,
+    completed: 0,
+    failed: 0,
+    processing: false,
+  });
 
   const columns = [
     {
@@ -116,24 +123,6 @@ const PendingPickRequest = () => {
       key: "clientName",
       width: 200,
     },
-    // {
-    //   title: "Client Short Name",
-    //   dataIndex: "clientShortName",
-    //   key: "clientShortName",
-    //   width: 150,
-    // },
-    // {
-    //   title: "Customer Name",
-    //   dataIndex: "customerName",
-    //   key: "customerName",
-    //   width: 200,
-    // },
-    // {
-    //   title: "Customer Short Name",
-    //   dataIndex: "customerShortName",
-    //   key: "customerShortName",
-    //   width: 150,
-    // },
   ];
 
   useEffect(() => {
@@ -170,11 +159,9 @@ const PendingPickRequest = () => {
     }
   };
 
-  // ✅ Utility to normalize date
   const formatDateForAPI = (dateValue) => {
     if (!dateValue) return "";
 
-    // If it's already in YYYY-MM-DD format
     if (
       typeof dateValue === "string" &&
       /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
@@ -182,23 +169,27 @@ const PendingPickRequest = () => {
       return dateValue;
     }
 
-    // If it's like "2025-08-24 00:00:00.0"
     if (typeof dateValue === "string" && dateValue.includes(" ")) {
-      return dateValue.split(" ")[0]; // keep only date part
+      return dateValue.split(" ")[0];
     }
 
-    // If it's a Date or other string
     const parsed = dayjs(dateValue);
     return parsed.isValid() ? parsed.format("YYYY-MM-DD") : "";
   };
-
   const handleSelectedRows = async () => {
     if (selectedRows.length === 0) {
       showToast("error", "Please select at least one order");
       return;
     }
 
-    setIsLoading(true);
+    setIsGenerating(true);
+    // Initialize with the correct total count
+    setGenerationStatus({
+      total: selectedRows.length,
+      completed: 0,
+      failed: 0,
+      processing: true,
+    });
 
     const saveFormData = selectedRows.map((row) => ({
       branch: loginBranch,
@@ -221,8 +212,6 @@ const PendingPickRequest = () => {
       warehouse: loginWarehouse,
     }));
 
-    console.log("📦 Final payload to API:", saveFormData);
-
     try {
       const response = await axios.post(
         `${API_URL}/api/pickrequest/createMultiplePickRequest`,
@@ -231,30 +220,79 @@ const PendingPickRequest = () => {
       );
 
       if (response.data.status === true) {
-        showToast("success", "Multiple Pick Requests created successfully");
-        handleClear();
-        getPendingPickDetails();
+        // Parse the success message to extract counts
+        const message = response.data.paramObjectsMap?.message || "";
+        let successCount = 0;
+        let failedCount = 0;
+
+        // Check if the message indicates all were successful
+        if (message.includes("All") && message.includes("Successfully")) {
+          // Extract the number from message like "All 2 PickRequests Created Successfully"
+          const match = message.match(
+            /All (\d+) PickRequests Created Successfully/
+          );
+          successCount = match ? parseInt(match[1], 10) : selectedRows.length;
+          failedCount = 0;
+        } else {
+          // If we can't parse the message, assume all were successful
+          successCount = selectedRows.length;
+          failedCount = 0;
+        }
+
+        // Update status with the actual counts
+        setGenerationStatus({
+          total: selectedRows.length,
+          completed: successCount,
+          failed: failedCount,
+          processing: false,
+        });
+
+        showToast(
+          "success",
+          `Multiple Pick Requests created successfully. ${successCount} succeeded, ${failedCount} failed.`
+        );
+
+        // Refresh data after a short delay
+        setTimeout(() => {
+          handleClear();
+          getPendingPickDetails();
+          setIsGenerating(false);
+        }, 2000);
       } else {
+        // If the API returns an error, mark all as failed
+        setGenerationStatus({
+          total: selectedRows.length,
+          completed: 0,
+          failed: selectedRows.length,
+          processing: false,
+        });
+
         showToast(
           "error",
           response.data.paramObjectsMap?.errorMessage ||
             "Multiple Pick Request creation failed"
         );
+        setIsGenerating(false);
       }
     } catch (err) {
       console.error("❌ API Error:", err);
+
+      // On any error, mark all as failed
+      setGenerationStatus({
+        total: selectedRows.length,
+        completed: 0,
+        failed: selectedRows.length,
+        processing: false,
+      });
+
       showToast(
         "error",
         err.response?.data?.paramObjectsMap?.errorMessage ||
           "Multiple Pick Request creation failed"
       );
-    } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
     }
   };
-
-  // In the JSX, update the onClick handler:
-
   const handleClear = () => {
     setSelectedRows([]);
   };
@@ -263,15 +301,12 @@ const PendingPickRequest = () => {
     setViewMode(viewMode === "form" ? "list" : "form");
   };
 
-  // Handle select all on current page
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      // Select all rows on current page
       const currentPageRows = rowData.slice(
         (currentPage - 1) * pageSize,
         currentPage * pageSize
       );
-      // Merge with existing selected rows, avoiding duplicates
       const newSelectedRows = [...selectedRows];
       currentPageRows.forEach((row) => {
         if (
@@ -282,7 +317,6 @@ const PendingPickRequest = () => {
       });
       setSelectedRows(newSelectedRows);
     } else {
-      // Deselect all rows on current page
       const currentPageRowKeys = rowData
         .slice((currentPage - 1) * pageSize, currentPage * pageSize)
         .map((row) => row.key);
@@ -292,7 +326,6 @@ const PendingPickRequest = () => {
     }
   };
 
-  // Handle individual row selection
   const handleRowSelect = (row, e) => {
     if (e.target.checked) {
       setSelectedRows([...selectedRows, row]);
@@ -303,7 +336,6 @@ const PendingPickRequest = () => {
     }
   };
 
-  // Check if all rows on current page are selected
   const isAllSelected = () => {
     const currentPageRows = rowData.slice(
       (currentPage - 1) * pageSize,
@@ -317,7 +349,6 @@ const PendingPickRequest = () => {
     );
   };
 
-  // Check if some but not all rows on current page are selected
   const isSomeSelected = () => {
     const currentPageRows = rowData.slice(
       (currentPage - 1) * pageSize,
@@ -357,6 +388,46 @@ const PendingPickRequest = () => {
             }}
           >
             <Spin size="large" tip="Submitting..." />
+          </div>
+        )}
+
+        {isGenerating && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0, 0, 0, 0.7)",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 1000,
+              color: "white",
+            }}
+          >
+            <Spin size="large" />
+            <div style={{ marginTop: "20px", textAlign: "center" }}>
+              <h3>Generating Pick Requests...</h3>
+              <p>
+                Processing{" "}
+                {generationStatus.completed + generationStatus.failed} of{" "}
+                {generationStatus.total}
+              </p>
+              <p>✅ Completed: {generationStatus.completed}</p>
+              <p>❌ Failed: {generationStatus.failed}</p>
+              {!generationStatus.processing && (
+                <Button
+                  type="primary"
+                  onClick={() => setIsGenerating(false)}
+                  style={{ marginTop: "20px" }}
+                >
+                  Close
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -440,8 +511,8 @@ const PendingPickRequest = () => {
               </Button>
               <Button
                 icon={<SaveOutlined />}
-                onClick={handleSelectedRows} // Now it will work correctly
-                loading={isSubmitting}
+                onClick={handleSelectedRows}
+                loading={isGenerating}
                 className="primary-action-btn"
                 style={{
                   background: "rgba(108, 99, 255, 0.3)",
@@ -449,7 +520,9 @@ const PendingPickRequest = () => {
                   border: "none",
                 }}
               >
-                Generate Multiple Pick Requests
+                {isGenerating
+                  ? "Generating..."
+                  : "Generate Multiple Pick Requests"}
               </Button>
               <Button
                 icon={<CloudUploadOutlined />}
@@ -506,7 +579,6 @@ const PendingPickRequest = () => {
                       backgroundColor: "rgba(255, 255, 255, 0.1)",
                     }}
                   >
-                    {/* Add checkbox column header */}
                     <th
                       style={{
                         padding: "12px",
@@ -555,7 +627,6 @@ const PendingPickRequest = () => {
                                 : "rgba(255, 255, 255, 0.05)",
                           }}
                         >
-                          {/* Add checkbox for each row */}
                           <td
                             style={{
                               padding: "12px",

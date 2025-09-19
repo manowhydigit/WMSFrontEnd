@@ -121,6 +121,29 @@ export const LocationMovement = () => {
     movedQty: "",
   });
 
+  const [toastId, setToastId] = useState(null);
+
+  useEffect(() => {
+    return () => {
+      // Clean up any active toasts when component unmounts
+      if (toastId) {
+        toast.dismiss(toastId);
+      }
+    };
+  }, [toastId]);
+
+  const showToast = (message, type = "default") => {
+    const id =
+      type === "error"
+        ? toast.error(message)
+        : type === "success"
+        ? toast.success(message)
+        : toast(message);
+
+    setToastId(id);
+    return id;
+  };
+
   // Styles
   const inputStyle = {
     background: "rgba(255, 255, 255, 0.1)",
@@ -196,7 +219,7 @@ export const LocationMovement = () => {
   const getToBinDetails = async () => {
     try {
       const response = await axios.get(
-        `${API_URL}/api/locationMovement/getToBinFromLocationStatusForLocationMovement?branch=${branch}&branchCode=${branchCode}&client=${client}&orgId=${orgId}&warehouse=${warehouse}`
+        `${API_URL}/api/locationMovement/getToBinFromLocationStatusForLocationMovement?branchCode=${branchCode}&client=${client}&orgId=${orgId}&warehouse=${warehouse}`
       );
       if (response.data.status === true) {
         setToBinList(response.data.paramObjectsMap.locationMovementDetailsVO);
@@ -214,6 +237,7 @@ export const LocationMovement = () => {
       partDesc: "",
       sku: "",
       grnNo: "",
+      grnDate: "", // Added grnDate field
       batchNo: "",
       avlQty: "",
       toBin: "",
@@ -265,6 +289,7 @@ export const LocationMovement = () => {
           partDesc: item.partDesc,
           sku: item.sku,
           grnNo: item.grnNo,
+          grnDate: item.grnDate, // Include grnDate in the payload
           batchNo: item.batchNo,
           avlQty: parseFloat(item.avlQty) || 0,
           toBin: item.toBin,
@@ -288,7 +313,7 @@ export const LocationMovement = () => {
       );
 
       if (response.data.status === true) {
-        toast.success(
+        showToast.success(
           editId
             ? "Location Movement updated successfully"
             : "Location Movement created successfully"
@@ -296,13 +321,13 @@ export const LocationMovement = () => {
         handleClear();
         getAllLocationMovements();
       } else {
-        toast.error(
+        showToast.error(
           response.data.message || "Failed to save Location Movement"
         );
       }
     } catch (error) {
       console.error("Error saving Location Movement:", error);
-      toast.error("Failed to save Location Movement");
+      showToast.error("Failed to save Location Movement");
     } finally {
       setIsSubmitting(false);
     }
@@ -333,6 +358,7 @@ export const LocationMovement = () => {
         partDesc: item.partDesc,
         sku: item.sku,
         grnNo: item.grnNo,
+        grnDate: item.grnDate, // Include grnDate when editing
         batchNo: item.batchNo,
         avlQty: item.avlQty,
         toBin: item.toBin,
@@ -372,6 +398,7 @@ export const LocationMovement = () => {
         partDesc: item.partDesc,
         sku: item.sku,
         grnNo: item.grnNo,
+        grnDate: item.grnDate, // Include grnDate
         batchNo: item.batchNo,
         avlQty: item.avlQty,
         toBin: "", // These will be filled by user
@@ -389,14 +416,6 @@ export const LocationMovement = () => {
     setSelectAll(false);
     setModalOpen(false);
   };
-
-  // const handleSaveSelectedRows = () => {
-  //   const selectedData = selectedRows.map((index) => fillGridData[index]);
-  //   setLocationMovementItems([...locationMovementItems, ...selectedData]);
-  //   setSelectedRows([]);
-  //   setSelectAll(false);
-  //   setModalOpen(false);
-  // };
 
   const handleSelectAll = () => {
     if (selectAll) {
@@ -419,6 +438,7 @@ export const LocationMovement = () => {
               partDesc: "",
               sku: "",
               grnNo: "",
+              grnDate: "", // Reset grnDate
               batchNo: "",
               avlQty: "",
               toBin: "",
@@ -474,6 +494,7 @@ export const LocationMovement = () => {
               partDesc: selectedPart?.partDesc || "",
               sku: selectedPart?.sku || "",
               grnNo: "",
+              grnDate: "", // Reset grnDate
               batchNo: "",
               avlQty: "",
               toBin: "",
@@ -579,6 +600,7 @@ export const LocationMovement = () => {
             "Part Description": detail.partDesc,
             SKU: detail.sku,
             "GRN No": detail.grnNo,
+            "GRN Date": formatDateForDisplay(detail.grnDate), // Include GRN Date
             "Batch No": detail.batchNo,
             "Available Qty": detail.avlQty,
             "To Qty": detail.toQty,
@@ -603,6 +625,7 @@ export const LocationMovement = () => {
           "Part Description": "",
           SKU: "",
           "GRN No": "",
+          "GRN Date": "", // Include empty GRN Date
           "Batch No": "",
           "Available Qty": "",
           "To Qty": "",
@@ -637,12 +660,15 @@ export const LocationMovement = () => {
         `${API_URL}/api/locationMovement/getGrnNoDetailsForLocationMovement?bin=${fromBin}&branch=${branch}&branchCode=${branchCode}&client=${client}&orgId=${orgId}&partNo=${partNo}`
       );
       if (response.data.status === true) {
+        // Extract grnDetails from the response
+        const grnDetails = response.data.paramObjectsMap.grnDetails || [];
+
         setLocationMovementItems((prev) =>
           prev.map((item) =>
             item.id === id
               ? {
                   ...item,
-                  rowGrnNoList: response.data.paramObjectsMap.grnDetails,
+                  rowGrnNoList: grnDetails,
                 }
               : item
           )
@@ -657,12 +683,16 @@ export const LocationMovement = () => {
     const selectedGrn = locationMovementItems
       .find((item) => item.id === id)
       ?.rowGrnNoList.find((grn) => grn.grnNo === value);
+
     setLocationMovementItems((prev) =>
       prev.map((item) =>
         item.id === id
           ? {
               ...item,
               grnNo: selectedGrn?.grnNo || "",
+              grnDate: selectedGrn?.grnDate
+                ? dayjs(selectedGrn.grnDate).format("YYYY-MM-DD")
+                : "", // Format grnDate
               batchNo: "",
               avlQty: "",
               toBin: "",
@@ -1210,14 +1240,14 @@ export const LocationMovement = () => {
                         <colgroup>
                           <col style={{ width: "50px" }} /> {/* Action */}
                           <col style={{ width: "50px" }} /> {/* S.No */}
-                          <col style={{ width: "120px" }} /> {/* From Bin */}
-                          <col style={{ width: "120px" }} /> {/* Part No */}
+                          <col style={{ width: "150px" }} /> {/* From Bin */}
+                          <col style={{ width: "150px" }} /> {/* Part No */}
                           <col style={{ width: "200px" }} /> {/* Part Desc */}
                           <col style={{ width: "120px" }} /> {/* SKU */}
-                          <col style={{ width: "120px" }} /> {/* GRN No */}
+                          <col style={{ width: "220px" }} /> {/* GRN No */}
                           <col style={{ width: "120px" }} /> {/* Batch No */}
                           <col style={{ width: "100px" }} /> {/* Avl Qty */}
-                          <col style={{ width: "120px" }} /> {/* To Bin */}
+                          <col style={{ width: "150px" }} /> {/* To Bin */}
                           <col style={{ width: "100px" }} /> {/* To Bin Type */}
                           <col style={{ width: "100px" }} /> {/* To Qty */}
                           <col style={{ width: "100px" }} /> {/* Remain Qty */}

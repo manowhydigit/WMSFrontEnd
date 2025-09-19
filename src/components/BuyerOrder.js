@@ -2570,7 +2570,7 @@ const BuyerOrder = () => {
                           color: "white",
                         }}
                       >
-                        Total Amount
+                        Total Quantity
                       </th>
                       <th
                         style={{

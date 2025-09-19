@@ -478,24 +478,19 @@ const LabelPrintModal = ({ visible, onClose, formData, items }) => {
   );
 };
 
-// Add this modal component for single order printing
 const RowLabelPrintModal = ({ visible, onClose, order }) => {
   const [numberOfLabels, setNumberOfLabels] = useState(1);
   const [isDownloading, setIsDownloading] = useState(false);
   const [toAddress, setToAddress] = useState("");
   const [toName, setToName] = useState("");
 
-  // Initialize toAddress and toName when order changes
   useEffect(() => {
     if (order) {
-      const defaultToAddress = order.customerAddress || "";
-      const defaultToName = order.customerName || "";
-      setToAddress(defaultToAddress);
-      setToName(defaultToName);
+      setToAddress(order.customerAddress || "");
+      setToName(order.customerName || "");
     }
   }, [order]);
 
-  // Reset when modal closes
   const handleClose = () => {
     setNumberOfLabels(1);
     setIsDownloading(false);
@@ -520,146 +515,130 @@ const RowLabelPrintModal = ({ visible, onClose, order }) => {
     const barcodeData = generateBarcodeData();
 
     printWindow.document.write(`
-      <html>
-        <head>
-          <title>Print Labels</title>
-          <style>
-            @page {
-              size: 4in 2in;
-              margin: 0;
-            }
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 0;
-              padding: 0;
-              width: 4in;
-              height: 2in;
-            }
+    <html>
+      <head>
+        <title>Print Labels</title>
+        <style>
+          @page {
+            size: 4in 2in;
+            margin: 0;
+          }
+          html, body {
+            margin: 0;
+            padding: 0;
+            width: 4in;
+            height: 2in;
+            font-family: Arial, sans-serif;
+            background: white;
+          }
+          .label {
+            width: 4in;
+            height: 2in;
+            position: relative;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            overflow: hidden;
+            padding: 0;
+          }
+          .label-header {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 2px 0;
+          }
+          .address-section {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            line-height: 1.2;
+            padding: 0 6px;
+          }
+          .company-address, .customer-address {
+            width: 48%;
+          }
+          .info-row {
+            text-align: center;
+            font-size: 13px;
+            font-weight: bold;
+            margin-top: 2px;
+          }
+          .barcode-section {
+            text-align: center;
+            margin-top: 2px;
+            height: 32px;
+          }
+          .label-footer {
+            position: absolute;
+            bottom: 2px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+          }
+          @media print {
             .label {
-              width: 4in;
-              height: 2in;
-              padding: 5px;
-              box-sizing: border-box;
-              border: 1px dotted #ccc;
-              page-break-after: always;
-              display: flex;
-              flex-direction: column;
-              justify-content: space-between;
+              border: none;
             }
-            .label-header {
-              text-align: center;
-              font-size: 14px;
-              font-weight: bold;
-              margin-bottom: 3px;
+            .no-print {
+              display: none;
             }
-            .label-content {
-              display: flex;
-              flex-direction: column;
-              gap: 2px;
-              flex-grow: 1;
-            }
-            .address-section {
-              display: flex;
-              justify-content: space-between;
-              font-size: 12px;
-              margin-bottom: 3px;
-              line-height: 1.2;
-            }
-            .company-address, .customer-address {
-              width: 48%;
-              font-size: 12px;
-            }
-            .info-row {
-              font-size: 16px;
-              margin: 1px 0;
-              display: flex;
-              justify-content: space-between;
-              font-weight:bold;
-            }
-            .barcode-section {
-              text-align: center;
-              margin: 2px 0;
-            }
-            .label-footer {
-              text-align: center;
-              font-size: 12px;
-              margin-top: 2px;
-            }
-            @media print {
-              .no-print {
-                display: none;
-              }
-              body {
-                padding: 0;
-                margin: 0;
-              }
-            }
-          </style>
-          <script src="https://unpkg.com/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-        </head>
-        <body>
-          ${Array.from(
-            { length: numberOfLabels },
-            (_, i) => `
-            <div class="label">
-              <div class="label-header">SHIPPING LABEL</div>
-              <div class="label-content">
-                <div class="address-section">
-                  <div class="company-address">
-                    <strong>From:</strong><br/>
-                    Uniworld Logistics pvt ltd<br/>
-                    Bilapur tauru road mewat 122105
-                  </div>
-                  <div class="customer-address">
-                    <strong>To:</strong><br/>
-                    ${toName || order.customerName || "N/A"}<br/>
-                    ${toAddress || order.customerAddress || "N/A"}
-                  </div>
-                </div>
-                <div style="font-size: 16px; margin: 1px 0; display: flex; justify-content: space-between;">
-                  <span><strong>Order No:</strong> <strong> ${
-                    order.buyerOrderNo || "N/A"
-                  } </strong> </span>
-                </div>
-                <div class="barcode-section">
-                  <svg id="barcode-${i}" width="180" height="30"></svg>
-                </div>
+          }
+        </style>
+        <script src="https://unpkg.com/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+      </head>
+      <body>
+        ${Array.from(
+          { length: numberOfLabels },
+          (_, i) => `
+          <div class="label">
+            <div class="label-header">SHIPPING LABEL</div>
+            <div class="address-section">
+              <div class="company-address">
+                <strong>From:</strong><br/>
+                Uniworld Logistics pvt ltd<br/>
+                Bilapur tauru road mewat 122105
               </div>
-              <div class="label-footer">
-                Label ${i + 1} of ${numberOfLabels}
+              <div class="customer-address">
+                <strong>To:</strong><br/>
+                ${toName || order.customerName || "N/A"}<br/>
+                ${toAddress || order.customerAddress || "N/A"}
               </div>
             </div>
-            `
-          ).join("")}
-          <div class="no-print" style="margin-top:20px; text-align:center;">
-            <button onclick="window.print()">Print</button>
-            <button onclick="window.close()">Close</button>
+            <div class="info-row">
+              Order No: ${order.buyerOrderNo || "N/A"}
+            </div>
+            <div class="barcode-section">
+              <svg id="barcode-${i}" width="180" height="30"></svg>
+            </div>
+            <div class="label-footer">
+              Label ${i + 1} of ${numberOfLabels}
+            </div>
           </div>
-          <script>
-            // Generate barcodes after page loads
-            window.onload = function() {
-              ${Array.from(
-                { length: numberOfLabels },
-                (_, i) => `
-                try {
-                  JsBarcode("#barcode-${i}", "${barcodeData}", {
-                    format: "CODE128",
-                    width: 1,
-                    height: 30,
-                    displayValue: false,
-                    margin: 0
-                  });
-                } catch (e) {
-                  console.error('Barcode error:', e);
-                }
-                `
-              ).join("")}
-              window.print();
-            }
-          </script>
-        </body>
-      </html>
-    `);
+        `
+        ).join("")}
+        <script>
+          window.onload = function() {
+            ${Array.from(
+              { length: numberOfLabels },
+              (_, i) => `
+              JsBarcode("#barcode-${i}", "${barcodeData}", {
+                format: "CODE128",
+                width: 1.5,
+                height: 30,
+                displayValue: false,
+                margin: 0
+              });
+            `
+            ).join("")}
+            setTimeout(() => { window.print(); }, 300);
+          }
+        </script>
+      </body>
+    </html>
+  `);
+
     printWindow.document.close();
   };
 
@@ -668,127 +647,102 @@ const RowLabelPrintModal = ({ visible, onClose, order }) => {
       message.error("Number of labels must be greater than 0");
       return;
     }
-
-    if (isDownloading) return; // Prevent multiple clicks
-
+    if (isDownloading) return;
     setIsDownloading(true);
 
     try {
-      // Create a unique container ID to avoid conflicts
       const containerId = `label-container-${Date.now()}`;
       const container = document.createElement("div");
       container.id = containerId;
       container.style.position = "absolute";
       container.style.left = "-9999px";
+      container.style.top = "0";
       container.style.display = "flex";
       container.style.flexDirection = "column";
-      container.style.gap = "10px";
-      container.style.width = "4in";
+      container.style.width = "384px"; // 4in @ 96 DPI
+      container.style.background = "#fff";
+      document.body.appendChild(container);
 
-      // Create labels
       for (let i = 0; i < numberOfLabels; i++) {
         const label = document.createElement("div");
-        label.style.width = "4in";
-        label.style.height = "2in";
-        label.style.padding = "5px";
+        label.style.width = "384px";
+        label.style.height = "192px"; // 2in @ 96 DPI
         label.style.boxSizing = "border-box";
+        label.style.position = "relative";
         label.style.border = "1px dotted #ccc";
         label.style.display = "flex";
         label.style.flexDirection = "column";
-        label.style.justifyContent = "space-between";
+        label.style.justifyContent = "flex-start";
+        label.style.padding = "6px"; // small padding
+        label.style.overflow = "hidden";
 
         label.innerHTML = `
-          <div style="text-align: center; font-size: 12px; font-weight: bold; margin-bottom: 3px;">
-            SHIPPING LABEL
+          <div style="text-align:center; font-size:16px; font-weight:bold; margin-bottom:4px;">SHIPPING LABEL</div>
+          <div style="display:flex; justify-content:space-between; font-size:11px; line-height:1.2; margin-bottom:4px;">
+            <div style="width:48%;"><strong>From:</strong><br/>Uniworld Logistics pvt ltd<br/>Bilapur tauru road mewat 122105</div>
+            <div style="width:48%;"><strong>To:</strong><br/>${
+              toName || order.customerName || "N/A"
+            }<br/>${toAddress || order.customerAddress || "N/A"}</div>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
-            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; line-height: 1.2;">
-              <div style="width: 48%;">
-                <strong>From:</strong><br/>
-                Uniworld Logistics pvt ltd<br/>
-                Bilapur tauru road mewat 122105
-              </div>
-              <div style="width: 48%;">
-                <strong>To:</strong><br/>
-                ${order.customerName || "N/A"}<br/>
-                ${order.customerAddress || "N/A"}
-              </div>
-            </div>
-            <div style="font-size: 16px; margin: 1px 0; display: flex; justify-content: space-between;">
-              <span><strong>Order No:</strong> <strong>${
-                order.buyerOrderNo || "N/A"
-              }</strong></span>
-            </div>
-            <div style="text-align: center; margin: 2px 0;">
-              <svg id="barcode-download-${containerId}-${i}" width="180" height="30"></svg>
-            </div>
+          <div style="text-align:center; font-size:13px; font-weight:bold; margin-bottom:4px;">
+            Order No: ${order.buyerOrderNo || "N/A"}
           </div>
-          <div style="text-align: center; font-size: 12px; margin-top: 2px;">
+          <div style="text-align:center; margin-bottom:4px;">
+            <svg id="barcode-download-${containerId}-${i}" width="180" height="30"></svg>
+          </div>
+          <div style="position:absolute; bottom:4px; left:0; width:100%; text-align:center; font-size:10px;">
             Label ${i + 1} of ${numberOfLabels}
           </div>
         `;
-
         container.appendChild(label);
       }
 
-      // Append to body
-      document.body.appendChild(container);
-
-      // Generate barcodes with a small delay to ensure DOM is ready
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       const barcodeData = generateBarcodeData();
-      Array.from({ length: numberOfLabels }, (_, i) => {
-        const barcodeElement = document.getElementById(
+      for (let i = 0; i < numberOfLabels; i++) {
+        const el = document.getElementById(
           `barcode-download-${containerId}-${i}`
         );
-        if (barcodeElement) {
-          JsBarcode(barcodeElement, barcodeData, {
+        if (el) {
+          JsBarcode(el, barcodeData, {
             format: "CODE128",
-            width: 1,
+            width: 1.5,
             height: 30,
             displayValue: false,
             margin: 0,
           });
         }
-      });
+      }
 
-      // Wait a bit more for barcodes to render
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
-      // Generate PDF
+      const totalHeight = 192 * numberOfLabels;
+
       const canvas = await html2canvas(container, {
         scale: 2,
         width: 384,
-        height: numberOfLabels * 192 + (numberOfLabels - 1) * 10,
-        windowWidth: 384,
+        height: totalHeight,
         useCORS: true,
-        logging: false,
+        backgroundColor: "#fff",
       });
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "in",
-        format: [4, 2 * numberOfLabels + (numberOfLabels - 1) * 0.1],
+        format: [4, numberOfLabels * 2], // 2 in per label
       });
 
-      pdf.addImage(
-        imgData,
-        "PNG",
-        0,
-        0,
-        4,
-        2 * numberOfLabels + (numberOfLabels - 1) * 0.1
-      );
+      pdf.addImage(imgData, "PNG", 0, 0, 4, numberOfLabels * 2);
       pdf.save(`shipping_labels_${order.buyerOrderNo || "labels"}.pdf`);
-    } catch (error) {
-      console.error("Download error:", error);
+    } catch (err) {
+      console.error("Download error:", err);
       message.error("Failed to download labels");
     } finally {
-      // Clean up all temporary containers
-      const containers = document.querySelectorAll('[id^="label-container-"]');
-      containers.forEach((container) => document.body.removeChild(container));
+      document
+        .querySelectorAll(`[id^="label-container-"]`)
+        .forEach((el) => el.remove());
       setIsDownloading(false);
     }
   };
@@ -823,147 +777,119 @@ const RowLabelPrintModal = ({ visible, onClose, order }) => {
       ]}
       width={700}
     >
-      <div>
-        <p>This will generate shipping labels for this specific order.</p>
+      <p>This will generate shipping labels for this specific order.</p>
+      <div style={{ marginBottom: 16 }}>
+        <label>
+          <strong>Number of labels to print:</strong>
+        </label>
+        <InputNumber
+          min={1}
+          max={100}
+          value={numberOfLabels}
+          onChange={setNumberOfLabels}
+          disabled={isDownloading}
+          style={{ marginLeft: 8 }}
+        />
+      </div>
 
-        <div style={{ margin: "16px 0" }}>
-          <label style={{ marginRight: "8px", fontWeight: "bold" }}>
-            Number of labels to print:
-          </label>
-          <InputNumber
-            min={1}
-            max={100}
-            value={numberOfLabels}
-            onChange={setNumberOfLabels}
+      <div style={{ marginBottom: 16 }}>
+        <label>
+          <strong>Ship To (Editable):</strong>
+        </label>
+        <div style={{ marginTop: 8 }}>
+          <label>Name:</label>
+          <Input
+            value={toName}
+            onChange={(e) => setToName(e.target.value)}
+            placeholder="Enter recipient name"
+            disabled={isDownloading}
+          />
+          <label style={{ marginTop: 8 }}>Address:</label>
+          <TextArea
+            value={toAddress}
+            onChange={(e) => setToAddress(e.target.value)}
+            placeholder="Enter shipping address"
+            rows={3}
             disabled={isDownloading}
           />
         </div>
+      </div>
 
-        {/* Editable Ship To Section */}
-        <div style={{ margin: "16px 0" }}>
-          <label style={{ marginRight: "8px", fontWeight: "bold" }}>
-            Ship To (Editable):
-          </label>
-          <div style={{ marginTop: "8px" }}>
-            <div style={{ marginBottom: "8px" }}>
-              <label style={{ display: "block", marginBottom: "4px" }}>
-                Name:
-              </label>
-              <Input
-                value={toName}
-                onChange={(e) => setToName(e.target.value)}
-                placeholder="Enter recipient name"
-                style={{ fontSize: "14px" }}
-                disabled={isDownloading}
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", marginBottom: "4px" }}>
-                Address:
-              </label>
-              <TextArea
-                value={toAddress}
-                onChange={(e) => setToAddress(e.target.value)}
-                placeholder="Enter shipping address"
-                rows={3}
-                style={{ fontSize: "14px" }}
-                disabled={isDownloading}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: "16px" }}>
-          <p>
-            <strong>Label Preview (4" x 2"):</strong>
-          </p>
+      <div style={{ marginTop: 16 }}>
+        <strong>Label Preview (4" x 2"):</strong>
+        <div
+          style={{
+            width: "4in",
+            height: "2in",
+            border: "1px solid #d9d9d9",
+            padding: "8px",
+            fontSize: "12px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            marginTop: 8,
+            position: "relative",
+          }}
+        >
           <div
             style={{
-              width: "4in",
-              height: "2in",
-              border: "1px solid #d9d9d9",
-              padding: "5px",
-              fontSize: "12px",
-              marginBottom: "10px",
-              boxSizing: "border-box",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              lineHeight: "1.2",
+              textAlign: "center",
+              fontWeight: "bold",
+              fontSize: "16px",
+              marginBottom: "5px",
             }}
           >
-            <div
-              style={{
-                textAlign: "center",
-                fontWeight: "bold",
-                marginBottom: "3px",
-                fontSize: "14px",
-              }}
-            >
-              SHIPPING LABEL
+            SHIPPING LABEL
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              lineHeight: "1.2",
+              marginBottom: "8px",
+            }}
+          >
+            <div style={{ width: "48%" }}>
+              <strong>From:</strong>
+              <br />
+              Uniworld Logistics pvt ltd
+              <br />
+              Bilapur tauru road mewat 122105
             </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "2px",
-                flexGrow: "1",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "3px",
-                }}
-              >
-                <div style={{ width: "48%", fontSize: "12px" }}>
-                  <strong>From:</strong>
-                  <br />
-                  Uniworld Logistics pvt ltd
-                  <br />
-                  Bilapur tauru road mewat 122105
-                </div>
-                <div style={{ width: "48%", fontSize: "12px" }}>
-                  <strong>To:</strong>
-                  <br />
-                  {toName || order.customerName || "N/A"}
-                  <br />
-                  {toAddress || order.customerAddress || "N/A"}
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: "16px",
-                }}
-              >
-                <span>
-                  <strong>Order No:</strong>{" "}
-                  <strong>{order.buyerOrderNo || "N/A"}</strong>
-                </span>
-              </div>
-              <div style={{ textAlign: "center", margin: "2px 0" }}>
-                <Barcode
-                  value={generateBarcodeData()}
-                  width={1}
-                  height={30}
-                  fontSize={10}
-                  margin={0}
-                  displayValue={false}
-                />
-              </div>
+            <div style={{ width: "48%" }}>
+              <strong>To:</strong>
+              <br />
+              {toName || order.customerName || "N/A"}
+              <br />
+              {toAddress || order.customerAddress || "N/A"}
             </div>
-            <div
-              style={{
-                textAlign: "center",
-                marginTop: "2px",
-                fontSize: "8px",
-              }}
-            >
-              Label 1 of {numberOfLabels}
-            </div>
+          </div>
+          <div
+            style={{ textAlign: "center", fontWeight: "bold", margin: "5px 0" }}
+          >
+            Order No: {order.buyerOrderNo || "N/A"}
+          </div>
+          <div style={{ textAlign: "center", margin: "5px 0" }}>
+            <Barcode
+              value={generateBarcodeData()}
+              width={1.5}
+              height={30}
+              displayValue={false}
+              margin={0}
+            />
+          </div>
+          <div
+            style={{
+              textAlign: "center",
+              fontSize: "10px",
+              position: "absolute",
+              bottom: "5px",
+              left: 0,
+              right: 0,
+            }}
+          >
+            Label 1 of {numberOfLabels}
           </div>
         </div>
       </div>

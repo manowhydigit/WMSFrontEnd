@@ -75,6 +75,7 @@ import StockConsolidationBinWise from "./components/StockConsolidationBinWise";
 import StockBinBatchStatusWise from "./components/StockBinBatchStatusWise";
 import StockLedger from "./components/StockLedger";
 import StockBatchWise from "./components/StockBatchWise";
+import WMSPutaway from "./components/WMSPutaway";
 
 function App() {
   const [isSelected, setIsSelected] = useState(false);
@@ -144,6 +145,7 @@ function App() {
               />
 
               <Route path="WMSPickRequest" element={<WMSPickRequest />} />
+              <Route path="WMSPutaway" element={<WMSPutaway />} />
               <Route path="ReversePick" element={<ReversePick />} />
               <Route path="SalesReturn" element={<SalesReturn />} />
               <Route path="CodeConversion" element={<CodeConversion />} />

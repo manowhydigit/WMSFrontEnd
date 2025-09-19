@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Button,
   Table,
@@ -37,7 +37,7 @@ import {
 } from "@ant-design/icons";
 import CommonBulkUpload from "../utils/CommonBulkUpload";
 import sampleFile from "../assets/sample-files/sample_Stock_Restate_.xls";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
 import dayjs from "dayjs";
 import axios from "axios";
 import * as XLSX from "xlsx";
@@ -88,6 +88,47 @@ const StockRestate = () => {
     { name: "RELEASE", value: "RELEASE" },
     { name: "VAS", value: "VAS" },
   ]);
+
+  // Add toast management
+  const isMounted = useRef(true);
+  const [toastId, setToastId] = useState(null);
+
+  useEffect(() => {
+    isMounted.current = true;
+    getAllStockRestate();
+    getFromBin();
+    getNewStockRestateDocId();
+
+    return () => {
+      isMounted.current = false;
+      // Clean up any active toasts when component unmounts
+      if (toastId) {
+        toast.dismiss(toastId);
+      }
+    };
+  }, []);
+
+  // Safe toast function
+  const showToast = (messageText, type = "default") => {
+    if (!isMounted.current) return null;
+
+    let id;
+    switch (type) {
+      case "error":
+        id = toast.error(messageText);
+        break;
+      case "success":
+        id = toast.success(messageText);
+        break;
+      case "warning":
+        id = toast.warning(messageText);
+        break;
+      default:
+        id = toast(messageText);
+    }
+    setToastId(id);
+    return id;
+  };
 
   const [formData, setFormData] = useState({
     docId: "",
@@ -775,6 +816,17 @@ const StockRestate = () => {
     try {
       setIsLoading(true);
 
+      // Validate required fields
+      if (!formData.transferFrom || !formData.transferTo) {
+        showToast("Please select Transfer From and Transfer To", "error");
+        return;
+      }
+
+      if (detailTableData.length === 0) {
+        showToast("Please add at least one item", "error");
+        return;
+      }
+
       const formattedDocDate = formData.docDate.format("YYYY-MM-DD");
 
       const saveData = {
@@ -799,12 +851,16 @@ const StockRestate = () => {
           partDesc: item.partDesc,
           sku: item.sku,
           grnNo: item.grnNo,
-          grnDate: item.grnDate ? item.grnDate.format("YYYY-MM-DD") : null,
+          grnDate: item.grnDate
+            ? dayjs(item.grnDate).format("YYYY-MM-DD")
+            : null,
           batch: item.batchNo,
           batchDate: item.batchDate
-            ? item.batchDate.format("YYYY-MM-DD")
+            ? dayjs(item.batchDate).format("YYYY-MM-DD")
             : null,
-          expDate: item.expDate ? item.expDate.format("YYYY-MM-DD") : null,
+          expDate: item.expDate
+            ? dayjs(item.expDate).format("YYYY-MM-DD")
+            : null,
           toBin: item.toBin,
           toBinType: item.toBinType,
           toBinClass: item.toBinClass,
@@ -823,19 +879,23 @@ const StockRestate = () => {
       );
 
       if (response.data.status === true) {
-        message.success(
+        showToast(
           editId
             ? "Stock Restate updated successfully"
-            : "Stock Restate created successfully"
+            : "Stock Restate created successfully",
+          "success"
         );
         handleClear();
         getAllStockRestate();
       } else {
-        message.error(response.data.message || "Failed to save Stock Restate");
+        showToast(
+          response.data.message || "Failed to save Stock Restate",
+          "error"
+        );
       }
     } catch (error) {
       console.error("Error saving Stock Restate:", error);
-      message.error("Failed to save Stock Restate");
+      showToast("Failed to save Stock Restate", "error");
     } finally {
       setIsLoading(false);
     }
